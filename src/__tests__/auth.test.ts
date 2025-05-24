@@ -4,6 +4,12 @@
 
 import { createUser, validateCredentials } from '@/lib/auth'
 
+// Mock bcryptjs
+jest.mock('bcryptjs', () => ({
+  hash: jest.fn(),
+  compare: jest.fn(),
+}))
+
 // Mock Prisma
 jest.mock('@/lib/db', () => ({
   prisma: {
@@ -15,6 +21,7 @@ jest.mock('@/lib/db', () => ({
 }))
 
 import { prisma } from '@/lib/db'
+import bcrypt from 'bcryptjs'
 
 describe('Authentication', () => {
   beforeEach(() => {
@@ -25,6 +32,9 @@ describe('Authentication', () => {
     it('should create a new user with valid credentials', async () => {
       // Mock that user doesn't exist
       ;(prisma.user.findUnique as jest.Mock).mockResolvedValue(null)
+      
+      // Mock bcrypt.hash to return a hashed password
+      ;(bcrypt.hash as jest.Mock).mockResolvedValue('$2a$12$hashedpassword')
       
       // Mock user creation
       const mockUser = {
@@ -49,7 +59,7 @@ describe('Authentication', () => {
       expect(prisma.user.create).toHaveBeenCalledWith({
         data: {
           email: 'test@example.com',
-          password: expect.any(String), // hashed password
+          password: '$2a$12$hashedpassword', // hashed password
           name: 'Test User',
         },
         select: {
@@ -99,8 +109,7 @@ describe('Authentication', () => {
       ;(prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser)
 
       // Mock bcrypt.compare to return true
-      const bcrypt = require('bcryptjs')
-      jest.spyOn(bcrypt, 'compare').mockResolvedValue(true)
+      ;(bcrypt.compare as jest.Mock).mockResolvedValue(true)
 
       const result = await validateCredentials('test@example.com', 'password123')
 

@@ -1,9 +1,0 @@
-src/generated/**/*
-src/generated/prisma/**/*
-node_modules
-.next
-out
-dist
-build
-*.config.js
-*.config.ts 

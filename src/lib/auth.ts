@@ -66,7 +66,6 @@ export async function validateCredentials(email: string, password: string): Prom
   }
 
   // Return user without password
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { password: _, ...userWithoutPassword } = user
   return userWithoutPassword
 } 
