@@ -5,6 +5,7 @@ const nextConfig = {
     // Our source code passes ESLint but generated Prisma files cause issues
     ignoreDuringBuilds: true,
   },
+  transpilePackages: ['next-auth'],
 }
 
 module.exports = nextConfig 

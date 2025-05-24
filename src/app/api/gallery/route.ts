@@ -15,8 +15,12 @@ export async function GET(request: NextRequest) {
 
     // Get query parameters for pagination and filtering
     const { searchParams } = new URL(request.url)
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '50')
+    const pageParam = searchParams.get('page')
+    const limitParam = searchParams.get('limit')
+    
+    // Parse with proper fallbacks for invalid inputs
+    const page = Math.max(1, parseInt(pageParam || '1') || 1)
+    const limit = Math.max(1, Math.min(100, parseInt(limitParam || '50') || 50)) // Max 100 to prevent abuse
     const offset = (page - 1) * limit
 
     // Fetch user's generated images
