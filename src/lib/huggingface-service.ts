@@ -223,12 +223,20 @@ export class HuggingFaceService {
         this.debugger?.log('info', TrainingStage.HUGGINGFACE_UPLOAD, 'Repository already exists', { repoId })
         return
       }
+
+      // Handle the specific "You already created this model repo" error message
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('You already created this model repo')) {
+        this.debugger?.log('info', TrainingStage.HUGGINGFACE_UPLOAD, 'Repository already exists (duplicate repo error)', { repoId })
+        // This is actually a duplicate repository error, so we should propagate it
+        throw new Error(`Repository name '${repoId}' already exists. Please use a unique model name.`)
+      }
       
       this.debugger?.logError(
         TrainingStage.HUGGINGFACE_UPLOAD,
         error,
         'Failed to create repository',
-        { repoId }
+        { repoId, errorMessage }
       )
       throw error
     }

@@ -276,19 +276,64 @@ export class TrainingService {
       
       console.log(`Training completed for ${modelName}, uploading to HuggingFace...`)
 
+      // Generate unique repository name to avoid conflicts
+      const baseModelName = modelName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+      const uniqueModelName = `${baseModelName}-${timestamp}`
+
+      console.log(`🤗 Creating unique HuggingFace repository: ${uniqueModelName}`)
+
       // Upload to HuggingFace using existing service instance
       const uploadResponse = await this.huggingface.uploadModel({
-        modelName: modelName.toLowerCase().replace(/\s+/g, '-'),
+        modelName: uniqueModelName, // Use unique name
         modelPath: replicateStatus.output || '', // Replicate output path
-        description: `Custom FLUX LoRA model: ${modelName}`,
+        description: `Custom FLUX LoRA model: ${modelName} (Training ID: ${trainingId})`,
         tags: ['flux', 'lora', 'text-to-image', 'custom'],
         isPrivate: false, // Make public for Together AI access
       })
 
       if (uploadResponse.status === 'failed') {
+        // Handle specific HuggingFace errors
+        let errorMessage = uploadResponse.error || 'HuggingFace upload failed'
+        
+        if (errorMessage.includes('You already created this model repo')) {
+          // Try with an additional random suffix
+          const randomSuffix = Math.random().toString(36).substring(2, 8)
+          const retryModelName = `${uniqueModelName}-${randomSuffix}`
+          
+          console.log(`🔄 Repository exists, retrying with: ${retryModelName}`)
+          
+          const retryResponse = await this.huggingface.uploadModel({
+            modelName: retryModelName,
+            modelPath: replicateStatus.output || '',
+            description: `Custom FLUX LoRA model: ${modelName} (Training ID: ${trainingId})`,
+            tags: ['flux', 'lora', 'text-to-image', 'custom'],
+            isPrivate: false,
+          })
+          
+          if (retryResponse.status === 'completed') {
+            // Use the retry result
+            this.debugger.endStage(TrainingStage.HUGGINGFACE_UPLOAD, 'HuggingFace upload completed (retry)', {
+              repoId: retryResponse.repoId,
+              repoUrl: retryResponse.repoUrl
+            })
+
+            return {
+              id: trainingId,
+              status: 'completed',
+              progress: 100,
+              stage: 'Training completed and model uploaded to HuggingFace',
+              huggingFaceRepo: retryResponse.repoId,
+              debugData: this.debugger.getDebugSummary()
+            }
+          } else {
+            errorMessage = retryResponse.error || 'HuggingFace retry upload failed'
+          }
+        }
+
         const error = this.debugger.logError(
           TrainingStage.HUGGINGFACE_UPLOAD,
-          new Error(uploadResponse.error || 'HuggingFace upload failed'),
+          new Error(errorMessage),
           'Failed to upload to HuggingFace'
         )
 
@@ -297,7 +342,7 @@ export class TrainingService {
           status: 'failed',
           progress: 95,
           stage: 'Failed to upload to HuggingFace',
-          error: uploadResponse.error,
+          error: errorMessage,
           debugData: this.debugger.getDebugSummary()
         }
       }

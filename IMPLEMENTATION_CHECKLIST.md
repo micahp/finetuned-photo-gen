@@ -226,6 +226,9 @@
 - [ ] Input sanitization improvements
 
 ### **Housekeeping**
+- [ ] Clean up zip file(s) from failed image training. Right now there's no visibility to these zip files in our training tab
+- [ ] Clean up replicate model(s) from failed image training. Right now there's no way to remove models from failed trainings
+- [ ] Clarify what togetherAIService is being used for and make sure it doesn't leak
 - [ ] Make sure free and lower tier paying users only have 1 model uploaded at a time, prompt and delete model when they try to create a new one
 - [ ] Check existing pages for missing pages and components
 - [ ] Implement any missing pages and components
