@@ -22,7 +22,7 @@ const customJestConfig = {
     '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(.*\\.mjs$|react-hook-form|@hookform/resolvers))',
+    'node_modules/(?!(.*\\.mjs$|react-hook-form|@hookform/resolvers|next-auth|@auth/core))',
   ],
 }
 

@@ -3,15 +3,15 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { loginSchema, type LoginFormData } from '@/lib/validations'
-import { ApiResponse, UserProfile } from '@/lib/types'
 
 interface LoginFormProps {
-  onSuccess?: (user: UserProfile) => void
+  onSuccess?: () => void
 }
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
@@ -31,26 +31,23 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setServerError('')
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+      const result = await signIn('credentials', {
+        email: data.email,
+        password: data.password,
+        redirect: false,
       })
 
-      const result: ApiResponse<{ user: UserProfile }> = await response.json()
-
-      if (!response.ok || !result.success) {
-        setServerError(result.error || 'Login failed')
+      if (result?.error) {
+        setServerError('Invalid email or password')
         return
       }
 
-      // Success
-      if (result.data?.user) {
-        onSuccess?.(result.data.user)
+      if (result?.ok) {
+        // Success - call onSuccess callback
+        onSuccess?.()
       }
-    } catch {
+    } catch (error) {
+      console.error('Login error:', error)
       setServerError('An unexpected error occurred. Please try again.')
     } finally {
       setIsLoading(false)
