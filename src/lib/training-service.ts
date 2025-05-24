@@ -304,10 +304,15 @@ export class TrainingService {
         }
       } else if (replicateStatus.output && typeof replicateStatus.output === 'object') {
         // Output might be an object with file information
+        console.log(`🔍 Object output detected, keys: ${Object.keys(replicateStatus.output).join(', ')}`, replicateStatus.output);
+        
         if (replicateStatus.output.url && typeof replicateStatus.output.url === 'string') {
           modelPath = replicateStatus.output.url;
         } else if (replicateStatus.output.file && typeof replicateStatus.output.file === 'string') {
           modelPath = replicateStatus.output.file;
+        } else if (replicateStatus.output.weights && typeof replicateStatus.output.weights === 'string') {
+          // Handle Replicate's weights URL format
+          modelPath = replicateStatus.output.weights;
         } else {
           throw new Error(`Invalid output format: Object does not contain valid URL (keys: ${Object.keys(replicateStatus.output).join(', ')})`);
         }

@@ -98,7 +98,26 @@ export default function TrainingDetailsPage() {
     try {
       setLoading(true)
       
-      const response = await fetch(`/api/training/jobs/${trainingId}`)
+      // Add timeout to prevent hanging
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+      
+      const response = await fetch(`/api/training/jobs/${trainingId}`, {
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Authentication failed. Please log in again.')
+        } else if (response.status === 404) {
+          throw new Error('Training job not found.')
+        } else {
+          throw new Error(`Server error: ${response.status}`)
+        }
+      }
+      
       const data = await response.json()
       
       if (data.success) {
@@ -109,6 +128,13 @@ export default function TrainingDetailsPage() {
       }
     } catch (error) {
       console.error('Failed to fetch training job:', error)
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          console.error('Request timed out')
+        }
+      }
+      
       setTrainingJob(null)
     } finally {
       setLoading(false)
@@ -242,8 +268,12 @@ export default function TrainingDetailsPage() {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="text-center">
+            <p className="text-lg font-medium text-gray-900">Loading training details...</p>
+            <p className="text-sm text-gray-600">Training ID: {trainingId}</p>
+          </div>
         </div>
       </div>
     )
@@ -479,59 +509,124 @@ export default function TrainingDetailsPage() {
 
             {/* Error Information (if failed) */}
             {trainingJob.error && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-red-700">Error Information</CardTitle>
+              <Card className="border-red-200 bg-gradient-to-br from-red-50 to-red-100/50">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                      <AlertTriangle className="h-5 w-5 text-red-600" />
+                    </div>
+                    <div className="flex-1">
+                      <CardTitle className="text-red-800 text-lg font-semibold">
+                        {trainingJob.error?.includes('Model training completed successfully') 
+                          ? 'Upload Failed' 
+                          : trainingJob.debugData?.lastError?.stage === 'huggingface_upload' 
+                            ? 'Model Upload Failed' 
+                            : 'Training Failed'}
+                      </CardTitle>
+                      <p className="text-sm text-red-600 mt-1">
+                        {trainingJob.error?.includes('Model training completed successfully') 
+                          ? 'Your model was trained successfully, but we encountered an issue uploading it to HuggingFace.'
+                          : 'We encountered an issue during the training process.'}
+                      </p>
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                    <div className="flex items-start">
-                      <AlertTriangle className="h-5 w-5 text-red-600 mr-3 mt-0.5" />
-                      <div className="flex-1">
-                        <h4 className="text-sm font-medium text-red-800 mb-1">
-                          {trainingJob.error?.includes('Model training completed successfully') 
-                            ? 'Upload Failed (Training Succeeded)' 
-                            : trainingJob.debugData?.lastError?.stage === 'huggingface_upload' 
-                              ? 'Model Upload Failed' 
-                              : 'Training Failed'}
-                        </h4>
-                        <p className="text-sm text-red-700">{trainingJob.error}</p>
-                        {trainingJob.debugData?.lastError && (
-                          <div className="mt-3 text-xs text-red-600">
-                            <p><strong>Stage:</strong> {trainingJob.debugData.lastError.stage}</p>
-                            <p><strong>Category:</strong> {trainingJob.debugData.lastError.category}</p>
-                            <p><strong>Time:</strong> {new Date(trainingJob.debugData.lastError.timestamp).toLocaleString()}</p>
-                            <p><strong>Retryable:</strong> {trainingJob.debugData.lastError.retryable ? 'Yes' : 'No'}</p>
+                <CardContent className="space-y-4">
+                  {/* Main Error Message */}
+                  <div className="bg-white/60 border border-red-200 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-red-800 mb-2 flex items-center space-x-2">
+                      <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                      <span>Error Details</span>
+                    </h4>
+                    <p className="text-sm text-red-700 leading-relaxed break-words overflow-hidden">{trainingJob.error}</p>
+                  </div>
+
+                  {/* Debug Information */}
+                  {trainingJob.debugData?.lastError && (
+                    <div className="bg-white/40 border border-red-100 rounded-lg p-4">
+                      <h4 className="text-sm font-medium text-red-700 mb-3 flex items-center space-x-2">
+                        <span className="w-2 h-2 bg-red-400 rounded-full"></span>
+                        <span>Technical Information</span>
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-red-600 font-medium">Stage:</span>
+                            <span className="text-red-800 capitalize">{trainingJob.debugData.lastError.stage.replace('_', ' ')}</span>
                           </div>
-                        )}
-                        
-                        {/* Retry Upload Button - Show when HuggingFace upload failed but training succeeded */}
-                        {(trainingJob.error?.includes('Model training completed successfully') || 
-                          trainingJob.debugData?.lastError?.stage === 'huggingface_upload') && (
-                          <div className="mt-4">
-                            <Button
-                              onClick={retryUpload}
-                              disabled={retrying}
-                              size="sm"
-                              className="bg-blue-600 hover:bg-blue-700 text-white"
-                            >
-                              {retrying ? (
-                                <>
-                                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                  Retrying Upload...
-                                </>
-                              ) : (
-                                <>
-                                  <Upload className="h-4 w-4 mr-2" />
-                                  Retry HuggingFace Upload
-                                </>
-                              )}
-                            </Button>
-                            <p className="text-xs text-blue-600 mt-2">
-                              Your model was trained successfully and is stored on Replicate. Click to retry uploading to HuggingFace.
+                          <div className="flex justify-between">
+                            <span className="text-red-600 font-medium">Category:</span>
+                            <span className="text-red-800 capitalize">{trainingJob.debugData.lastError.category}</span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-red-600 font-medium">Time:</span>
+                            <span className="text-red-800">{new Date(trainingJob.debugData.lastError.timestamp).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-red-600 font-medium">Retryable:</span>
+                            <span className={`font-medium ${trainingJob.debugData.lastError.retryable ? 'text-green-700' : 'text-red-800'}`}>
+                              {trainingJob.debugData.lastError.retryable ? 'Yes' : 'No'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Action Section */}
+                  {(trainingJob.error?.includes('Model training completed successfully') || 
+                    trainingJob.debugData?.lastError?.stage === 'huggingface_upload') && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                          <Upload className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div className="flex-1 space-y-3">
+                          <div>
+                            <h4 className="text-sm font-medium text-blue-800 mb-1">Good News!</h4>
+                            <p className="text-sm text-blue-700">
+                              Your model was trained successfully and is safely stored on Replicate. 
+                              You can retry uploading it to HuggingFace to make it available for use.
                             </p>
                           </div>
-                        )}
+                          
+                          <Button
+                            onClick={retryUpload}
+                            disabled={retrying}
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                          >
+                            {retrying ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                Retrying Upload...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-4 w-4 mr-2" />
+                                Retry HuggingFace Upload
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Support Information */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mt-0.5">
+                        <span className="text-gray-600 text-sm font-medium">?</span>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-gray-800 mb-1">Need Help?</h4>
+                        <p className="text-sm text-gray-600">
+                          If you continue to experience issues, please contact our support team with the training ID: 
+                          <code className="mx-1 px-2 py-0.5 bg-gray-200 rounded text-xs font-mono">{trainingJob.id}</code>
+                        </p>
                       </div>
                     </div>
                   </div>

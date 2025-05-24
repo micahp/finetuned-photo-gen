@@ -82,10 +82,18 @@ export async function GET(
     if (payload?.externalTrainingId && ['running', 'pending'].includes(job.status)) {
       try {
         const trainingService = new TrainingService()
-        const currentStatus = await trainingService.getTrainingStatus(
+        
+        // Add timeout to prevent hanging on external API calls
+        const statusPromise = trainingService.getTrainingStatus(
           payload.externalTrainingId,
           payload?.name || 'Unknown Model'
         )
+        
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Training status fetch timeout')), 3000)
+        })
+        
+        const currentStatus = await Promise.race([statusPromise, timeoutPromise]) as any
         
         trainingStatus = {
           status: currentStatus.status,
@@ -98,7 +106,8 @@ export async function GET(
         }
       } catch (statusError) {
         console.error(`Failed to get status for training ${payload.externalTrainingId}:`, statusError)
-        trainingStatus.error = 'Failed to fetch current training status'
+        // Don't fail the whole request, just use basic status
+        trainingStatus.error = 'Unable to fetch current status (external service timeout)'
       }
     } else if (job.status === 'completed') {
       trainingStatus.progress = 100
