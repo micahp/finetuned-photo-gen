@@ -13,7 +13,7 @@ export interface UserModelWithImages extends UserModel {
 }
 
 // API Response types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: string
@@ -46,11 +46,11 @@ export interface ModelUploadProgress {
 
 // Image generation types
 export interface GenerationRequest {
-  prompt: string
   modelId: string
+  prompt: string
   style?: string
-  aspectRatio?: string
-  quantity?: number
+  aspectRatio: '1:1' | '16:9' | '9:16' | '3:4' | '4:3'
+  quantity: number
 }
 
 export interface GenerationParams {
@@ -146,20 +146,222 @@ export interface PromptInputProps {
 }
 
 // Error types
-export interface AppError {
-  code: string
-  message: string
-  details?: any
+export class AppError extends Error {
+  public statusCode: number
+  public isOperational: boolean
+
+  constructor(message: string, statusCode: number = 500, isOperational: boolean = true) {
+    super(message)
+    this.statusCode = statusCode
+    this.isOperational = isOperational
+
+    Error.captureStackTrace(this, this.constructor)
+  }
 }
 
-export class APIError extends Error {
-  public code: string
-  public status: number
-  
-  constructor(message: string, code: string = 'UNKNOWN_ERROR', status: number = 500) {
-    super(message)
-    this.name = 'APIError'
-    this.code = code
-    this.status = status
+export class ValidationError extends AppError {
+  public errors: Array<{ field: string; message: string }>
+
+  constructor(errors: Array<{ field: string; message: string }>) {
+    super('Validation failed', 400)
+    this.errors = errors
   }
+}
+
+export class AuthenticationError extends AppError {
+  constructor(message: string = 'Authentication failed') {
+    super(message, 401)
+  }
+}
+
+export class AuthorizationError extends AppError {
+  constructor(message: string = 'Access denied') {
+    super(message, 403)
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(resource: string = 'Resource') {
+    super(`${resource} not found`, 404)
+  }
+}
+
+export class ConflictError extends AppError {
+  constructor(message: string) {
+    super(message, 409)
+  }
+}
+
+export class RateLimitError extends AppError {
+  constructor(message: string = 'Rate limit exceeded') {
+    super(message, 429)
+  }
+}
+
+// User-related types
+export interface UserProfile {
+  id: string
+  email: string
+  name: string | null
+  subscriptionStatus: string
+  subscriptionPlan: string | null
+  stripeCustomerId: string | null
+  credits: number
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Model-related types
+export interface ModelData {
+  id: string
+  userId: string
+  name: string
+  status: 'training' | 'completed' | 'failed'
+  togetherModelId?: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface TrainingImageData {
+  id: string
+  userModelId: string
+  fileName: string
+  originalFileName: string
+  s3Key: string
+  s3Url: string
+  createdAt: Date
+}
+
+// Generation types
+export interface GeneratedImageData {
+  id: string
+  userId: string
+  userModelId: string
+  prompt: string
+  style?: string | null
+  aspectRatio: string
+  fileName: string
+  s3Key: string
+  s3Url: string
+  generationTime?: number | null
+  createdAt: Date
+}
+
+// Job queue types
+export interface JobQueueData {
+  id: string
+  userId: string
+  userModelId?: string | null
+  type: 'model_training' | 'image_generation'
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  priority: number
+  payload: Record<string, unknown>
+  result?: Record<string, unknown> | null
+  errorMessage?: string | null
+  attempts: number
+  maxAttempts: number
+  createdAt: Date
+  updatedAt: Date
+  startedAt?: Date | null
+  completedAt?: Date | null
+}
+
+// Subscription types
+export interface SubscriptionData {
+  id: string
+  userId: string
+  stripeSubscriptionId: string
+  status: string
+  plan: string
+  currentPeriodStart: Date
+  currentPeriodEnd: Date
+  cancelAtPeriodEnd: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// File upload types
+export interface FileUploadResponse {
+  fileName: string
+  s3Key: string
+  s3Url: string
+  originalFileName: string
+}
+
+// Together AI types
+export interface TogetherModelResponse {
+  id: string
+  name: string
+  status: 'training' | 'completed' | 'failed'
+  created_at: string
+  updated_at: string
+}
+
+export interface TogetherGenerationResponse {
+  id: string
+  status: 'processing' | 'completed' | 'failed'
+  images?: Array<{
+    url: string
+    width: number
+    height: number
+  }>
+  error?: string
+}
+
+// Stripe types
+export interface StripeCheckoutSession {
+  id: string
+  url: string
+}
+
+export interface StripeWebhookEvent {
+  id: string
+  type: string
+  data: {
+    object: Record<string, unknown>
+  }
+}
+
+// Pagination types
+export interface PaginationParams {
+  page: number
+  limit: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasNextPage: boolean
+    hasPrevPage: boolean
+  }
+}
+
+// Form validation types
+export interface FieldError {
+  field: string
+  message: string
+}
+
+// Credit system types
+export interface CreditTransaction {
+  id: string
+  userId: string
+  amount: number
+  type: 'earned' | 'spent' | 'purchased'
+  description: string
+  createdAt: Date
+}
+
+// Analytics types
+export interface UsageStats {
+  modelsCreated: number
+  imagesGenerated: number
+  creditsUsed: number
+  creditsRemaining: number
 } 

@@ -36,6 +36,7 @@ export async function createUser(email: string, password: string, name?: string)
       name: true,
       subscriptionStatus: true,
       subscriptionPlan: true,
+      stripeCustomerId: true,
       credits: true,
       createdAt: true,
       updatedAt: true,
@@ -65,6 +66,7 @@ export async function validateCredentials(email: string, password: string): Prom
   }
 
   // Return user without password
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { password: _, ...userWithoutPassword } = user
   return userWithoutPassword
 } 

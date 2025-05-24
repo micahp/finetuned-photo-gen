@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createUser } from '@/lib/auth'
-import { RegisterRequest, ApiResponse } from '@/lib/types'
+import { validateCredentials } from '@/lib/auth'
+import { LoginRequest, ApiResponse } from '@/lib/types'
 
 export async function POST(request: NextRequest) {
   try {
-    const body: RegisterRequest = await request.json()
-    const { email, password, name } = body
+    const body: LoginRequest = await request.json()
+    const { email, password } = body
 
     // Validation
     if (!email) {
@@ -40,42 +40,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Password validation
-    if (password.length < 6) {
+    // Validate credentials
+    const user = await validateCredentials(email.toLowerCase(), password)
+
+    if (!user) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Password must be at least 6 characters long',
+          error: 'Invalid email or password',
         } as ApiResponse,
-        { status: 400 }
+        { status: 401 }
       )
     }
 
-    // Create user
-    const user = await createUser(email.toLowerCase(), password, name)
-
-    // Success response
+    // Success - return user data
     return NextResponse.json(
       {
         success: true,
         data: { user },
-        message: 'User created successfully',
+        message: 'Login successful',
       } as ApiResponse,
-      { status: 201 }
+      { status: 200 }
     )
   } catch (error: unknown) {
-    console.error('Registration error:', error)
-
-    // Handle duplicate user error
-    if (error instanceof Error && error.message.includes('already exists')) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-        } as ApiResponse,
-        { status: 409 }
-      )
-    }
+    console.error('Login error:', error)
 
     return NextResponse.json(
       {
