@@ -131,6 +131,12 @@ export default function GeneratePage() {
       if (result.success) {
         setGeneratedImage(result.image)
         setCreditsRemaining(result.creditsRemaining)
+        
+        // Trigger a refresh of dashboard stats in the background
+        // This will update the dashboard when user navigates back
+        fetch('/api/dashboard/stats').catch(() => {
+          // Silent fail - this is just for cache warming
+        })
       } else {
         throw new Error(result.error || 'Generation failed')
       }
