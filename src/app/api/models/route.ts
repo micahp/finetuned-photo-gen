@@ -53,6 +53,13 @@ export async function GET(request: NextRequest) {
 
           if (serviceName === 'replicate' && model.externalTrainingId) {
             // Use TrainingService for comprehensive status checking including HuggingFace upload
+            console.log(`🔍 Training status check params:`, {
+              modelId: model.id,
+              modelName: model.name,
+              externalTrainingId: model.externalTrainingId,
+              serviceName: serviceName
+            })
+            
             const trainingStatus = await trainingService.getTrainingStatus(model.externalTrainingId, model.name)
             
             console.log(`📊 Training status for ${model.name}:`, {
@@ -92,14 +99,16 @@ export async function GET(request: NextRequest) {
             serviceName = 'together_ai'
             const currentServiceStatus = await togetherService.getTrainingStatus(model.modelId)
             
-            if (currentServiceStatus && currentServiceStatus.status !== model.status && currentServiceStatus.status !== 'processing' && currentServiceStatus.status !== 'starting') {
-              newStatus = (currentServiceStatus.status === 'succeeded' || currentServiceStatus.status === 'completed') ? 'ready' :
-                          (currentServiceStatus.status === 'failed' || currentServiceStatus.status === 'canceled') ? 'failed' :
-                          model.status
-              
-              if (newStatus === 'ready') {
+            if (currentServiceStatus && currentServiceStatus.status !== model.status) {
+              // Map TogetherAI status to database status using correct status values
+              const serviceStatus = currentServiceStatus.status
+              if (serviceStatus === 'completed') {
+                newStatus = 'ready'
                 trainingCompletedAt = new Date()
+              } else if (serviceStatus === 'failed') {
+                newStatus = 'failed'
               }
+              // For 'queued', 'training', keep current status (training)
             }
           } else {
             console.warn(`Model ${model.id} is in training status but has no usable ID for status check.`)

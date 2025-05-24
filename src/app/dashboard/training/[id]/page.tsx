@@ -454,7 +454,13 @@ export default function TrainingDetailsPage() {
                     <div className="flex items-start">
                       <AlertTriangle className="h-5 w-5 text-red-600 mr-3 mt-0.5" />
                       <div className="flex-1">
-                        <h4 className="text-sm font-medium text-red-800 mb-1">Training Failed</h4>
+                        <h4 className="text-sm font-medium text-red-800 mb-1">
+                          {trainingJob.error?.includes('Model training completed successfully') 
+                            ? 'Upload Failed (Training Succeeded)' 
+                            : trainingJob.debugData?.lastError?.stage === 'huggingface_upload' 
+                              ? 'Model Upload Failed' 
+                              : 'Training Failed'}
+                        </h4>
                         <p className="text-sm text-red-700">{trainingJob.error}</p>
                         {trainingJob.debugData?.lastError && (
                           <div className="mt-3 text-xs text-red-600">

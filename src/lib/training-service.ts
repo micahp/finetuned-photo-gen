@@ -274,14 +274,24 @@ export class TrainingService {
     try {
       this.debugger.startStage(TrainingStage.HUGGINGFACE_UPLOAD, 'Starting HuggingFace upload')
       
+      console.log(`🔍 TRAINING COMPLETION DEBUG:`, {
+        trainingId,
+        modelName,
+        modelNameType: typeof modelName,
+        modelNameLength: modelName?.length,
+        replicateOutput: replicateStatus.output
+      })
+      
       console.log(`Training completed for ${modelName}, uploading to HuggingFace...`)
 
       // Generate unique repository name to avoid conflicts
-      const baseModelName = modelName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
-      const uniqueModelName = `${baseModelName}-${timestamp}`
+      const baseModelName = modelName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'trained-model'
+      // Use a more unique timestamp format with milliseconds and a random suffix
+      const timestamp = Date.now()
+      const randomSuffix = Math.random().toString(36).substring(2, 8)
+      const uniqueModelName = `${baseModelName}-${timestamp}-${randomSuffix}`
 
-      console.log(`🤗 Creating unique HuggingFace repository: ${uniqueModelName}`)
+      console.log(`🤗 Creating unique HuggingFace repository: ${uniqueModelName} (original: ${modelName})`)
 
       // Upload to HuggingFace using existing service instance
       const uploadResponse = await this.huggingface.uploadModel({
@@ -296,10 +306,10 @@ export class TrainingService {
         // Handle specific HuggingFace errors
         let errorMessage = uploadResponse.error || 'HuggingFace upload failed'
         
-        if (errorMessage.includes('You already created this model repo')) {
-          // Try with an additional random suffix
-          const randomSuffix = Math.random().toString(36).substring(2, 8)
-          const retryModelName = `${uniqueModelName}-${randomSuffix}`
+        if (errorMessage.includes('You already created this model repo') || errorMessage.includes('already exists')) {
+          // Try with an additional random suffix - make it even more unique
+          const extraRandomSuffix = Math.random().toString(36).substring(2, 10)
+          const retryModelName = `${baseModelName}-${timestamp}-${randomSuffix}-${extraRandomSuffix}`
           
           console.log(`🔄 Repository exists, retrying with: ${retryModelName}`)
           
@@ -322,7 +332,7 @@ export class TrainingService {
               id: trainingId,
               status: 'completed',
               progress: 100,
-              stage: 'Training completed and model uploaded to HuggingFace',
+              stage: 'Training completed successfully and model uploaded to HuggingFace',
               huggingFaceRepo: retryResponse.repoId,
               debugData: this.debugger.getDebugSummary()
             }
@@ -334,15 +344,16 @@ export class TrainingService {
         const error = this.debugger.logError(
           TrainingStage.HUGGINGFACE_UPLOAD,
           new Error(errorMessage),
-          'Failed to upload to HuggingFace'
+          'HuggingFace upload failed after training completion'
         )
 
+        // Training succeeded but upload failed - be specific about this
         return {
           id: trainingId,
           status: 'failed',
           progress: 95,
-          stage: 'Failed to upload to HuggingFace',
-          error: errorMessage,
+          stage: 'Training completed successfully, but HuggingFace upload failed',
+          error: `Model training completed successfully, but failed to upload to HuggingFace: ${errorMessage}`,
           debugData: this.debugger.getDebugSummary()
         }
       }
@@ -360,7 +371,7 @@ export class TrainingService {
         id: trainingId,
         status: 'completed',
         progress: 100,
-        stage: 'Training completed and model uploaded to HuggingFace',
+        stage: 'Training completed successfully and model uploaded to HuggingFace',
         huggingFaceRepo: uploadResponse.repoId,
         debugData: this.debugger.getDebugSummary()
       }
@@ -373,12 +384,14 @@ export class TrainingService {
       )
 
       console.error('Error handling training completion:', error)
+      
+      // Training succeeded but upload failed - be specific about this
       return {
         id: trainingId,
         status: 'failed',
         progress: 90,
-        stage: 'Failed to complete workflow',
-        error: error instanceof Error ? error.message : 'Completion failed',
+        stage: 'Training completed successfully, but HuggingFace upload failed',
+        error: `Model training completed successfully, but failed to upload to HuggingFace: ${error instanceof Error ? error.message : 'Upload failed'}`,
         debugData: this.debugger.getDebugSummary()
       }
     }
