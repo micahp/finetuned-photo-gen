@@ -200,10 +200,12 @@
 
 ## 💳 **Phase 6: Billing & Subscriptions (Week 6)**
 
-### **Stripe Integration**
+### **Stripe & Subscription Integration**
 - [ ] Stripe configuration and webhooks
 - [ ] Pricing plans and products setup
 - [ ] Subscription API endpoints
+- [ ] Ensure model upload limits are enforced by tier
+- [ ] Consider if we need webhooks for like replicate
 - [ ] Payment processing
 - [ ] Billing dashboard and history
 
@@ -224,6 +226,7 @@
 - [ ] Input sanitization improvements
 
 ### **Housekeeping**
+- [ ] Make sure free and lower tier paying users only have 1 model uploaded at a time, prompt and delete model when they try to create a new one
 - [ ] Check existing pages for missing pages and components
 - [ ] Implement any missing pages and components
 

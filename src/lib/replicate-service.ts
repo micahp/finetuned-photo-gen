@@ -62,7 +62,10 @@ export class ReplicateService {
       // For now, use a fixed owner name (can be made dynamic later)
       const owner = 'micahp'
       
-      const modelId = `flux-lora-${modelName.toLowerCase().replace(/\s+/g, '-')}`
+      // Generate unique model ID with timestamp and random suffix
+      const timestamp = Date.now()
+      const randomSuffix = Math.random().toString(36).substring(2, 8)
+      const modelId = `flux-lora-${modelName.toLowerCase().replace(/\s+/g, '-')}-${timestamp}-${randomSuffix}`
       
       // Use the correct models.create API with positional arguments
       const model = await this.client.models.create(

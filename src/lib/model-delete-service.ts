@@ -3,11 +3,13 @@ import * as path from 'path'
 import { prisma } from './db'
 import { HuggingFaceService } from './huggingface-service'
 import { CloudStorageService } from './cloud-storage'
+import { ReplicateService } from './replicate-service'
 
 interface DeleteResult {
   success: boolean
   error?: string
   details?: {
+    replicate?: { success: boolean; error?: string }
     huggingface?: { success: boolean; error?: string }
     cloudStorage?: { success: boolean; error?: string }
     localImages?: { success: boolean; deletedCount: number; error?: string }
@@ -18,10 +20,18 @@ interface DeleteResult {
 export class ModelDeleteService {
   private huggingfaceService: HuggingFaceService
   private cloudStorage: CloudStorageService
+  private replicateService: ReplicateService | null = null
 
   constructor() {
     this.huggingfaceService = new HuggingFaceService()
     this.cloudStorage = new CloudStorageService()
+    
+    // Initialize Replicate service if API token is available
+    try {
+      this.replicateService = new ReplicateService()
+    } catch (error) {
+      console.warn('Replicate service not available:', error)
+    }
   }
 
   /**
@@ -68,6 +78,19 @@ export class ModelDeleteService {
           console.log(`✅ HuggingFace repository deleted: ${model.huggingfaceRepo}`)
         } else {
           console.warn(`⚠️ Failed to delete HuggingFace repository: ${hfResult.error}`)
+        }
+      }
+
+      // 2.5. Delete Replicate model (if exists)
+      if (model.externalTrainingService === 'replicate' && model.modelId && this.replicateService) {
+        console.log(`🔄 Deleting Replicate model: ${model.modelId}`)
+        const replicateResult = await this.deleteReplicateModel(model.modelId)
+        details.replicate = replicateResult
+        
+        if (replicateResult.success) {
+          console.log(`✅ Replicate model deleted: ${model.modelId}`)
+        } else {
+          console.warn(`⚠️ Failed to delete Replicate model: ${replicateResult.error}`)
         }
       }
 
@@ -244,6 +267,54 @@ export class ModelDeleteService {
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Failed to get deletion preview'
+      }
+    }
+  }
+
+  /**
+   * Delete a model from Replicate
+   */
+  private async deleteReplicateModel(modelId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (!this.replicateService) {
+        return { success: false, error: 'Replicate service not available' }
+      }
+
+      // Parse owner and name from modelId (format: "owner/model-name")
+      const [owner, name] = modelId.split('/')
+      if (!owner || !name) {
+        return { success: false, error: `Invalid model ID format: ${modelId}` }
+      }
+
+      // Get API token from Replicate service
+      const token = process.env.REPLICATE_API_TOKEN
+      if (!token) {
+        return { success: false, error: 'Replicate API token not available' }
+      }
+
+      // Use direct HTTP API call since the JS client doesn't support model deletion
+      const response = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        return { success: true }
+      } else {
+        const errorData = await response.text()
+        return { 
+          success: false, 
+          error: `HTTP ${response.status}: ${errorData}` 
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete Replicate model:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       }
     }
   }
