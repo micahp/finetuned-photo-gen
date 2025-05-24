@@ -18,6 +18,8 @@ import { ImageUpload } from '@/components/upload/ImageUpload'
 const modelSchema = z.object({
   name: z.string().min(1, 'Model name is required').max(100, 'Model name too long'),
   description: z.string().max(500, 'Description too long').optional(),
+  triggerWord: z.string().optional(),
+  baseModel: z.string().optional(),
 })
 
 type ModelFormData = z.infer<typeof modelSchema>
@@ -32,27 +34,31 @@ export default function NewModelPage() {
   const router = useRouter()
   const { data: session } = useSession()
   const [currentStep, setCurrentStep] = useState(1)
-  const [uploadedImages, setUploadedImages] = useState<string[]>([])
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [isCreating, setIsCreating] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({})
+  const [creationProgress, setCreationProgress] = useState('')
 
   const form = useForm<ModelFormData>({
     resolver: zodResolver(modelSchema),
     defaultValues: {
       name: '',
       description: '',
+      triggerWord: '',
+      baseModel: 'black-forest-labs/FLUX.1-dev',
     },
   })
 
   const handleUploadSuccess = (files: File[]) => {
-    // For now, we'll use filenames as IDs until we have proper image management
-    const imageIds = files.map(file => file.name)
-    setUploadedImages(imageIds)
+    setUploadedFiles(files)
   }
 
   const handleNext = () => {
-    if (currentStep === 1 && uploadedImages.length === 0) {
+    if (currentStep === 1 && uploadedFiles.length === 0) {
       alert('Please upload at least one image')
+      return
+    }
+    if (currentStep === 1 && uploadedFiles.length < 5) {
+      alert('Please upload at least 5 images for better training results')
       return
     }
     if (currentStep < steps.length) {
@@ -67,15 +73,22 @@ export default function NewModelPage() {
   }
 
   const onSubmit = async (data: ModelFormData) => {
-    if (uploadedImages.length === 0) {
+    if (uploadedFiles.length === 0) {
       alert('Please upload at least one image')
+      return
+    }
+
+    if (uploadedFiles.length < 5) {
+      alert('Please upload at least 5 images for better training results')
       return
     }
 
     setIsCreating(true)
 
     try {
-      const response = await fetch('/api/models/create', {
+      // Step 1: Create the model record
+      setCreationProgress('Creating model record...')
+      const createModelResponse = await fetch('/api/models/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -83,25 +96,73 @@ export default function NewModelPage() {
         body: JSON.stringify({
           name: data.name,
           description: data.description,
-          imageIds: uploadedImages,
+          triggerWord: data.triggerWord || data.name.toLowerCase().replace(/\s+/g, '_'),
+          baseModel: data.baseModel,
+          skipTraining: true, // We'll handle training separately
         }),
       })
 
-      if (!response.ok) {
-        const error = await response.json()
+      if (!createModelResponse.ok) {
+        const error = await createModelResponse.json()
         throw new Error(error.error || 'Failed to create model')
       }
 
-      const result = await response.json()
+      const createResult = await createModelResponse.json()
+      const modelId = createResult.model.id
+
+      // Step 2: Upload training images
+      setCreationProgress('Uploading training images...')
+      const formData = new FormData()
+      uploadedFiles.forEach(file => {
+        formData.append('images', file)
+      })
+      formData.append('userModelId', modelId)
+
+      const uploadResponse = await fetch('/api/models/training-images', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.json()
+        throw new Error(error.error || 'Failed to upload training images')
+      }
+
+      const uploadResult = await uploadResponse.json()
+
+      // Step 3: Start Together AI training
+      setCreationProgress('Starting AI training...')
+      const trainingResponse = await fetch('/api/models/start-training', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          modelId: modelId,
+          trainingImages: uploadResult.uploads,
+        }),
+      })
+
+      if (!trainingResponse.ok) {
+        const error = await trainingResponse.json()
+        throw new Error(error.error || 'Failed to start training')
+      }
+
+      const trainingResult = await trainingResponse.json()
       
-      if (result.success) {
-        router.push('/dashboard/models')
+      if (trainingResult.success) {
+        setCreationProgress('Training started successfully!')
+        // Redirect to models page after a short delay
+        setTimeout(() => {
+          router.push('/dashboard/models')
+        }, 1500)
       } else {
-        throw new Error(result.error || 'Failed to create model')
+        throw new Error(trainingResult.error || 'Failed to start training')
       }
     } catch (error) {
       console.error('Model creation error:', error)
       alert(error instanceof Error ? error.message : 'Failed to create model')
+      setCreationProgress('')
     } finally {
       setIsCreating(false)
     }
@@ -177,6 +238,7 @@ export default function NewModelPage() {
                   <li>• Use different angles, lighting, and backgrounds</li>
                   <li>• Avoid blurry, low-resolution, or heavily edited images</li>
                   <li>• Focus on the main subject (person, object, or style)</li>
+                  <li>• Images will be used to train your custom AI model</li>
                 </ul>
               </div>
               
@@ -185,11 +247,16 @@ export default function NewModelPage() {
                 maxFiles={20}
               />
 
-              {uploadedImages.length > 0 && (
-                <div className="mt-4">
+              {uploadedFiles.length > 0 && (
+                <div className="mt-4 space-y-2">
                   <Badge variant="secondary">
-                    {uploadedImages.length} image{uploadedImages.length !== 1 ? 's' : ''} uploaded
+                    {uploadedFiles.length} image{uploadedFiles.length !== 1 ? 's' : ''} uploaded
                   </Badge>
+                  {uploadedFiles.length < 5 && (
+                    <p className="text-sm text-amber-600">
+                      Consider uploading at least 5 images for better training results
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -232,6 +299,50 @@ export default function NewModelPage() {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="triggerWord"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Trigger Word (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g., johndoe_person (auto-generated if empty)"
+                          {...field}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-gray-500 mt-1">
+                        This word will be used in prompts to generate images of your subject
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="baseModel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Base Model</FormLabel>
+                      <FormControl>
+                        <select
+                          className="w-full p-2 border border-gray-300 rounded-md"
+                          {...field}
+                        >
+                          <option value="black-forest-labs/FLUX.1-dev">FLUX.1 Dev (Recommended)</option>
+                          <option value="black-forest-labs/FLUX.1-schnell">FLUX.1 Schnell (Fast)</option>
+                          <option value="black-forest-labs/FLUX.1-pro">FLUX.1 Pro (Premium)</option>
+                        </select>
+                      </FormControl>
+                      <p className="text-xs text-gray-500 mt-1">
+                        The base model that will be fine-tuned with your images
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
             </Form>
           )}
@@ -250,6 +361,14 @@ export default function NewModelPage() {
                       <dt className="text-gray-600">Description:</dt>
                       <dd>{form.getValues('description') || 'No description'}</dd>
                     </div>
+                    <div>
+                      <dt className="text-gray-600">Trigger Word:</dt>
+                      <dd className="font-medium">{form.getValues('triggerWord') || `${form.getValues('name')?.toLowerCase().replace(/\s+/g, '_') || 'auto'}_person`}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">Base Model:</dt>
+                      <dd>{form.getValues('baseModel')}</dd>
+                    </div>
                   </dl>
                 </div>
                 
@@ -258,7 +377,11 @@ export default function NewModelPage() {
                   <dl className="space-y-2 text-sm">
                     <div>
                       <dt className="text-gray-600">Images:</dt>
-                      <dd className="font-medium">{uploadedImages.length} uploaded</dd>
+                      <dd className="font-medium">{uploadedFiles.length} uploaded</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">Total Size:</dt>
+                      <dd>{(uploadedFiles.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024).toFixed(1)} MB</dd>
                     </div>
                   </dl>
                 </div>
@@ -267,10 +390,20 @@ export default function NewModelPage() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <h3 className="font-medium text-yellow-900 mb-2">Training Process</h3>
                 <p className="text-sm text-yellow-800">
-                  Your model will be queued for training and will typically take 15-30 minutes to complete.
+                  Your model will be trained using Together AI's LoRA fine-tuning. 
+                  Training typically takes 15-30 minutes to complete.
                   You'll be able to generate images once training is finished.
                 </p>
               </div>
+
+              {isCreating && creationProgress && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                    <span className="text-sm font-medium text-blue-900">{creationProgress}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -281,29 +414,29 @@ export default function NewModelPage() {
         <Button
           variant="outline"
           onClick={handleBack}
-          disabled={currentStep === 1}
+          disabled={currentStep === 1 || isCreating}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
 
         {currentStep < steps.length ? (
-          <Button onClick={handleNext}>
+          <Button onClick={handleNext} disabled={isCreating}>
             Next
             <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         ) : (
           <Button
             onClick={form.handleSubmit(onSubmit)}
-            disabled={isCreating || uploadedImages.length === 0}
+            disabled={isCreating || uploadedFiles.length === 0}
           >
             {isCreating ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating Model...
+                {creationProgress || 'Creating Model...'}
               </>
             ) : (
-              'Create Model'
+              'Create & Train Model'
             )}
           </Button>
         )}

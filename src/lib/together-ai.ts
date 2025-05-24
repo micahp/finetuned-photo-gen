@@ -21,6 +21,55 @@ interface GenerateImageResponse {
   error?: string
 }
 
+interface TrainLoRAParams {
+  name: string
+  description?: string
+  baseModel?: string
+  trainingImages: Array<{
+    url: string
+    caption?: string
+  }>
+  triggerWord?: string
+  learningRate?: number
+  epochs?: number
+  batchSize?: number
+}
+
+interface TrainLoRAResponse {
+  id: string
+  status: 'queued' | 'training' | 'completed' | 'failed'
+  name: string
+  progress?: number
+  estimatedTimeRemaining?: number
+  error?: string
+}
+
+interface BatchGenerateParams {
+  prompts: string[]
+  model?: string
+  width?: number
+  height?: number
+  steps?: number
+  aspectRatio?: '1:1' | '16:9' | '9:16' | '3:4' | '4:3'
+  batchSize?: number
+}
+
+interface BatchGenerateResponse {
+  batchId: string
+  status: 'processing' | 'completed' | 'failed'
+  results: Array<{
+    prompt: string
+    image?: {
+      url: string
+      width: number
+      height: number
+    }
+    error?: string
+  }>
+  completedCount: number
+  totalCount: number
+}
+
 export class TogetherAIService {
   private apiKey: string
   private baseUrl = 'https://api.together.xyz/v1'
@@ -95,6 +144,192 @@ export class TogetherAIService {
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       }
     }
+  }
+
+  // Train LoRA model using uploaded images
+  async trainLoRA(params: TrainLoRAParams): Promise<TrainLoRAResponse> {
+    try {
+      const requestBody = {
+        model_type: 'lora',
+        name: params.name,
+        description: params.description || `Custom LoRA model: ${params.name}`,
+        base_model: params.baseModel || 'black-forest-labs/FLUX.1-dev',
+        trigger_word: params.triggerWord || params.name.toLowerCase().replace(/\s+/g, '_'),
+        training_type: 'full',
+        hyperparameters: {
+          learning_rate: params.learningRate || 0.0002,
+          epochs: params.epochs || 100,
+          batch_size: params.batchSize || 1,
+          resolution: 1024,
+          gradient_accumulation_steps: 1,
+        },
+        training_data: params.trainingImages.map((img, index) => ({
+          image_url: img.url,
+          caption: img.caption || `${params.triggerWord || params.name} person`,
+        }))
+      }
+
+      const response = await fetch(`${this.baseUrl}/fine-tuning/jobs`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error?.message || `Training API request failed: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      return {
+        id: data.id,
+        status: data.status as 'queued' | 'training' | 'completed' | 'failed',
+        name: params.name,
+        progress: 0,
+        estimatedTimeRemaining: 1800 // 30 minutes estimate
+      }
+
+    } catch (error) {
+      console.error('Together AI training error:', error)
+      return {
+        id: `train_err_${Date.now()}`,
+        status: 'failed',
+        name: params.name,
+        error: error instanceof Error ? error.message : 'Training failed'
+      }
+    }
+  }
+
+  // Check training job status
+  async getTrainingStatus(jobId: string): Promise<TrainLoRAResponse> {
+    try {
+      const response = await fetch(`${this.baseUrl}/fine-tuning/jobs/${jobId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Status check failed: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      return {
+        id: data.id,
+        status: data.status as 'queued' | 'training' | 'completed' | 'failed',
+        name: data.name || 'Unknown',
+        progress: this.calculateProgress(data.status, data.created_at),
+        estimatedTimeRemaining: this.calculateTimeRemaining(data.status, data.created_at),
+        error: data.error?.message
+      }
+
+    } catch (error) {
+      console.error('Training status check error:', error)
+      return {
+        id: jobId,
+        status: 'failed',
+        name: 'Unknown',
+        error: error instanceof Error ? error.message : 'Status check failed'
+      }
+    }
+  }
+
+  // Batch generation support
+  async batchGenerateImages(params: BatchGenerateParams): Promise<BatchGenerateResponse> {
+    const batchId = `batch_${Date.now()}`
+    const results: BatchGenerateResponse['results'] = []
+    const batchSize = params.batchSize || 3 // Process in smaller batches to avoid timeouts
+    
+    try {
+      for (let i = 0; i < params.prompts.length; i += batchSize) {
+        const promptBatch = params.prompts.slice(i, i + batchSize)
+        
+        const batchPromises = promptBatch.map(async (prompt) => {
+          try {
+            const result = await this.generateImage({
+              prompt,
+              model: params.model,
+              width: params.width,
+              height: params.height,
+              steps: params.steps,
+              aspectRatio: params.aspectRatio
+            })
+
+            if (result.status === 'completed' && result.images?.[0]) {
+              return {
+                prompt,
+                image: result.images[0]
+              }
+            } else {
+              return {
+                prompt,
+                error: result.error || 'Generation failed'
+              }
+            }
+          } catch (error) {
+            return {
+              prompt,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            }
+          }
+        })
+
+        const batchResults = await Promise.all(batchPromises)
+        results.push(...batchResults)
+      }
+
+      return {
+        batchId,
+        status: 'completed',
+        results,
+        completedCount: results.filter(r => r.image).length,
+        totalCount: params.prompts.length
+      }
+
+    } catch (error) {
+      return {
+        batchId,
+        status: 'failed',
+        results,
+        completedCount: results.filter(r => r.image).length,
+        totalCount: params.prompts.length
+      }
+    }
+  }
+
+  // Helper methods for training progress calculation
+  private calculateProgress(status: string, createdAt?: string): number {
+    if (status === 'completed') return 100
+    if (status === 'failed') return 0
+    if (status === 'queued') return 5
+    
+    if (status === 'training' && createdAt) {
+      const elapsed = Date.now() - new Date(createdAt).getTime()
+      const estimatedTotal = 1800000 // 30 minutes in milliseconds
+      return Math.min(95, 10 + (elapsed / estimatedTotal) * 85)
+    }
+    
+    return 10
+  }
+
+  private calculateTimeRemaining(status: string, createdAt?: string): number {
+    if (status === 'completed' || status === 'failed') return 0
+    if (status === 'queued') return 1800 // 30 minutes
+    
+    if (status === 'training' && createdAt) {
+      const elapsed = Date.now() - new Date(createdAt).getTime()
+      const estimatedTotal = 1800000 // 30 minutes in milliseconds
+      return Math.max(0, Math.floor((estimatedTotal - elapsed) / 1000))
+    }
+    
+    return 1800
   }
 
   // Get available FLUX models

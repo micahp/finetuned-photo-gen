@@ -6,7 +6,11 @@ import { z } from 'zod'
 const createModelSchema = z.object({
   name: z.string().min(1, 'Model name is required').max(100, 'Model name too long'),
   description: z.string().max(500, 'Description too long').optional(),
-  imageIds: z.array(z.string()).min(1, 'At least one image is required').max(20, 'Too many images'),
+  triggerWord: z.string().optional(),
+  baseModel: z.string().optional(),
+  skipTraining: z.boolean().optional(),
+  // Legacy support for old imageIds format
+  imageIds: z.array(z.string()).optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -31,25 +35,110 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { name, imageIds } = validation.data
+    const { name, description, triggerWord, baseModel, skipTraining, imageIds } = validation.data
 
-    // Basic validation
-    if (imageIds.length < 1) {
-      return NextResponse.json(
-        { error: 'At least one image is required' },
-        { status: 400 }
-      )
-    }
+    // Generate trigger word if not provided
+    const finalTriggerWord = triggerWord || name.toLowerCase().replace(/\s+/g, '_')
 
-    // Create the model
+    // Create the model record
     const model = await prisma.userModel.create({
       data: {
         name,
-        status: 'pending',
+        status: skipTraining ? 'pending' : 'pending',
         userId: session.user.id,
+        triggerWord: finalTriggerWord,
       },
     })
 
+    // If skipTraining is true, just return the model without starting training
+    if (skipTraining) {
+      return NextResponse.json(
+        {
+          success: true,
+          model: {
+            id: model.id,
+            name: model.name,
+            status: model.status,
+            userId: model.userId,
+            triggerWord: model.triggerWord,
+            createdAt: model.createdAt,
+          },
+          message: 'Model created successfully. Upload training images to continue.'
+        },
+        { status: 201 }
+      )
+    }
+
+    // Legacy flow for backward compatibility (if imageIds provided)
+    if (imageIds && imageIds.length > 0) {
+      // Validate we have uploaded images to work with
+      if (imageIds.length < 3) {
+        return NextResponse.json(
+          { error: 'At least 3 images are required for model training' },
+          { status: 400 }
+        )
+      }
+
+      try {
+        // Create a job queue entry for this training
+        await prisma.jobQueue.create({
+          data: {
+            userId: session.user.id,
+            jobType: 'model_training',
+            status: 'pending',
+            payload: {
+              userModelId: model.id,
+              name,
+              description,
+              imageIds,
+              triggerWord: finalTriggerWord,
+              baseModel: baseModel || 'black-forest-labs/FLUX.1-dev'
+            }
+          }
+        })
+
+        // Update model status to training
+        await prisma.userModel.update({
+          where: { id: model.id },
+          data: { 
+            status: 'training',
+            trainingStartedAt: new Date()
+          }
+        })
+
+        return NextResponse.json(
+          {
+            success: true,
+            model: {
+              id: model.id,
+              name: model.name,
+              status: 'training',
+              userId: model.userId,
+              triggerWord: model.triggerWord,
+              createdAt: model.createdAt,
+            },
+            message: 'Model training started successfully. Training typically takes 15-30 minutes.'
+          },
+          { status: 201 }
+        )
+
+      } catch (trainingError) {
+        console.error('Failed to start training:', trainingError)
+        
+        // Update model status to failed
+        await prisma.userModel.update({
+          where: { id: model.id },
+          data: { status: 'failed' }
+        })
+
+        return NextResponse.json(
+          { error: 'Failed to start model training' },
+          { status: 500 }
+        )
+      }
+    }
+
+    // Default response for new flow
     return NextResponse.json(
       {
         success: true,
@@ -58,8 +147,10 @@ export async function POST(request: NextRequest) {
           name: model.name,
           status: model.status,
           userId: model.userId,
+          triggerWord: model.triggerWord,
           createdAt: model.createdAt,
         },
+        message: 'Model created successfully.'
       },
       { status: 201 }
     )
