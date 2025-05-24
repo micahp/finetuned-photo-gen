@@ -41,7 +41,7 @@ export class ModelDeleteService {
     const details: DeleteResult['details'] = {}
     
     try {
-      console.log(`🗑️ Starting model deletion: ${modelId}`)
+      console.log(`🗑️ Starting model deletion: ${modelId} for user: ${userId}`)
 
       // 1. Get model data from database
       const model = await prisma.userModel.findFirst({
@@ -60,13 +60,16 @@ export class ModelDeleteService {
       })
 
       if (!model) {
+        console.log(`❌ Model not found or access denied: ${modelId} for user: ${userId}`)
         return {
           success: false,
           error: 'Model not found or access denied'
         }
       }
 
-      console.log(`📊 Model found: ${model.name} (${model.trainingImages.length} training images, ${model._count.generatedImages} generated images)`)
+      console.log(`📊 Model found: ${model.name} (ID: ${model.id})`)
+      console.log(`📊 Model details: status=${model.status}, externalTrainingService=${model.externalTrainingService}, modelId=${model.modelId}`)
+      console.log(`📊 Associated data: ${model.trainingImages.length} training images, ${model._count.generatedImages} generated images`)
 
       // 2. Delete HuggingFace repository (if exists)
       if (model.huggingfaceRepo) {
@@ -79,6 +82,8 @@ export class ModelDeleteService {
         } else {
           console.warn(`⚠️ Failed to delete HuggingFace repository: ${hfResult.error}`)
         }
+      } else {
+        console.log(`ℹ️ No HuggingFace repository to delete`)
       }
 
       // 2.5. Delete Replicate model (if exists)
@@ -92,6 +97,8 @@ export class ModelDeleteService {
         } else {
           console.warn(`⚠️ Failed to delete Replicate model: ${replicateResult.error}`)
         }
+      } else {
+        console.log(`ℹ️ No Replicate model to delete (service: ${model.externalTrainingService}, modelId: ${model.modelId})`)
       }
 
       // 3. Delete ZIP files from cloud storage (extract ZIP names from training IDs)
@@ -277,23 +284,33 @@ export class ModelDeleteService {
   private async deleteReplicateModel(modelId: string): Promise<{ success: boolean; error?: string }> {
     try {
       if (!this.replicateService) {
+        console.log(`❌ Replicate service not available for model deletion: ${modelId}`)
         return { success: false, error: 'Replicate service not available' }
       }
 
       // Parse owner and name from modelId (format: "owner/model-name")
       const [owner, name] = modelId.split('/')
       if (!owner || !name) {
+        console.log(`❌ Invalid model ID format: ${modelId}`)
         return { success: false, error: `Invalid model ID format: ${modelId}` }
       }
+
+      console.log(`🔄 Attempting to delete Replicate model: ${owner}/${name}`)
 
       // Get API token from Replicate service
       const token = process.env.REPLICATE_API_TOKEN
       if (!token) {
+        console.log(`❌ Replicate API token not available`)
         return { success: false, error: 'Replicate API token not available' }
       }
 
+      console.log(`🔑 Using Replicate API token (${token.substring(0, 8)}...)`)
+
       // Use direct HTTP API call since the JS client doesn't support model deletion
-      const response = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}`, {
+      const url = `https://api.replicate.com/v1/models/${owner}/${name}`
+      console.log(`📡 Making DELETE request to: ${url}`)
+      
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -301,10 +318,14 @@ export class ModelDeleteService {
         }
       })
 
+      console.log(`📡 Replicate API response: ${response.status} ${response.statusText}`)
+
       if (response.ok) {
+        console.log(`✅ Successfully deleted Replicate model: ${modelId}`)
         return { success: true }
       } else {
         const errorData = await response.text()
+        console.log(`❌ Replicate deletion failed: ${response.status} - ${errorData}`)
         return { 
           success: false, 
           error: `HTTP ${response.status}: ${errorData}` 

@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { User, LogOut, Settings, CreditCard } from 'lucide-react'
+import { User, LogOut, Settings, CreditCard, Shield } from 'lucide-react'
 
 export function Navbar() {
   const { data: session, status } = useSession()
@@ -49,6 +49,14 @@ export function Navbar() {
                 </Link>
                 <Link href="/dashboard/training">
                   <Button variant="ghost">Training</Button>
+                </Link>
+                
+                {/* Temporary admin access - should be protected later */}
+                <Link href="/admin">
+                  <Button variant="ghost" className="text-orange-600 hover:text-orange-700">
+                    <Shield className="h-4 w-4 mr-1" />
+                    Admin
+                  </Button>
                 </Link>
                 
                 <DropdownMenu>
