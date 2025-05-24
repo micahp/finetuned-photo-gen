@@ -136,15 +136,15 @@ export default function GeneratePage() {
     if (!generatedImage) return
 
     try {
-      const response = await fetch(generatedImage.url)
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
+      // Use our proxy endpoint to avoid CORS issues
+      const downloadUrl = `/api/download-image?url=${encodeURIComponent(generatedImage.url)}&filename=generated-image-${generatedImage.id}.png`
+      
+      // Create a temporary link and trigger download
       const a = document.createElement('a')
-      a.href = url
+      a.href = downloadUrl
       a.download = `generated-image-${generatedImage.id}.png`
       document.body.appendChild(a)
       a.click()
-      window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (err) {
       console.error('Download failed:', err)
