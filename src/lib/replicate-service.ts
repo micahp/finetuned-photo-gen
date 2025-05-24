@@ -128,12 +128,13 @@ export class ReplicateService {
             batch_size: params.batchSize || 1,
             resolution: params.resolution || "512,768,1024",
             autocaption: true,
-            learning_rate: params.learningRate || 1e-4,
-            // Additional FLUX-specific parameters
+            learning_rate: params.learningRate || 0.0004,
             caption_dropout_rate: 0.05,
             cache_latents_to_disk: false,
             wandb_project: "flux_train_replicate",
-            max_sequence_length: 512,
+            wandb_save_interval: 100,
+            wandb_sample_interval: 100,
+            gradient_checkpointing: false,
           }
         }
       )
