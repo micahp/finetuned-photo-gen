@@ -7,9 +7,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Plus, Image, Calendar, Loader2, ExternalLink, DollarSign, Clock, Users, Zap, Activity, AlertCircle } from 'lucide-react'
+import { Plus, Image, Calendar, Loader2, ExternalLink, DollarSign, Clock, Users, Zap, Activity, AlertCircle, Trash2 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { 
+  AlertDialog,
+  AlertDialogAction, 
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 interface Model {
   id: string
@@ -47,6 +58,15 @@ export default function ModelsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [deletePreview, setDeletePreview] = useState<{
+    modelId: string
+    name: string
+    trainingImagesCount: number
+    generatedImagesCount: number
+    huggingfaceRepo?: string
+    hasZipFiles: boolean
+  } | null>(null)
 
   useEffect(() => {
     fetchModels()
@@ -111,6 +131,53 @@ export default function ModelsPage() {
       }
     } finally {
       setRefreshing(null)
+    }
+  }
+
+  const handleDeleteClick = async (modelId: string) => {
+    try {
+      // Fetch deletion preview
+      const response = await fetch(`/api/models/${modelId}/delete`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.preview) {
+          setDeletePreview({
+            modelId,
+            ...data.preview
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch deletion preview:', error)
+    }
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deletePreview) return
+    
+    setDeleting(deletePreview.modelId)
+    try {
+      const response = await fetch(`/api/models/${deletePreview.modelId}/delete`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        // Remove model from state
+        setModels(prev => prev.filter(m => m.id !== deletePreview.modelId))
+        setDeletePreview(null)
+        
+        // Show success message
+        console.log('Model deleted successfully:', data.details)
+      } else {
+        setError(data.error || 'Failed to delete model')
+      }
+    } catch (error) {
+      setError('Failed to delete model')
+      console.error('Delete error:', error)
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -377,6 +444,26 @@ export default function ModelsPage() {
                           </Button>
                         </Link>
                       )}
+                      
+                      {/* Delete Button */}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteClick(model.id)}
+                            disabled={deleting === model.id}
+                            className="px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            {deleting === model.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete Model</TooltipContent>
+                      </Tooltip>
                     </div>
                   </CardContent>
                 </Card>
@@ -384,6 +471,73 @@ export default function ModelsPage() {
             })}
           </div>
         )}
+
+        {/* Delete Confirmation Modal */}
+        <AlertDialog open={!!deletePreview} onOpenChange={(open) => !open && setDeletePreview(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Model: {deletePreview?.name}</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action will permanently delete this model and clean up all associated resources. 
+                This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            
+            {deletePreview && (
+              <div className="my-4 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold text-sm text-gray-900 mb-3">What will be deleted:</h4>
+                <ul className="space-y-1 text-sm text-gray-700">
+                  <li className="flex items-center gap-2">
+                    <span className="text-red-500">✗</span>
+                    Model configuration and metadata
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-red-500">✗</span>
+                    {deletePreview.trainingImagesCount} training images
+                  </li>
+                  {deletePreview.huggingfaceRepo && (
+                    <li className="flex items-center gap-2">
+                      <span className="text-red-500">✗</span>
+                      HuggingFace repository: {deletePreview.huggingfaceRepo}
+                    </li>
+                  )}
+                  {deletePreview.hasZipFiles && (
+                    <li className="flex items-center gap-2">
+                      <span className="text-red-500">✗</span>
+                      Cloud storage ZIP files
+                    </li>
+                  )}
+                </ul>
+                
+                <h4 className="font-semibold text-sm text-green-900 mt-4 mb-2">What will be preserved:</h4>
+                <ul className="space-y-1 text-sm text-green-700">
+                  <li className="flex items-center gap-2">
+                    <span className="text-green-500">✓</span>
+                    {deletePreview.generatedImagesCount} generated images (will remain in your gallery)
+                  </li>
+                </ul>
+              </div>
+            )}
+
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={!!deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                disabled={!!deleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete Model'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   )

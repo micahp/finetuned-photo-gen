@@ -169,46 +169,69 @@ export class CloudStorageService {
   }
 
   /**
-   * Delete a ZIP file (cleanup)
+   * Delete a ZIP file from storage
    */
-  async deleteZipFile(urlOrPath: string): Promise<boolean> {
+  async deleteZipFile(fileName: string): Promise<{ success: boolean; error?: string }> {
     try {
       if (this.config.useLocal) {
-        // Extract filename from URL or use path directly
-        const filename = urlOrPath.includes('/api/training/zip/') 
-          ? urlOrPath.split('/').pop()
-          : path.basename(urlOrPath)
+        // Delete from local storage
+        const localPath = path.join(this.config.localConfig?.uploadDir || '', fileName)
         
-        if (!filename || !this.config.localConfig) return false
-        
-        const filePath = path.join(this.config.localConfig.uploadDir, filename)
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath)
-          console.log(`🗑️  Deleted local ZIP: ${filename}`)
-          return true
+        if (fs.existsSync(localPath)) {
+          fs.unlinkSync(localPath)
+          console.log(`🗑️ Deleted local ZIP file: ${localPath}`)
+        } else {
+          console.log(`📂 Local ZIP file not found (already deleted): ${localPath}`)
         }
-        return false
+        
+        return { success: true }
       } else {
-        // Delete from R2
-        if (!this.s3Client || !this.config.r2Config) return false
-        
-        // Extract key from URL
-        const key = urlOrPath.includes('training-zips/') 
-          ? urlOrPath.split('training-zips/')[1]
-          : `training-zips/${path.basename(urlOrPath)}`
-        
-        const command = new DeleteObjectCommand({
-          Bucket: this.config.r2Config.bucket,
-          Key: `training-zips/${key}`
+        // Delete from Cloudflare R2
+        if (!this.s3Client) {
+          throw new Error('S3 client not initialized')
+        }
+
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: this.config.r2Config?.bucket,
+          Key: fileName
         })
+
+        await this.s3Client.send(deleteCommand)
+        console.log(`☁️ Deleted ZIP file from R2: ${fileName}`)
         
-        await this.s3Client.send(command)
-        console.log(`🗑️  Deleted R2 ZIP: ${key}`)
-        return true
+        return { success: true }
       }
     } catch (error) {
-      console.error('Error deleting ZIP file:', error)
-      return false
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error(`❌ Failed to delete ZIP file: ${errorMessage}`)
+      
+      return {
+        success: false,
+        error: errorMessage
+      }
+    }
+  }
+
+  /**
+   * Delete multiple ZIP files (for batch cleanup)
+   */
+  async deleteZipFiles(fileNames: string[]): Promise<{ success: boolean; deletedCount: number; errors: string[] }> {
+    const errors: string[] = []
+    let deletedCount = 0
+
+    for (const fileName of fileNames) {
+      const result = await this.deleteZipFile(fileName)
+      if (result.success) {
+        deletedCount++
+      } else {
+        errors.push(`${fileName}: ${result.error}`)
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      deletedCount,
+      errors
     }
   }
 

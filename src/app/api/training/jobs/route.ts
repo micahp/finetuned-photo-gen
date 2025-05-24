@@ -57,9 +57,9 @@ export async function GET(request: NextRequest) {
           status: job.status,
           progress: 0,
           stage: 'Initializing',
-          estimatedTimeRemaining: undefined,
+          estimatedTimeRemaining: undefined as number | undefined,
           debugData: null,
-          error: job.errorMessage
+          error: job.errorMessage || null
         }
 
         // If job has external training ID, fetch current status
@@ -75,9 +75,9 @@ export async function GET(request: NextRequest) {
               status: currentStatus.status,
               progress: currentStatus.progress,
               stage: currentStatus.stage,
-              estimatedTimeRemaining: currentStatus.estimatedTimeRemaining,
+              estimatedTimeRemaining: currentStatus.estimatedTimeRemaining as number | undefined,
               debugData: currentStatus.debugData,
-              error: currentStatus.error
+              error: currentStatus.error || null
             }
           } catch (statusError) {
             console.error(`Failed to get status for training ${payload.externalTrainingId}:`, statusError)

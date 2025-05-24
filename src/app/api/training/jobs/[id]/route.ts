@@ -72,9 +72,9 @@ export async function GET(
       status: job.status,
       progress: 0,
       stage: 'Initializing',
-      estimatedTimeRemaining: undefined,
+      estimatedTimeRemaining: undefined as number | undefined,
       debugData: null,
-      error: job.errorMessage,
+      error: job.errorMessage || null,
       logs: ''
     }
 
@@ -93,7 +93,7 @@ export async function GET(
           stage: currentStatus.stage,
           estimatedTimeRemaining: currentStatus.estimatedTimeRemaining,
           debugData: currentStatus.debugData,
-          error: currentStatus.error,
+          error: currentStatus.error || null,
           logs: currentStatus.logs || ''
         }
       } catch (statusError) {

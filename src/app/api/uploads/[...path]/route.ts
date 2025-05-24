@@ -5,7 +5,7 @@ import * as path from 'path'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
     // Check authentication for security
@@ -14,7 +14,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const filePath = params.path
+    const { path: filePath } = await params
     
     // Validate path structure: should be [userId, filename]
     if (!filePath || filePath.length !== 2) {

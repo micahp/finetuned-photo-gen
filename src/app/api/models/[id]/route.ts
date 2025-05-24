@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -16,7 +16,7 @@ export async function GET(
       )
     }
 
-    const modelId = params.id
+    const { id: modelId } = await params
 
     // Get the model with all related data
     const model = await prisma.userModel.findFirst({
@@ -82,7 +82,7 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -94,7 +94,7 @@ export async function DELETE(
       )
     }
 
-    const modelId = params.id
+    const { id: modelId } = await params
 
     // Verify model ownership
     const model = await prisma.userModel.findFirst({

@@ -464,4 +464,63 @@ This model is licensed under Apache 2.0.
     
     return hasModelFiles && hasMetadata
   }
+
+  /**
+   * Delete a HuggingFace repository
+   */
+  async deleteRepository(repoId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (!this.apiToken) {
+        throw new Error('HuggingFace API token not configured')
+      }
+
+      this.debugger?.log('info', TrainingStage.HUGGINGFACE_UPLOAD, 'Starting repository deletion', {
+        repoId
+      })
+
+      const response = await fetch(`https://huggingface.co/api/repos/delete`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${this.apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: repoId,
+          type: 'model'
+        })
+      })
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          // Repository doesn't exist, consider it successful
+          this.debugger?.log('info', TrainingStage.HUGGINGFACE_UPLOAD, 'Repository not found (already deleted)', {
+            repoId,
+            status: response.status
+          })
+          return { success: true }
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      this.debugger?.log('info', TrainingStage.HUGGINGFACE_UPLOAD, 'Repository deleted successfully', {
+        repoId
+      })
+
+      return { success: true }
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.debugger?.logError(
+        TrainingStage.HUGGINGFACE_UPLOAD,
+        error,
+        'Failed to delete repository',
+        { repoId }
+      )
+
+      return {
+        success: false,
+        error: errorMessage
+      }
+    }
+  }
 } 
