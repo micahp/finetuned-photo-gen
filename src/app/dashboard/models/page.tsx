@@ -59,14 +59,8 @@ export default function ModelsPage() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
-  const [deletePreview, setDeletePreview] = useState<{
-    modelId: string
-    name: string
-    trainingImagesCount: number
-    generatedImagesCount: number
-    huggingfaceRepo?: string
-    hasZipFiles: boolean
-  } | null>(null)
+  const [deletePreview, setDeletePreview] = useState<Model | null>(null)
+  const [retryingUpload, setRetryingUpload] = useState<string | null>(null)
 
   useEffect(() => {
     fetchModels()
@@ -141,10 +135,7 @@ export default function ModelsPage() {
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.preview) {
-          setDeletePreview({
-            modelId,
-            ...data.preview
-          })
+          setDeletePreview(data.preview)
         }
       }
     } catch (error) {
@@ -155,9 +146,9 @@ export default function ModelsPage() {
   const handleDeleteConfirm = async () => {
     if (!deletePreview) return
     
-    setDeleting(deletePreview.modelId)
+    setDeleting(deletePreview.id)
     try {
-      const response = await fetch(`/api/models/${deletePreview.modelId}/delete`, {
+      const response = await fetch(`/api/models/${deletePreview.id}/delete`, {
         method: 'DELETE'
       })
 
@@ -165,7 +156,7 @@ export default function ModelsPage() {
       
       if (data.success) {
         // Remove model from state
-        setModels(prev => prev.filter(m => m.id !== deletePreview.modelId))
+        setModels(prev => prev.filter(m => m.id !== deletePreview.id))
         setDeletePreview(null)
         
         // Show success message
@@ -437,7 +428,7 @@ export default function ModelsPage() {
                           </Button>
                         </Link>
                       )}
-                      {model.status === 'training' && (
+                      {model.status === 'training' && model.externalTrainingId && (
                         <Link href={`/dashboard/training/${model.externalTrainingId}`} className="flex-1">
                           <Button size="sm" variant="outline" className="w-full">
                             Monitor
@@ -493,18 +484,12 @@ export default function ModelsPage() {
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="text-red-500">✗</span>
-                    {deletePreview.trainingImagesCount} training images
+                    {deletePreview._count.trainingImages} training images
                   </li>
                   {deletePreview.huggingfaceRepo && (
                     <li className="flex items-center gap-2">
                       <span className="text-red-500">✗</span>
                       HuggingFace repository: {deletePreview.huggingfaceRepo}
-                    </li>
-                  )}
-                  {deletePreview.hasZipFiles && (
-                    <li className="flex items-center gap-2">
-                      <span className="text-red-500">✗</span>
-                      Cloud storage ZIP files
                     </li>
                   )}
                 </ul>

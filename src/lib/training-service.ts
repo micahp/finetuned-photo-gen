@@ -281,10 +281,45 @@ export class TrainingService {
         modelName,
         modelNameType: typeof modelName,
         modelNameLength: modelName?.length,
-        replicateOutput: replicateStatus.output
+        replicateOutput: replicateStatus.output,
+        replicateOutputType: typeof replicateStatus.output,
+        replicateOutputArray: Array.isArray(replicateStatus.output),
       })
       
       console.log(`Training completed for ${modelName}, uploading to HuggingFace...`)
+
+      // Extract model path from Replicate output with proper type handling
+      let modelPath: string = '';
+      
+      if (typeof replicateStatus.output === 'string') {
+        // Output is a single URL string
+        modelPath = replicateStatus.output;
+      } else if (Array.isArray(replicateStatus.output) && replicateStatus.output.length > 0) {
+        // Output is an array of URLs, take the first one
+        const firstOutput = replicateStatus.output[0];
+        if (typeof firstOutput === 'string') {
+          modelPath = firstOutput;
+        } else {
+          throw new Error(`Invalid output format: First array item is not a string (type: ${typeof firstOutput})`);
+        }
+      } else if (replicateStatus.output && typeof replicateStatus.output === 'object') {
+        // Output might be an object with file information
+        if (replicateStatus.output.url && typeof replicateStatus.output.url === 'string') {
+          modelPath = replicateStatus.output.url;
+        } else if (replicateStatus.output.file && typeof replicateStatus.output.file === 'string') {
+          modelPath = replicateStatus.output.file;
+        } else {
+          throw new Error(`Invalid output format: Object does not contain valid URL (keys: ${Object.keys(replicateStatus.output).join(', ')})`);
+        }
+      } else {
+        throw new Error(`Invalid output format: Expected string, array, or object with URL, got ${typeof replicateStatus.output}: ${JSON.stringify(replicateStatus.output)}`);
+      }
+
+      if (!modelPath || !modelPath.trim()) {
+        throw new Error('No valid model path extracted from Replicate output');
+      }
+
+      console.log(`📁 Extracted model path: ${modelPath} (type: ${typeof modelPath})`);
 
       // Generate unique repository name to avoid conflicts
       const baseModelName = modelName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'trained-model'
@@ -298,7 +333,7 @@ export class TrainingService {
       // Upload to HuggingFace using existing service instance
       const uploadResponse = await this.huggingface.uploadModel({
         modelName: uniqueModelName, // Use unique name
-        modelPath: replicateStatus.output || '', // Replicate output path
+        modelPath: modelPath, // Now guaranteed to be a string
         description: `Custom FLUX LoRA model: ${modelName} (Training ID: ${trainingId})`,
         tags: ['flux', 'lora', 'text-to-image', 'custom'],
         isPrivate: isPrivate, // Use the provided privacy setting
@@ -317,7 +352,7 @@ export class TrainingService {
           
           const retryResponse = await this.huggingface.uploadModel({
             modelName: retryModelName,
-            modelPath: replicateStatus.output || '',
+            modelPath: modelPath, // Use the same validated model path
             description: `Custom FLUX LoRA model: ${modelName} (Training ID: ${trainingId})`,
             tags: ['flux', 'lora', 'text-to-image', 'custom'],
             isPrivate: isPrivate,

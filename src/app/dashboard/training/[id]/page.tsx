@@ -90,6 +90,7 @@ export default function TrainingDetailsPage() {
   const [trainingJob, setTrainingJob] = useState<TrainingJob | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   // Fetch training job details from API
@@ -137,6 +138,39 @@ export default function TrainingDetailsPage() {
     setRefreshing(true)
     await fetchTrainingJob()
     setRefreshing(false)
+  }
+
+  const retryUpload = async () => {
+    if (!trainingJob?.modelId) return
+    
+    setRetrying(true)
+    try {
+      const response = await fetch('/api/models/retry-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          modelId: trainingJob.modelId
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        // Refresh the training job data to show updated status
+        await fetchTrainingJob()
+        // Optional: Show success message
+        console.log('Upload retry successful:', data.message)
+      } else {
+        console.error('Upload retry failed:', data.error)
+        // Optional: Show error message to user
+      }
+    } catch (error) {
+      console.error('Upload retry error:', error)
+    } finally {
+      setRetrying(false)
+    }
   }
 
   const formatDuration = (ms: number) => {
@@ -468,6 +502,34 @@ export default function TrainingDetailsPage() {
                             <p><strong>Category:</strong> {trainingJob.debugData.lastError.category}</p>
                             <p><strong>Time:</strong> {new Date(trainingJob.debugData.lastError.timestamp).toLocaleString()}</p>
                             <p><strong>Retryable:</strong> {trainingJob.debugData.lastError.retryable ? 'Yes' : 'No'}</p>
+                          </div>
+                        )}
+                        
+                        {/* Retry Upload Button - Show when HuggingFace upload failed but training succeeded */}
+                        {(trainingJob.error?.includes('Model training completed successfully') || 
+                          trainingJob.debugData?.lastError?.stage === 'huggingface_upload') && (
+                          <div className="mt-4">
+                            <Button
+                              onClick={retryUpload}
+                              disabled={retrying}
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              {retrying ? (
+                                <>
+                                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                  Retrying Upload...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="h-4 w-4 mr-2" />
+                                  Retry HuggingFace Upload
+                                </>
+                              )}
+                            </Button>
+                            <p className="text-xs text-blue-600 mt-2">
+                              Your model was trained successfully and is stored on Replicate. Click to retry uploading to HuggingFace.
+                            </p>
                           </div>
                         )}
                       </div>
