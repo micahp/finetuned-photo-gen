@@ -18,6 +18,8 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.9.1",
+    "@aws-sdk/client-s3": "^3.817.0",
+    "@aws-sdk/s3-request-presigner": "^3.817.0",
     "@hookform/resolvers": "^5.0.1",
     "@huggingface/hub": "^2.1.0",
     "@prisma/client": "^6.8.2",

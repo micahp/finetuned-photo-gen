@@ -11,6 +11,7 @@ interface ReplicateTrainingParams {
   modelName: string
   triggerWord: string
   trainingImages: TrainingImage[]
+  zipUrl?: string
   steps?: number
   learningRate?: number
   loraRank?: number
@@ -49,8 +50,10 @@ export class ReplicateService {
    */
   async startTraining(params: ReplicateTrainingParams): Promise<ReplicateTrainingResponse> {
     try {
-      // Create a ZIP file URL for training images
-      const imageZipUrl = await this.packageImagesForTraining(params.trainingImages)
+      // Use provided ZIP URL or create one from training images
+      const imageZipUrl = params.zipUrl || await this.packageImagesForTraining(params.trainingImages)
+      
+      console.log(`Using training images from: ${params.zipUrl ? 'provided ZIP URL' : 'legacy image URLs'}`)
       
       // Use Replicate's FLUX LoRA trainer
       const training = await this.client.trainings.create(

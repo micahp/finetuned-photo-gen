@@ -1,5 +1,7 @@
 import { ReplicateService } from './replicate-service'
 import { HuggingFaceService } from './huggingface-service'
+import { ZipCreationService } from './zip-creation-service'
+import { TrainingDebugger, TrainingStage } from './training-debug'
 
 interface TrainingImage {
   id: string
@@ -29,29 +31,60 @@ interface TrainingStatus {
   huggingFaceRepo?: string
   error?: string
   logs?: string
+  debugData?: any
 }
 
 export class TrainingService {
   private replicate: ReplicateService
   private huggingface: HuggingFaceService
+  private zipService: ZipCreationService
+  private debugger: TrainingDebugger | null = null
 
   constructor() {
     this.replicate = new ReplicateService()
     this.huggingface = new HuggingFaceService()
+    this.zipService = new ZipCreationService()
   }
 
   /**
-   * Start the complete LoRA training workflow
+   * Start the complete LoRA training workflow with debugging
    */
   async startTraining(params: StartTrainingParams): Promise<{ trainingId: string; status: TrainingStatus }> {
+    const trainingId = `training_${Date.now()}_${Math.random().toString(36).substring(7)}`
+    this.debugger = new TrainingDebugger(trainingId)
+    
     try {
+      this.debugger.startStage(TrainingStage.INITIALIZING, 'Starting complete LoRA training workflow', {
+        modelName: params.modelName,
+        imageCount: params.trainingImages.length,
+        userId: params.userId
+      })
+
       console.log(`Starting LoRA training for model: ${params.modelName}`)
+
+      // Step 1: Create ZIP file with training images
+      this.debugger.startStage(TrainingStage.ZIP_CREATION, 'Creating training images ZIP file')
       
-      // Step 1: Start Replicate training
+      const zipResult = await this.zipService.createTrainingZip(params.trainingImages)
+      
+      if (!zipResult.success) {
+        throw new Error(`ZIP creation failed: ${zipResult.error}`)
+      }
+
+      this.debugger.endStage(TrainingStage.ZIP_CREATION, 'ZIP creation completed', {
+        zipUrl: zipResult.zipUrl,
+        imageCount: zipResult.imageCount,
+        totalSize: zipResult.totalSize
+      })
+
+      // Step 2: Start Replicate training with ZIP URL
+      this.debugger.startStage(TrainingStage.REPLICATE_TRAINING, 'Starting Replicate training')
+      
       const replicateResponse = await this.replicate.startTraining({
         modelName: params.modelName,
         triggerWord: params.triggerWord,
-        trainingImages: params.trainingImages,
+        trainingImages: params.trainingImages, // Keep for compatibility
+        zipUrl: zipResult.zipUrl, // New: ZIP URL for actual training
         steps: params.steps,
         learningRate: params.learningRate,
         loraRank: params.loraRank,
@@ -61,41 +94,59 @@ export class TrainingService {
         throw new Error(replicateResponse.error || 'Failed to start Replicate training')
       }
 
+      this.debugger.endStage(TrainingStage.REPLICATE_TRAINING, 'Replicate training started', {
+        replicateId: replicateResponse.id,
+        status: replicateResponse.status
+      })
+
       const initialStatus: TrainingStatus = {
-        id: replicateResponse.id,
+        id: trainingId,
         status: 'starting',
-        progress: 0,
-        stage: 'Initializing external training with Replicate',
+        progress: 5,
+        stage: 'Training environment prepared, starting LoRA training',
         estimatedTimeRemaining: 1800, // 30 minutes
+        debugData: this.debugger.getDebugSummary()
       }
 
       return {
-        trainingId: replicateResponse.id,
+        trainingId: replicateResponse.id, // Return Replicate ID for status checking
         status: initialStatus
       }
 
     } catch (error) {
+      const trainingError = this.debugger?.logError(
+        TrainingStage.INITIALIZING,
+        error,
+        'Failed to start training workflow'
+      )
+
       console.error('Training service error:', error)
       
       const errorStatus: TrainingStatus = {
-        id: `error_${Date.now()}`,
+        id: trainingId,
         status: 'failed',
         progress: 0,
         stage: 'Failed to start training',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
+        debugData: this.debugger?.getDebugSummary()
       }
 
       return {
-        trainingId: errorStatus.id,
+        trainingId: trainingId,
         status: errorStatus
       }
     }
   }
 
   /**
-   * Check training status and handle workflow progression
+   * Check training status and handle workflow progression with debugging
    */
   async getTrainingStatus(trainingId: string, modelName: string): Promise<TrainingStatus> {
+    // Initialize debugger if not exists (for status checks)
+    if (!this.debugger) {
+      this.debugger = new TrainingDebugger(trainingId)
+    }
+
     try {
       // Check Replicate training status
       const replicateStatus = await this.replicate.getTrainingStatus(trainingId)
@@ -105,20 +156,22 @@ export class TrainingService {
           return {
             id: trainingId,
             status: 'starting',
-            progress: 5,
+            progress: 10,
             stage: 'Preparing training environment',
             estimatedTimeRemaining: 1800,
-            logs: replicateStatus.logs
+            logs: replicateStatus.logs,
+            debugData: this.debugger.getDebugSummary()
           }
 
         case 'processing':
           return {
             id: trainingId,
             status: 'training',
-            progress: 30,
+            progress: 40,
             stage: 'Training LoRA model (this may take 15-30 minutes)',
             estimatedTimeRemaining: 1200,
-            logs: replicateStatus.logs
+            logs: replicateStatus.logs,
+            debugData: this.debugger.getDebugSummary()
           }
 
         case 'succeeded':
@@ -127,49 +180,70 @@ export class TrainingService {
 
         case 'failed':
         case 'canceled':
+          const error = this.debugger.logError(
+            TrainingStage.REPLICATE_TRAINING,
+            new Error(replicateStatus.error || 'Training failed'),
+            'Replicate training failed'
+          )
+
           return {
             id: trainingId,
             status: 'failed',
             progress: 0,
             stage: 'Training failed',
             error: replicateStatus.error || 'Training was canceled or failed',
-            logs: replicateStatus.logs
+            logs: replicateStatus.logs,
+            debugData: this.debugger.getDebugSummary()
           }
 
         default:
           return {
             id: trainingId,
             status: 'training',
-            progress: 10,
+            progress: 20,
             stage: 'Training in progress',
             estimatedTimeRemaining: 1500,
+            debugData: this.debugger.getDebugSummary()
           }
       }
 
     } catch (error) {
+      const trainingError = this.debugger.logError(
+        TrainingStage.REPLICATE_TRAINING,
+        error,
+        'Failed to check training status'
+      )
+
       console.error('Error checking training status:', error)
       return {
         id: trainingId,
         status: 'failed',
         progress: 0,
         stage: 'Status check failed',
-        error: error instanceof Error ? error.message : 'Status check failed'
+        error: trainingError.message,
+        debugData: this.debugger.getDebugSummary()
       }
     }
   }
 
   /**
-   * Handle training completion and upload to HuggingFace
+   * Handle training completion and upload to HuggingFace with debugging
    */
   private async handleTrainingCompletion(
     trainingId: string, 
     modelName: string, 
     replicateStatus: any
   ): Promise<TrainingStatus> {
+    if (!this.debugger) {
+      this.debugger = new TrainingDebugger(trainingId)
+    }
+
     try {
+      this.debugger.startStage(TrainingStage.HUGGINGFACE_UPLOAD, 'Starting HuggingFace upload')
+      
       console.log(`Training completed for ${modelName}, uploading to HuggingFace...`)
 
-      // Upload to HuggingFace
+      // Upload to HuggingFace using existing service instance
       const uploadResponse = await this.huggingface.uploadModel({
         modelName: modelName.toLowerCase().replace(/\s+/g, '-'),
         modelPath: replicateStatus.output || '', // Replicate output path
@@ -179,14 +253,29 @@ export class TrainingService {
       })
 
       if (uploadResponse.status === 'failed') {
+        const error = this.debugger.logError(
+          TrainingStage.HUGGINGFACE_UPLOAD,
+          new Error(uploadResponse.error || 'HuggingFace upload failed'),
+          'Failed to upload to HuggingFace'
+        )
+
         return {
           id: trainingId,
           status: 'failed',
           progress: 95,
           stage: 'Failed to upload to HuggingFace',
-          error: uploadResponse.error
+          error: uploadResponse.error,
+          debugData: this.debugger.getDebugSummary()
         }
       }
+
+      this.debugger.endStage(TrainingStage.HUGGINGFACE_UPLOAD, 'HuggingFace upload completed', {
+        repoId: uploadResponse.repoId,
+        repoUrl: uploadResponse.repoUrl
+      })
+
+      this.debugger.startStage(TrainingStage.COMPLETION, 'Finalizing training workflow')
+      this.debugger.endStage(TrainingStage.COMPLETION, 'Training workflow completed successfully')
 
       // Training and upload completed successfully
       return {
@@ -195,27 +284,50 @@ export class TrainingService {
         progress: 100,
         stage: 'Training completed and model uploaded to HuggingFace',
         huggingFaceRepo: uploadResponse.repoId,
+        debugData: this.debugger.getDebugSummary()
       }
 
     } catch (error) {
+      const trainingError = this.debugger.logError(
+        TrainingStage.HUGGINGFACE_UPLOAD,
+        error,
+        'Failed to complete training workflow'
+      )
+
       console.error('Error handling training completion:', error)
       return {
         id: trainingId,
         status: 'failed',
         progress: 90,
         stage: 'Failed to complete workflow',
-        error: error instanceof Error ? error.message : 'Completion failed'
+        error: error instanceof Error ? error.message : 'Completion failed',
+        debugData: this.debugger.getDebugSummary()
       }
     }
   }
 
   /**
-   * Cancel a training job
+   * Cancel a training job with debugging
    */
   async cancelTraining(trainingId: string): Promise<boolean> {
+    if (!this.debugger) {
+      this.debugger = new TrainingDebugger(trainingId)
+    }
+
     try {
-      return await this.replicate.cancelTraining(trainingId)
+      this.debugger.log('info', TrainingStage.REPLICATE_TRAINING, 'Canceling training job', { trainingId })
+      
+      const result = await this.replicate.cancelTraining(trainingId)
+      
+      if (result) {
+        this.debugger.log('info', TrainingStage.REPLICATE_TRAINING, 'Training job canceled successfully')
+      } else {
+        this.debugger.log('warn', TrainingStage.REPLICATE_TRAINING, 'Failed to cancel training job')
+      }
+      
+      return result
     } catch (error) {
+      this.debugger.logError(TrainingStage.REPLICATE_TRAINING, error, 'Error canceling training')
       console.error('Error canceling training:', error)
       return false
     }

@@ -3,6 +3,7 @@ import * as path from 'path'
 import archiver from 'archiver'
 import sharp from 'sharp'
 import { TrainingDebugger, TrainingStage, ErrorCategory } from './training-debug'
+import { CloudStorageService } from './cloud-storage'
 
 interface TrainingImage {
   id: string
@@ -31,6 +32,7 @@ interface ImageValidationResult {
 
 export class ZipCreationService {
   private debugger: TrainingDebugger | null = null
+  private cloudStorage: CloudStorageService
   private readonly supportedFormats = ['jpeg', 'jpg', 'png', 'webp', 'tiff']
   private readonly maxImageSize = 10 * 1024 * 1024 // 10MB
   private readonly minDimensions = 512 // minimum 512px on either side
@@ -40,6 +42,7 @@ export class ZipCreationService {
     if (trainingId) {
       this.debugger = new TrainingDebugger(trainingId)
     }
+    this.cloudStorage = new CloudStorageService()
   }
 
   /**
@@ -51,7 +54,8 @@ export class ZipCreationService {
     try {
       this.debugger?.startStage(TrainingStage.ZIP_CREATION, 'Starting ZIP creation', {
         imageCount: images.length,
-        totalEstimatedSize: images.reduce((sum, img) => sum + img.size, 0)
+        totalEstimatedSize: images.reduce((sum, img) => sum + img.size, 0),
+        storageProvider: this.cloudStorage.getStorageInfo().provider
       })
 
       // Validate inputs
@@ -83,13 +87,24 @@ export class ZipCreationService {
       // Create ZIP file
       const zipResult = await this.createZipFile(processedImages, zipPath)
       
-      // Upload to temporary storage (S3 or similar)
-      const uploadResult = await this.uploadZipFile(zipPath)
+      // Upload to cloud storage
+      this.debugger?.log('info', TrainingStage.ZIP_CREATION, 'Uploading ZIP to cloud storage')
+      const uploadResult = await this.cloudStorage.uploadZipFile(zipPath, undefined, {
+        ttlHours: 48, // Auto-delete after 48 hours
+        contentType: 'application/zip'
+      })
+      
+      if (!uploadResult.success) {
+        throw new Error(`Failed to upload ZIP: ${uploadResult.error}`)
+      }
+      
+      // Cleanup local temp files
+      await this.cleanup(tempDir)
       
       const result: ZipCreationResult = {
         success: true,
         zipUrl: uploadResult.url,
-        zipPath: zipPath,
+        zipPath: uploadResult.filePath || zipPath, // For local storage
         totalSize: zipResult.totalSize,
         imageCount: processedImages.length,
         debugData: this.debugger?.getDebugSummary()
@@ -99,6 +114,7 @@ export class ZipCreationService {
         finalImageCount: processedImages.length,
         zipSize: zipResult.totalSize,
         zipUrl: uploadResult.url,
+        storageProvider: this.cloudStorage.getStorageInfo().provider,
         duration: Date.now() - startTime
       })
 
@@ -109,7 +125,11 @@ export class ZipCreationService {
         TrainingStage.ZIP_CREATION,
         error,
         'ZIP creation failed',
-        { imageCount: images.length, duration: Date.now() - startTime }
+        { 
+          imageCount: images.length, 
+          duration: Date.now() - startTime,
+          storageProvider: this.cloudStorage.getStorageInfo().provider
+        }
       )
 
       return {
@@ -369,26 +389,6 @@ export class ZipCreationService {
 
       archive.finalize()
     })
-  }
-
-  /**
-   * Upload ZIP file to temporary storage
-   */
-  private async uploadZipFile(zipPath: string): Promise<{ url: string }> {
-    // TODO: Implement actual upload to S3 or similar storage
-    // For now, return a local file URL
-    
-    this.debugger?.log('warn', TrainingStage.ZIP_CREATION, 
-      'TODO: Implement actual ZIP upload to cloud storage', {
-      zipPath
-    })
-
-    // In production, this would upload to S3 and return the public URL
-    // For now, we'll return a placeholder URL
-    const fileName = path.basename(zipPath)
-    const mockUrl = `https://temporary-storage.example.com/training-zips/${fileName}`
-    
-    return { url: mockUrl }
   }
 
   /**
