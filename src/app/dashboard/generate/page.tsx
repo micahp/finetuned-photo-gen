@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus } from 'lucide-react'
+import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users } from 'lucide-react'
 import { TogetherAIService } from '@/lib/together-ai'
 
 const generateSchema = z.object({
@@ -24,6 +25,7 @@ const generateSchema = z.object({
   aspectRatio: z.enum(['1:1', '16:9', '9:16', '3:4', '4:3']),
   steps: z.number().min(1).max(50),
   seed: z.number().optional(),
+  userModelId: z.string().optional(), // For custom trained models
 })
 
 type GenerateFormData = z.infer<typeof generateSchema>
@@ -36,13 +38,31 @@ interface GeneratedImage {
   createdAt: string
 }
 
+interface UserModel {
+  id: string
+  name: string
+  status: string
+  triggerWord?: string
+  huggingfaceRepo?: string
+  loraReadyForInference: boolean
+  _count: {
+    generatedImages: number
+  }
+}
+
 export default function GeneratePage() {
   const { data: session } = useSession()
+  const searchParams = useSearchParams()
+  const preselectedModelId = searchParams.get('model')
+
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null)
   const [creditsRemaining, setCreditsRemaining] = useState(session?.user?.credits || 0)
   const [error, setError] = useState<string | null>(null)
   const [copiedPrompt, setCopiedPrompt] = useState<string | null>(null)
+  const [userModels, setUserModels] = useState<UserModel[]>([])
+  const [selectedUserModel, setSelectedUserModel] = useState<UserModel | null>(null)
+  const [loadingModels, setLoadingModels] = useState(true)
 
   // Initialize service without API key on client side (will be handled by API route)
   const getTogetherService = () => {
@@ -57,11 +77,19 @@ export default function GeneratePage() {
             name: 'FLUX.1 Schnell (Free)',
             description: 'Fast, free FLUX model - perfect for testing',
             free: true
+          },
+          {
+            id: 'black-forest-labs/FLUX.1-dev',
+            name: 'FLUX.1 Dev',
+            description: 'High-quality FLUX model for professional results',
+            free: false
           }
         ],
         getStylePresets: () => [
           { id: 'none', name: 'None', prompt: '' },
-          { id: 'photorealistic', name: 'Photorealistic', prompt: 'photorealistic, high quality, detailed' }
+          { id: 'photorealistic', name: 'Photorealistic', prompt: 'photorealistic, high quality, detailed' },
+          { id: 'artistic', name: 'Artistic', prompt: 'artistic, creative, stylized' },
+          { id: 'portrait', name: 'Portrait', prompt: 'portrait photography, professional lighting' }
         ],
         getPromptSuggestions: () => [
           'A professional headshot of a person',
@@ -85,7 +113,7 @@ export default function GeneratePage() {
   }
 
   const together = getTogetherService()
-  const models = together.getAvailableModels()
+  const baseModels = together.getAvailableModels()
   const styles = together.getStylePresets()
   const suggestions = together.getPromptSuggestions()
   const quickPrompts = together.getQuickPrompts()
@@ -103,6 +131,48 @@ export default function GeneratePage() {
       steps: 4,
     },
   })
+
+  // Fetch user's trained models
+  useEffect(() => {
+    fetchUserModels()
+  }, [])
+
+  // Handle preselected model
+  useEffect(() => {
+    if (preselectedModelId && userModels.length > 0) {
+      const preselectedModel = userModels.find(m => m.id === preselectedModelId)
+      if (preselectedModel && preselectedModel.status === 'ready' && preselectedModel.loraReadyForInference) {
+        setSelectedUserModel(preselectedModel)
+        form.setValue('userModelId', preselectedModel.id)
+        
+        // Suggest trigger word in prompt if available
+        if (preselectedModel.triggerWord) {
+          const currentPrompt = form.getValues('prompt')
+          if (!currentPrompt.includes(preselectedModel.triggerWord)) {
+            form.setValue('prompt', `${preselectedModel.triggerWord}, ${currentPrompt}`.trim().replace(/^,\s*/, ''))
+          }
+        }
+      }
+    }
+  }, [preselectedModelId, userModels])
+
+  const fetchUserModels = async () => {
+    try {
+      setLoadingModels(true)
+      const response = await fetch('/api/models')
+      if (response.ok) {
+        const data = await response.json()
+        const readyModels = (data.models || []).filter(
+          (model: UserModel) => model.status === 'ready' && model.loraReadyForInference
+        )
+        setUserModels(readyModels)
+      }
+    } catch (error) {
+      console.error('Failed to fetch user models:', error)
+    } finally {
+      setLoadingModels(false)
+    }
+  }
 
   const onSubmit = async (data: GenerateFormData) => {
     if (creditsRemaining < 1) {
@@ -147,8 +217,35 @@ export default function GeneratePage() {
     }
   }
 
+  const handleUserModelSelect = (modelId: string) => {
+    if (modelId === 'none') {
+      setSelectedUserModel(null)
+      form.setValue('userModelId', undefined)
+    } else {
+      const model = userModels.find(m => m.id === modelId)
+      if (model) {
+        setSelectedUserModel(model)
+        form.setValue('userModelId', model.id)
+        
+        // Auto-suggest trigger word
+        if (model.triggerWord) {
+          const currentPrompt = form.getValues('prompt')
+          if (!currentPrompt.includes(model.triggerWord)) {
+            form.setValue('prompt', `${model.triggerWord}, ${currentPrompt}`.trim().replace(/^,\s*/, ''))
+          }
+        }
+      }
+    }
+  }
+
   const handleSuggestionClick = (suggestion: string) => {
-    form.setValue('prompt', suggestion)
+    // If using a custom model with trigger word, prepend it
+    if (selectedUserModel?.triggerWord) {
+      const enhancedSuggestion = `${selectedUserModel.triggerWord}, ${suggestion}`
+      form.setValue('prompt', enhancedSuggestion)
+    } else {
+      form.setValue('prompt', suggestion)
+    }
   }
 
   const handlePromptCopy = async (prompt: string) => {
@@ -162,7 +259,13 @@ export default function GeneratePage() {
   }
 
   const handlePromptUse = (prompt: string) => {
-    form.setValue('prompt', prompt)
+    // If using a custom model with trigger word, prepend it
+    if (selectedUserModel?.triggerWord) {
+      const enhancedPrompt = `${selectedUserModel.triggerWord}, ${prompt}`
+      form.setValue('prompt', enhancedPrompt)
+    } else {
+      form.setValue('prompt', prompt)
+    }
   }
 
   const handlePromptAppend = (addition: string) => {
@@ -206,438 +309,470 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Generate Images</h1>
-        <p className="text-gray-600">
-          Create stunning AI-generated images using FLUX models
-        </p>
-        <div className="flex items-center gap-2 mt-3">
-          <Badge variant="secondary" className="flex items-center gap-1">
-            <Zap className="h-3 w-3" />
-            {creditsRemaining} credits remaining
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Generate Images</h1>
+          <p className="text-gray-600 mt-2">
+            Create stunning AI-generated images with FLUX models
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <Badge variant="outline" className="flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            {creditsRemaining} credits
           </Badge>
-          {creditsRemaining < 5 && (
-            <Badge variant="destructive">Low credits</Badge>
-          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Generation Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
-              Image Generation
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                {/* Prompt */}
-                <FormField
-                  control={form.control}
-                  name="prompt"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Prompt</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Describe the image you want to generate..."
-                          rows={3}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Enhanced Prompt Suggestions */}
-                <div className="space-y-4">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                    <Lightbulb className="h-4 w-4" />
-                    Prompt Inspiration
-                  </label>
-                  
-                  {/* Quick Prompt Templates */}
-                  <div>
-                    <h4 className="text-xs font-medium text-gray-600 mb-2">Quick Templates</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {quickPrompts.map((template, index) => (
-                        <div key={index} className="relative group">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePromptUse(template.prompt)}
-                            className="w-full text-left justify-start text-xs h-auto p-2"
-                          >
-                            <span className="mr-2">{template.emoji}</span>
-                            <span className="truncate">{template.label}</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handlePromptCopy(template.prompt)}
-                            className="absolute -top-1 -right-1 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            {copiedPrompt === template.prompt ? (
-                              <Star className="h-3 w-3 text-green-500" />
-                            ) : (
-                              <Copy className="h-3 w-3" />
-                            )}
-                          </Button>
+        <div className="lg:col-span-2 space-y-6">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5" />
+                    Generation Settings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Custom Model Selection */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Model Type</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div 
+                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                          !selectedUserModel ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        onClick={() => handleUserModelSelect('none')}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Zap className="h-4 w-4" />
+                          <span className="font-medium">Base FLUX Models</span>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Categorized Prompts */}
-                  <div>
-                    <h4 className="text-xs font-medium text-gray-600 mb-2">Browse by Category</h4>
-                    <Tabs defaultValue="Dating Apps" className="w-full">
-                      <TabsList className="grid w-full grid-cols-3 h-auto">
-                        {Object.keys(categorizedPrompts).slice(0, 3).map((category) => (
-                          <TabsTrigger 
-                            key={category} 
-                            value={category}
-                            className="text-xs px-2 py-1"
-                          >
-                            {category.split(' ')[0]}
-                          </TabsTrigger>
-                        ))}
-                      </TabsList>
+                        <p className="text-xs text-gray-600 mt-1">Use standard FLUX models</p>
+                      </div>
                       
-                      {Object.entries(categorizedPrompts).slice(0, 3).map(([category, prompts]) => (
-                        <TabsContent key={category} value={category} className="mt-2">
-                          <div className="space-y-2 max-h-32 overflow-y-auto">
-                            {prompts.slice(0, 3).map((item, index) => (
-                              <div key={index} className="relative group">
-                                <div className="p-2 border rounded text-xs hover:bg-gray-50">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-medium text-gray-800 leading-tight">
-                                        {item.prompt.slice(0, 60)}...
-                                      </p>
-                                      <p className="text-gray-500 text-xs mt-1">
-                                        {item.description}
-                                      </p>
-                                    </div>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handlePromptUse(item.prompt)}
-                                        className="h-6 w-6 p-0"
-                                        title="Use this prompt"
-                                      >
-                                        <Plus className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handlePromptCopy(item.prompt)}
-                                        className="h-6 w-6 p-0"
-                                        title="Copy to clipboard"
-                                      >
-                                        {copiedPrompt === item.prompt ? (
-                                          <Star className="h-3 w-3 text-green-500" />
-                                        ) : (
-                                          <Copy className="h-3 w-3" />
-                                        )}
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </TabsContent>
-                      ))}
-                    </Tabs>
-                  </div>
-
-                  {/* Prompt Enhancers */}
-                  <div>
-                    <h4 className="text-xs font-medium text-gray-600 mb-2">Enhance Your Prompt</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {[
-                        'high quality', 'professional lighting', 'sharp focus', 
-                        'detailed', 'cinematic', 'studio lighting'
-                      ].map((enhancer) => (
-                        <Button
-                          key={enhancer}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handlePromptAppend(enhancer)}
-                          className="text-xs h-6 px-2"
-                        >
-                          +{enhancer}
-                        </Button>
-                      ))}
+                      <div 
+                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                          selectedUserModel ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        onClick={() => {
+                          if (userModels.length > 0) {
+                            handleUserModelSelect(userModels[0].id)
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          <span className="font-medium">My Custom Models</span>
+                          <Badge variant="secondary" className="text-xs">{userModels.length}</Badge>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">Use your trained models</p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Model Selection */}
-                <FormField
-                  control={form.control}
-                  name="modelId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Model</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
+                  {/* Custom Model Selector */}
+                  {selectedUserModel && (
+                    <div className="space-y-3 p-3 bg-blue-50 rounded-lg border">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-blue-900">Selected Custom Model</span>
+                        <Badge className="bg-blue-100 text-blue-800">{selectedUserModel._count.generatedImages} images</Badge>
+                      </div>
+                      <Select value={selectedUserModel.id} onValueChange={handleUserModelSelect}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
-                          {models.map((model) => (
+                          <SelectItem value="none">Use Base Models</SelectItem>
+                          {userModels.map((model) => (
                             <SelectItem key={model.id} value={model.id}>
                               <div className="flex items-center gap-2">
-                                {model.free && <Badge variant="secondary" className="text-xs">FREE</Badge>}
-                                {model.name.includes('Pro') && <Crown className="h-3 w-3 text-amber-500" />}
                                 <span>{model.name}</span>
+                                {model.triggerWord && (
+                                  <code className="text-xs bg-gray-100 px-1 rounded">{model.triggerWord}</code>
+                                )}
                               </div>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-gray-500">
-                        {models.find(m => m.id === field.value)?.description}
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Style */}
-                <FormField
-                  control={form.control}
-                  name="style"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Style</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {styles.map((style) => (
-                            <SelectItem key={style.id} value={style.id}>
-                              {style.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Aspect Ratio */}
-                <FormField
-                  control={form.control}
-                  name="aspectRatio"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Aspect Ratio</FormLabel>
-                      <div className="flex gap-2">
-                        {['1:1', '16:9', '9:16', '3:4', '4:3'].map((ratio) => (
-                          <Button
-                            key={ratio}
-                            type="button"
-                            variant={field.value === ratio ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => field.onChange(ratio)}
-                          >
-                            {ratio}
-                          </Button>
-                        ))}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Steps */}
-                <FormField
-                  control={form.control}
-                  name="steps"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Generation Steps: {field.value}</FormLabel>
-                      <FormControl>
-                        <Slider
-                          min={1}
-                          max={50}
-                          step={1}
-                          value={[field.value]}
-                          onValueChange={(value) => field.onChange(value[0])}
-                        />
-                      </FormControl>
-                      <p className="text-xs text-gray-500">
-                        More steps = higher quality but slower generation
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Seed */}
-                <FormField
-                  control={form.control}
-                  name="seed"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Seed (Optional)</FormLabel>
-                      <div className="flex gap-2">
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="Random"
-                            {...field}
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                          />
-                        </FormControl>
+                      
+                      {selectedUserModel.triggerWord && (
+                        <div className="text-xs text-blue-700">
+                          💡 Tip: Use "<code className="bg-blue-100 px-1 rounded">{selectedUserModel.triggerWord}</code>" in your prompt for best results
+                        </div>
+                      )}
+                      
+                      {selectedUserModel.huggingfaceRepo && (
                         <Button
                           type="button"
-                          variant="outline"
-                          size="icon"
-                          onClick={generateRandomSeed}
+                          variant="ghost"
+                          size="sm"
+                          className="text-blue-700 hover:text-blue-900 p-0 h-auto"
+                          onClick={() => window.open(`https://huggingface.co/${selectedUserModel.huggingfaceRepo}`, '_blank')}
                         >
-                          <RefreshCw className="h-4 w-4" />
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          View on HuggingFace
                         </Button>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Use the same seed to reproduce results
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Error */}
-                {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                    {error}
-                  </div>
-                )}
-
-                {/* Submit */}
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isGenerating || creditsRemaining < 1}
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Generate Image (1 credit)
-                    </>
-                  )}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-
-        {/* Generated Image */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Generated Image</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isGenerating ? (
-              <div className="space-y-4">
-                {/* Generation Loading State */}
-                <div className="flex items-center justify-center h-64 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-200">
-                  <div className="text-center">
-                    <div className="relative mb-4">
-                      <Loader2 className="h-12 w-12 text-blue-500 mx-auto animate-spin" />
-                      <Sparkles className="h-6 w-6 text-purple-500 absolute -top-1 -right-1 animate-pulse" />
+                      )}
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Generating your image...</h3>
-                    <p className="text-gray-600 text-sm mb-4">
-                      Creating something amazing with AI magic ✨
-                    </p>
-                    
-                    {/* Animated progress dots */}
-                    <div className="flex justify-center space-x-1">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Current prompt being generated */}
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-sm text-gray-600">
-                    <strong>Generating:</strong> {form.getValues('prompt') || 'Your amazing image...'}
-                  </p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="outline" className="text-xs">
-                      {form.getValues('aspectRatio')}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {form.getValues('steps')} steps
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {models.find(m => m.id === form.getValues('modelId'))?.name.split(' ')[0] || 'FLUX'}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            ) : generatedImage ? (
-              <div className="space-y-4">
-                <div className="relative">
-                  <img
-                    src={generatedImage.url}
-                    alt={generatedImage.prompt}
-                    className="w-full rounded-lg shadow-lg"
+                  )}
+
+                  {/* Base Model Selection (only when not using custom models) */}
+                  {!selectedUserModel && (
+                    <FormField
+                      control={form.control}
+                      name="modelId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Base Model</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a model" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {baseModels.map((model) => (
+                                <SelectItem key={model.id} value={model.id}>
+                                  <div className="flex items-center gap-2">
+                                    <span>{model.name}</span>
+                                    {model.free && <Badge variant="secondary" className="text-xs">Free</Badge>}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {/* Prompt */}
+                  <FormField
+                    control={form.control}
+                    name="prompt"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Prompt</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder={
+                              selectedUserModel?.triggerWord 
+                                ? `Describe what you want to generate. Start with "${selectedUserModel.triggerWord}" for best results...`
+                                : "Describe what you want to generate..."
+                            }
+                            className="min-h-[100px]"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-                
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-600">
-                    <strong>Prompt:</strong> {generatedImage.prompt}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Generated on {new Date(generatedImage.createdAt).toLocaleString()}
-                  </p>
-                </div>
 
-                <Button onClick={downloadImage} className="w-full">
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Image
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                <div className="text-center">
-                  <Sparkles className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">Generated image will appear here</p>
-                  <p className="text-xs text-gray-400 mt-2">Enter a prompt and click generate to get started</p>
+                  {/* Style */}
+                  <FormField
+                    control={form.control}
+                    name="style"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Style</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a style" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {styles.map((style) => (
+                              <SelectItem key={style.id} value={style.id}>
+                                {style.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Aspect Ratio */}
+                    <FormField
+                      control={form.control}
+                      name="aspectRatio"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Aspect Ratio</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select aspect ratio" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="1:1">Square (1:1)</SelectItem>
+                              <SelectItem value="16:9">Landscape (16:9)</SelectItem>
+                              <SelectItem value="9:16">Portrait (9:16)</SelectItem>
+                              <SelectItem value="3:4">Photo (3:4)</SelectItem>
+                              <SelectItem value="4:3">Photo Landscape (4:3)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Steps */}
+                    <FormField
+                      control={form.control}
+                      name="steps"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Steps: {field.value}</FormLabel>
+                          <FormControl>
+                            <Slider
+                              min={1}
+                              max={50}
+                              step={1}
+                              value={[field.value]}
+                              onValueChange={(value) => field.onChange(value[0])}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Seed */}
+                  <div className="flex gap-2">
+                    <FormField
+                      control={form.control}
+                      name="seed"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormLabel>Seed (optional)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="Random seed"
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                              value={field.value || ''}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex items-end">
+                      <Button type="button" variant="outline" onClick={generateRandomSeed}>
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Button 
+                type="submit" 
+                disabled={isGenerating || creditsRemaining < 1} 
+                className="w-full"
+                size="lg"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Generate Image (1 credit)
+                  </>
+                )}
+              </Button>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                  {error}
                 </div>
+              )}
+            </form>
+          </Form>
+
+          {/* Generated Image */}
+          {generatedImage && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Star className="h-5 w-5" />
+                  Generated Image
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                    <img
+                      src={generatedImage.url}
+                      alt="Generated image"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm text-gray-600">
+                      <p className="font-medium">Prompt:</p>
+                      <p className="break-words">{generatedImage.prompt}</p>
+                    </div>
+                    <Button onClick={downloadImage} size="sm">
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Quick Prompts */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lightbulb className="h-5 w-5" />
+                Quick Prompts
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {quickPrompts.map((prompt, index) => (
+                  <Button
+                    key={index}
+                    variant="outline"
+                    className="w-full justify-start text-left h-auto p-3"
+                    onClick={() => handlePromptUse(prompt.prompt)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg">{prompt.emoji}</span>
+                      <div>
+                        <div className="font-medium text-sm">{prompt.label}</div>
+                        <div className="text-xs text-gray-600 mt-1">{prompt.prompt}</div>
+                      </div>
+                    </div>
+                  </Button>
+                ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          {/* Prompt Categories */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Prompt Library</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
+                <TabsList className="grid w-full grid-cols-2">
+                  {Object.keys(categorizedPrompts).map((category) => (
+                    <TabsTrigger key={category} value={category} className="text-xs">
+                      {category.split(' ')[0]}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                {Object.entries(categorizedPrompts).map(([category, prompts]) => (
+                  <TabsContent key={category} value={category} className="space-y-2 mt-4">
+                    {prompts.map((item, index) => (
+                      <div key={index} className="p-3 border rounded-lg">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium mb-1">{item.description}</p>
+                            <p className="text-xs text-gray-600 break-words">{item.prompt}</p>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handlePromptCopy(item.prompt)}
+                              className="h-6 w-6 p-0"
+                            >
+                              {copiedPrompt === item.prompt ? (
+                                <span className="text-green-600">✓</span>
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handlePromptUse(item.prompt)}
+                              className="h-6 w-6 p-0"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </CardContent>
+          </Card>
+
+          {/* User Models Quick Access */}
+          {!loadingModels && userModels.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  My Models
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {userModels.slice(0, 3).map((model) => (
+                    <div
+                      key={model.id}
+                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                        selectedUserModel?.id === model.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                      onClick={() => handleUserModelSelect(model.id)}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{model.name}</p>
+                          {model.triggerWord && (
+                            <code className="text-xs bg-gray-100 px-1 rounded">{model.triggerWord}</code>
+                          )}
+                        </div>
+                        <Badge variant="secondary" className="text-xs ml-2">
+                          {model._count.generatedImages}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {userModels.length > 3 && (
+                    <p className="text-xs text-gray-500 text-center">
+                      +{userModels.length - 3} more models available
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   )
