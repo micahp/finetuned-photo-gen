@@ -158,4 +158,84 @@ export class TogetherAIService {
       'A student studying in a library'
     ]
   }
+
+  // Get categorized prompt suggestions
+  getCategorizedPrompts(): Record<string, Array<{ prompt: string; description: string }>> {
+    return {
+      'Dating Apps': [
+        { prompt: 'A genuine smile portrait with natural lighting, authentic and approachable', description: 'Perfect for Tinder, Bumble, Hinge' },
+        { prompt: 'Casual outdoor portrait, relaxed pose, warm golden hour lighting', description: 'Shows personality and authenticity' },
+        { prompt: 'A person enjoying their hobby, genuine happiness, lifestyle portrait', description: 'Conversation starter photo' },
+        { prompt: 'Beach portrait, casual attire, natural smile, sunset lighting', description: 'Fun and adventurous vibe' },
+        { prompt: 'Coffee shop portrait, reading or working, cozy atmosphere', description: 'Intellectual and approachable' },
+        { prompt: 'Hiking or outdoor adventure portrait, natural background', description: 'Active lifestyle showcase' },
+        { prompt: 'Pet lover portrait with dog or cat, genuine interaction', description: 'Shows caring personality' },
+        { prompt: 'Travel photo at famous landmark, happy expression', description: 'Worldly and adventurous' }
+      ],
+      'Professional Headshots': [
+        { prompt: 'Executive business headshot, confident expression, professional lighting', description: 'CEO and leadership roles' },
+        { prompt: 'LinkedIn professional headshot, approachable smile, business attire', description: 'Networking and career growth' },
+        { prompt: 'Lawyer professional headshot, trustworthy expression, formal attire', description: 'Legal profession' },
+        { prompt: 'Doctor medical professional headshot, competent and caring', description: 'Healthcare industry' },
+        { prompt: 'Tech professional headshot, modern office background, casual business', description: 'Startup and tech industry' },
+        { prompt: 'Consultant headshot, confident and approachable, clean background', description: 'Business consulting' },
+        { prompt: 'Real estate agent headshot, friendly and trustworthy smile', description: 'Real estate industry' },
+        { prompt: 'Teacher or educator headshot, warm and approachable expression', description: 'Education sector' }
+      ],
+      'Lifestyle & Social': [
+        { prompt: 'Instagram influencer photo, stylish outfit, trendy location', description: 'Social media content' },
+        { prompt: 'Fitness influencer workout photo, athletic wear, gym setting', description: 'Health and wellness content' },
+        { prompt: 'Food blogger photo, enjoying a meal, restaurant setting', description: 'Culinary content creation' },
+        { prompt: 'Fashion portrait, stylish outfit, urban background', description: 'Style and fashion content' },
+        { prompt: 'Cozy home lifestyle photo, comfortable and relaxed', description: 'Lifestyle blogging' },
+        { prompt: 'Book lover portrait, reading in beautiful location', description: 'Literary and intellectual content' },
+        { prompt: 'Art creator portrait, in studio with artwork', description: 'Creative and artistic content' },
+        { prompt: 'Music lover photo, with instrument or at concert', description: 'Music and entertainment content' }
+      ],
+      'Creative & Artistic': [
+        { prompt: 'Artistic portrait with dramatic lighting, creative composition', description: 'Fine art photography style' },
+        { prompt: 'Vintage aesthetic portrait, retro styling and colors', description: '1950s-1980s inspired looks' },
+        { prompt: 'Film noir portrait, black and white, dramatic shadows', description: 'Classic Hollywood glamour' },
+        { prompt: 'Cyberpunk aesthetic portrait, neon lighting, futuristic', description: 'Sci-fi and tech aesthetic' },
+        { prompt: 'Bohemian portrait, natural setting, flowing fabrics', description: 'Free-spirited artistic vibe' },
+        { prompt: 'Minimalist portrait, clean composition, simple background', description: 'Modern and sophisticated' },
+        { prompt: 'Gothic portrait, dark romantic aesthetic, dramatic makeup', description: 'Alternative and edgy style' },
+        { prompt: 'Ethereal fantasy portrait, magical lighting effects', description: 'Dreamy and otherworldly' }
+      ],
+      'Luxury & Glamour': [
+        { prompt: 'Luxury lifestyle photo, expensive car, sophisticated pose', description: 'High-end lifestyle content' },
+        { prompt: 'Red carpet glamour portrait, elegant gown, professional makeup', description: 'Celebrity-style photos' },
+        { prompt: 'Private jet or yacht photo, luxury travel lifestyle', description: 'Elite lifestyle showcase' },
+        { prompt: 'Designer fashion portrait, luxury boutique setting', description: 'High fashion and luxury brands' },
+        { prompt: 'Five-star hotel lifestyle photo, elegant and refined', description: 'Luxury hospitality content' },
+        { prompt: 'Champagne and celebration photo, elegant party setting', description: 'Celebratory luxury moments' },
+        { prompt: 'High-end jewelry portrait, elegant accessories focus', description: 'Luxury accessories showcase' },
+        { prompt: 'Penthouse lifestyle photo, city skyline background', description: 'Urban luxury living' }
+      ],
+      'Seasonal & Occasions': [
+        { prompt: 'Holiday family portrait, warm lighting, festive atmosphere', description: 'Christmas and holiday cards' },
+        { prompt: 'Wedding portrait, elegant dress, romantic lighting', description: 'Bridal and wedding content' },
+        { prompt: 'Graduation portrait, cap and gown, proud expression', description: 'Academic achievements' },
+        { prompt: 'Birthday celebration photo, party atmosphere, joyful', description: 'Special occasion memories' },
+        { prompt: 'Summer vacation photo, beach or pool setting, relaxed', description: 'Seasonal lifestyle content' },
+        { prompt: 'Autumn portrait, fall colors, cozy sweater', description: 'Seasonal fashion and mood' },
+        { prompt: 'Spring garden portrait, flowers, fresh and bright', description: 'Nature and renewal themes' },
+        { prompt: 'Winter snow portrait, warm clothing, magical atmosphere', description: 'Winter wonderland vibes' }
+      ]
+    }
+  }
+
+  // Get quick prompt templates
+  getQuickPrompts(): Array<{ label: string; prompt: string; emoji: string }> {
+    return [
+      { label: 'Professional Headshot', prompt: 'Professional business headshot, confident smile, clean background, studio lighting', emoji: '💼' },
+      { label: 'Dating Profile', prompt: 'Authentic portrait, genuine smile, natural lighting, approachable and friendly', emoji: '💖' },
+      { label: 'Instagram Ready', prompt: 'Instagram-worthy photo, trendy outfit, stylish location, perfect lighting', emoji: '📸' },
+      { label: 'Casual Portrait', prompt: 'Casual lifestyle portrait, relaxed pose, natural setting, warm lighting', emoji: '😊' },
+      { label: 'Fitness Photo', prompt: 'Fitness lifestyle photo, athletic wear, gym or outdoor setting, energetic pose', emoji: '💪' },
+      { label: 'Creative Portrait', prompt: 'Artistic portrait, creative lighting, unique composition, dramatic shadows', emoji: '🎨' },
+      { label: 'Travel Vibes', prompt: 'Travel portrait, exotic location, adventure outfit, wanderlust atmosphere', emoji: '✈️' },
+      { label: 'Luxury Lifestyle', prompt: 'Luxury lifestyle photo, elegant setting, sophisticated pose, high-end aesthetic', emoji: '💎' }
+    ]
+  }
 } 

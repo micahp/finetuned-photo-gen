@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
-import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus } from 'lucide-react'
 import { TogetherAIService } from '@/lib/together-ai'
 
 const generateSchema = z.object({
@@ -41,6 +42,7 @@ export default function GeneratePage() {
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null)
   const [creditsRemaining, setCreditsRemaining] = useState(session?.user?.credits || 0)
   const [error, setError] = useState<string | null>(null)
+  const [copiedPrompt, setCopiedPrompt] = useState<string | null>(null)
 
   // Initialize service without API key on client side (will be handled by API route)
   const getTogetherService = () => {
@@ -65,6 +67,18 @@ export default function GeneratePage() {
           'A professional headshot of a person',
           'A person in a modern office setting',
           'A casual portrait outdoors'
+        ],
+        getCategorizedPrompts: () => ({
+          'Dating Apps': [
+            { prompt: 'A genuine smile portrait with natural lighting, authentic and approachable', description: 'Perfect for Tinder, Bumble, Hinge' }
+          ],
+          'Professional Headshots': [
+            { prompt: 'Executive business headshot, confident expression, professional lighting', description: 'CEO and leadership roles' }
+          ]
+        }),
+        getQuickPrompts: () => [
+          { label: 'Professional Headshot', prompt: 'Professional business headshot, confident smile, clean background, studio lighting', emoji: '💼' },
+          { label: 'Dating Profile', prompt: 'Authentic portrait, genuine smile, natural lighting, approachable and friendly', emoji: '💖' }
         ]
       }
     }
@@ -74,6 +88,10 @@ export default function GeneratePage() {
   const models = together.getAvailableModels()
   const styles = together.getStylePresets()
   const suggestions = together.getPromptSuggestions()
+  const quickPrompts = together.getQuickPrompts()
+  const categorizedPrompts = together.getCategorizedPrompts()
+  
+  const [selectedCategory, setSelectedCategory] = useState<string>('Dating Apps')
 
   const form = useForm<GenerateFormData>({
     resolver: zodResolver(generateSchema),
@@ -125,6 +143,26 @@ export default function GeneratePage() {
 
   const handleSuggestionClick = (suggestion: string) => {
     form.setValue('prompt', suggestion)
+  }
+
+  const handlePromptCopy = async (prompt: string) => {
+    try {
+      await navigator.clipboard.writeText(prompt)
+      setCopiedPrompt(prompt)
+      setTimeout(() => setCopiedPrompt(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy prompt:', err)
+    }
+  }
+
+  const handlePromptUse = (prompt: string) => {
+    form.setValue('prompt', prompt)
+  }
+
+  const handlePromptAppend = (addition: string) => {
+    const currentPrompt = form.getValues('prompt')
+    const newPrompt = currentPrompt ? `${currentPrompt}, ${addition}` : addition
+    form.setValue('prompt', newPrompt)
   }
 
   const generateRandomSeed = () => {
@@ -210,22 +248,134 @@ export default function GeneratePage() {
                   )}
                 />
 
-                {/* Prompt Suggestions */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Suggestions</label>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestions.slice(0, 3).map((suggestion, index) => (
-                      <Button
-                        key={index}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSuggestionClick(suggestion)}
-                        className="text-xs"
-                      >
-                        {suggestion}
-                      </Button>
-                    ))}
+                {/* Enhanced Prompt Suggestions */}
+                <div className="space-y-4">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <Lightbulb className="h-4 w-4" />
+                    Prompt Inspiration
+                  </label>
+                  
+                  {/* Quick Prompt Templates */}
+                  <div>
+                    <h4 className="text-xs font-medium text-gray-600 mb-2">Quick Templates</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {quickPrompts.map((template, index) => (
+                        <div key={index} className="relative group">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePromptUse(template.prompt)}
+                            className="w-full text-left justify-start text-xs h-auto p-2"
+                          >
+                            <span className="mr-2">{template.emoji}</span>
+                            <span className="truncate">{template.label}</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handlePromptCopy(template.prompt)}
+                            className="absolute -top-1 -right-1 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            {copiedPrompt === template.prompt ? (
+                              <Star className="h-3 w-3 text-green-500" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Categorized Prompts */}
+                  <div>
+                    <h4 className="text-xs font-medium text-gray-600 mb-2">Browse by Category</h4>
+                    <Tabs defaultValue="Dating Apps" className="w-full">
+                      <TabsList className="grid w-full grid-cols-3 h-auto">
+                        {Object.keys(categorizedPrompts).slice(0, 3).map((category) => (
+                          <TabsTrigger 
+                            key={category} 
+                            value={category}
+                            className="text-xs px-2 py-1"
+                          >
+                            {category.split(' ')[0]}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                      
+                      {Object.entries(categorizedPrompts).slice(0, 3).map(([category, prompts]) => (
+                        <TabsContent key={category} value={category} className="mt-2">
+                          <div className="space-y-2 max-h-32 overflow-y-auto">
+                            {prompts.slice(0, 3).map((item, index) => (
+                              <div key={index} className="relative group">
+                                <div className="p-2 border rounded text-xs hover:bg-gray-50">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium text-gray-800 leading-tight">
+                                        {item.prompt.slice(0, 60)}...
+                                      </p>
+                                      <p className="text-gray-500 text-xs mt-1">
+                                        {item.description}
+                                      </p>
+                                    </div>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handlePromptUse(item.prompt)}
+                                        className="h-6 w-6 p-0"
+                                        title="Use this prompt"
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handlePromptCopy(item.prompt)}
+                                        className="h-6 w-6 p-0"
+                                        title="Copy to clipboard"
+                                      >
+                                        {copiedPrompt === item.prompt ? (
+                                          <Star className="h-3 w-3 text-green-500" />
+                                        ) : (
+                                          <Copy className="h-3 w-3" />
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </TabsContent>
+                      ))}
+                    </Tabs>
+                  </div>
+
+                  {/* Prompt Enhancers */}
+                  <div>
+                    <h4 className="text-xs font-medium text-gray-600 mb-2">Enhance Your Prompt</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        'high quality', 'professional lighting', 'sharp focus', 
+                        'detailed', 'cinematic', 'studio lighting'
+                      ].map((enhancer) => (
+                        <Button
+                          key={enhancer}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePromptAppend(enhancer)}
+                          className="text-xs h-6 px-2"
+                        >
+                          +{enhancer}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
