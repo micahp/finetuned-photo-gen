@@ -20,6 +20,7 @@ interface StartTrainingParams {
   steps?: number
   learningRate?: number
   loraRank?: number
+  isPrivate?: boolean // Future feature: will be tied to subscription plans (free = public, premium = private)
 }
 
 interface TrainingStatus {
@@ -265,7 +266,8 @@ export class TrainingService {
   private async handleTrainingCompletion(
     trainingId: string, 
     modelName: string, 
-    replicateStatus: any
+    replicateStatus: any,
+    isPrivate: boolean = false // MVP: Public models for all users, private models will be a premium feature
   ): Promise<TrainingStatus> {
     if (!this.debugger) {
       this.debugger = new TrainingDebugger(trainingId)
@@ -299,7 +301,7 @@ export class TrainingService {
         modelPath: replicateStatus.output || '', // Replicate output path
         description: `Custom FLUX LoRA model: ${modelName} (Training ID: ${trainingId})`,
         tags: ['flux', 'lora', 'text-to-image', 'custom'],
-        isPrivate: false, // Make public for Together AI access
+        isPrivate: isPrivate, // Use the provided privacy setting
       })
 
       if (uploadResponse.status === 'failed') {
@@ -318,7 +320,7 @@ export class TrainingService {
             modelPath: replicateStatus.output || '',
             description: `Custom FLUX LoRA model: ${modelName} (Training ID: ${trainingId})`,
             tags: ['flux', 'lora', 'text-to-image', 'custom'],
-            isPrivate: false,
+            isPrivate: isPrivate,
           })
           
           if (retryResponse.status === 'completed') {

@@ -208,6 +208,7 @@
 - [ ] Consider if we need webhooks for like replicate
 - [ ] Payment processing
 - [ ] Billing dashboard and history
+- [ ] **Model Privacy Tiers**: Free users get public models, premium subscribers get private HuggingFace repositories
 
 ### **Credit System & Usage Tracking**
 - [x] Credit tracking implementation
@@ -232,6 +233,7 @@
 - [ ] Make sure free and lower tier paying users only have 1 model uploaded at a time, prompt and delete model when they try to create a new one
 - [ ] Check existing pages for missing pages and components
 - [ ] Implement any missing pages and components
+- [ ] **Model Privacy Feature**: Implement subscription-based model privacy (free users = public models, premium users = private models)
 
 ### **Theme**
 - [ ] Add dark theme
