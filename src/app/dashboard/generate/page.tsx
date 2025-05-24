@@ -562,7 +562,48 @@ export default function GeneratePage() {
             <CardTitle>Generated Image</CardTitle>
           </CardHeader>
           <CardContent>
-            {generatedImage ? (
+            {isGenerating ? (
+              <div className="space-y-4">
+                {/* Generation Loading State */}
+                <div className="flex items-center justify-center h-64 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                  <div className="text-center">
+                    <div className="relative mb-4">
+                      <Loader2 className="h-12 w-12 text-blue-500 mx-auto animate-spin" />
+                      <Sparkles className="h-6 w-6 text-purple-500 absolute -top-1 -right-1 animate-pulse" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Generating your image...</h3>
+                    <p className="text-gray-600 text-sm mb-4">
+                      Creating something amazing with AI magic ✨
+                    </p>
+                    
+                    {/* Animated progress dots */}
+                    <div className="flex justify-center space-x-1">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Current prompt being generated */}
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-sm text-gray-600">
+                    <strong>Generating:</strong> {form.getValues('prompt') || 'Your amazing image...'}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="outline" className="text-xs">
+                      {form.getValues('aspectRatio')}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {form.getValues('steps')} steps
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {models.find(m => m.id === form.getValues('modelId'))?.name.split(' ')[0] || 'FLUX'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            ) : generatedImage ? (
               <div className="space-y-4">
                 <div className="relative">
                   <img
@@ -591,6 +632,7 @@ export default function GeneratePage() {
                 <div className="text-center">
                   <Sparkles className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500">Generated image will appear here</p>
+                  <p className="text-xs text-gray-400 mt-2">Enter a prompt and click generate to get started</p>
                 </div>
               </div>
             )}
