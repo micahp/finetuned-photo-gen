@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
 import { auth } from "@/lib/next-auth";
+import AutoReloadErrorBoundary from "@/components/AutoReloadErrorBoundary";
+import "@/utils/errorMonitor"; // Auto-setup error monitoring
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,9 +33,11 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthSessionProvider session={session}>
-          {children}
-        </AuthSessionProvider>
+        <AutoReloadErrorBoundary>
+          <AuthSessionProvider session={session}>
+            {children}
+          </AuthSessionProvider>
+        </AutoReloadErrorBoundary>
       </body>
     </html>
   );
