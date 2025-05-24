@@ -35,14 +35,59 @@ export class ReplicateService {
   private client: Replicate
 
   constructor(apiToken?: string) {
-    const token = apiToken || process.env.REPLICATE_API_TOKEN
+    // Try multiple sources for the API token
+    const token = apiToken || 
+                  process.env.REPLICATE_API_TOKEN || 
+                  process.env.NEXT_PUBLIC_REPLICATE_API_TOKEN
+    
     if (!token) {
-      throw new Error('Replicate API token is required')
+      console.error('Available environment variables:', Object.keys(process.env).filter(key => key.includes('REPLICATE')))
+      throw new Error('Replicate API token is required. Please set REPLICATE_API_TOKEN environment variable.')
     }
+    
+    console.log(`✅ Replicate API token loaded (${token.substring(0, 8)}...)`)
     
     this.client = new Replicate({
       auth: token,
     })
+  }
+
+  /**
+   * Create a destination model for training
+   */
+  async createDestinationModel(modelName: string, description?: string): Promise<{ success: boolean; modelId?: `${string}/${string}`; error?: string }> {
+    try {
+      console.log(`Creating destination model: ${modelName}`)
+      
+      // For now, use a fixed owner name (can be made dynamic later)
+      const owner = 'micahp'
+      
+      const modelId = `flux-lora-${modelName.toLowerCase().replace(/\s+/g, '-')}`
+      
+      // Use the correct models.create API with positional arguments
+      const model = await this.client.models.create(
+        owner,
+        modelId,
+        {
+          description: description || `Fine-tuned FLUX LoRA model for ${modelName}`,
+          visibility: 'private' as const, // Start as private
+          hardware: 'gpu-t4' as const // Required field
+        }
+      )
+      
+      console.log(`✅ Successfully created model: ${owner}/${modelId}`)
+      const destinationId = `${owner}/${modelId}` as `${string}/${string}`
+      return {
+        success: true,
+        modelId: destinationId
+      }
+    } catch (error) {
+      console.error('Failed to create destination model:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }
   }
 
   /**
@@ -54,14 +99,26 @@ export class ReplicateService {
       const imageZipUrl = params.zipUrl || await this.packageImagesForTraining(params.trainingImages)
       
       console.log(`Using training images from: ${params.zipUrl ? 'provided ZIP URL' : 'legacy image URLs'}`)
+      console.log(`ZIP URL: ${imageZipUrl}`)
       
-      // Use Replicate's FLUX LoRA trainer
+      // Step 1: Create destination model if it doesn't exist
+      console.log('Creating destination model...')
+      const modelResult = await this.createDestinationModel(params.modelName)
+      
+      if (!modelResult.success) {
+        throw new Error(`Failed to create destination model: ${modelResult.error}`)
+      }
+      
+      console.log(`Using destination model: ${modelResult.modelId}`)
+      
+      // Step 2: Start training with the created model
+      console.log('Starting Replicate training with correct version...')
       const training = await this.client.trainings.create(
         "ostris",
         "flux-dev-lora-trainer",
-        "c6e78d25",
+        "c6e78d2501e8088876e99ef21e4460d0dc121af7a4b786b9a4c2d75c620e300d",
         {
-          destination: `user/flux-lora-${params.modelName.toLowerCase().replace(/\s+/g, '-')}`,
+          destination: modelResult.modelId!,
           input: {
             input_images: imageZipUrl,
             trigger_word: params.triggerWord,
@@ -81,6 +138,7 @@ export class ReplicateService {
         }
       )
 
+      console.log('Replicate training created successfully:', training.id)
       return {
         id: String(training.id),
         status: training.status as 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled',
@@ -89,6 +147,12 @@ export class ReplicateService {
 
     } catch (error) {
       console.error('Replicate training error:', error)
+      console.error('Full error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined
+      })
+      
       return {
         id: `error_${Date.now()}`,
         status: 'failed',
@@ -179,10 +243,10 @@ export class ReplicateService {
       {
         id: 'ostris/flux-dev-lora-trainer',
         name: 'FLUX Dev LoRA Trainer',
-        description: 'Train LoRA models for FLUX.1-dev',
-        version: 'c6e78d25',
+        description: 'Train LoRA models for FLUX.1-dev using ai-toolkit',
+        version: 'c6e78d2501e8088876e99ef21e4460d0dc121af7a4b786b9a4c2d75c620e300d',
         estimatedTime: '10-30 minutes',
-        cost: '$0.05 per minute'
+        cost: '$0.001525 per second'
       }
     ]
   }
