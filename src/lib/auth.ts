@@ -11,9 +11,12 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 }
 
 export async function createUser(email: string, password: string, name?: string): Promise<Omit<User, 'password'>> {
+  // Normalize email to lowercase
+  const normalizedEmail = email.toLowerCase()
+  
   // Check if user already exists
   const existingUser = await prisma.user.findUnique({
-    where: { email }
+    where: { email: normalizedEmail }
   })
 
   if (existingUser) {
@@ -26,7 +29,7 @@ export async function createUser(email: string, password: string, name?: string)
   // Create user
   const user = await prisma.user.create({
     data: {
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
       name,
     },
@@ -48,24 +51,30 @@ export async function createUser(email: string, password: string, name?: string)
 
 export async function findUserByEmail(email: string): Promise<User | null> {
   return prisma.user.findUnique({
-    where: { email }
+    where: { email: email.toLowerCase() }
   })
 }
 
 export async function validateCredentials(email: string, password: string): Promise<Omit<User, 'password'> | null> {
-  const user = await findUserByEmail(email)
-  
-  if (!user || !user.password) {
+  try {
+    const user = await findUserByEmail(email)
+    
+    if (!user || !user.password) {
+      return null
+    }
+
+    const isValid = await verifyPassword(password, user.password)
+    
+    if (!isValid) {
+      return null
+    }
+
+    // Return user without password
+    const { password: _, ...userWithoutPassword } = user
+    return userWithoutPassword
+  } catch (error) {
+    // Log error for debugging but don't expose details to client
+    console.error('Error validating credentials:', error)
     return null
   }
-
-  const isValid = await verifyPassword(password, user.password)
-  
-  if (!isValid) {
-    return null
-  }
-
-  // Return user without password
-  const { password: _, ...userWithoutPassword } = user
-  return userWithoutPassword
 } 

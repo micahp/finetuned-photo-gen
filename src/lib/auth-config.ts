@@ -24,7 +24,7 @@ export const authConfig: NextAuthConfig = {
 
       return true
     },
-    async signIn({ user, account, profile, email, credentials }) {
+    async signIn({ user, account: _account, profile: _profile, email: _email, credentials: _credentials }) {
       // Allow sign in if user exists
       return !!user
     },
@@ -63,18 +63,11 @@ export const authConfig: NextAuthConfig = {
         password: { label: 'Password', type: 'password' }
       },
       async authorize(credentials) {
-        console.log('🔍 Credentials provider authorize called with:', { 
-          email: credentials?.email, 
-          hasPassword: !!credentials?.password 
-        });
-        
         if (!credentials?.email || !credentials?.password) {
-          console.log('❌ Missing email or password');
           return null
         }
 
         try {
-          console.log('🔍 Validating credentials for:', credentials.email);
           // Use direct validation instead of HTTP call to avoid CSRF issues
           const user = await validateCredentials(
             credentials.email as string, 
@@ -82,15 +75,8 @@ export const authConfig: NextAuthConfig = {
           )
 
           if (!user) {
-            console.log('❌ User validation failed');
             return null
           }
-
-          console.log('✅ User validation successful:', { 
-            id: user.id, 
-            email: user.email, 
-            name: user.name 
-          });
 
           return {
             id: user.id,
@@ -102,7 +88,7 @@ export const authConfig: NextAuthConfig = {
             credits: user.credits,
           }
         } catch (error) {
-          console.error('❌ Authentication error:', error)
+          console.error('Authentication error:', error)
           return null
         }
       }
