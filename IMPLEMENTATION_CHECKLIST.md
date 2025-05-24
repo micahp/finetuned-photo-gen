@@ -175,11 +175,10 @@
 - [ ] Create training status component with error handling and retry options
 
 ### **Training Management Dashboard**
-- [ ] Create `/app/dashboard/training/page.tsx` - Training history and management
-- [ ] Create `/app/dashboard/training/[id]/page.tsx` - Training details with debug data
-- [ ] Implement training cancellation functionality
-- [ ] Add cost tracking and estimation for training jobs
-- [ ] Display comprehensive debug logs and error analysis
+- [x] Create `/app/dashboard/training/page.tsx` - Training history and management
+- [x] Create `/app/dashboard/training/[id]/page.tsx` - Training details with debug data
+- [x] Add cost tracking and estimation for training jobs
+- [x] Display comprehensive debug logs and error analysis
 
 ### **Enhanced Model Management**
 - [ ] Update model gallery to show training status and debug info

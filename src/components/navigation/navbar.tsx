@@ -47,6 +47,9 @@ export function Navbar() {
                 <Link href="/dashboard/models">
                   <Button variant="ghost">Models</Button>
                 </Link>
+                <Link href="/dashboard/training">
+                  <Button variant="ghost">Training</Button>
+                </Link>
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
