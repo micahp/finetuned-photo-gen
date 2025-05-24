@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
-import { TogetherAIService } from '@/lib/together-ai'
+import { TrainingService } from '@/lib/training-service'
 import { z } from 'zod'
 
 const startTrainingSchema = z.object({
@@ -53,55 +53,53 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate training images count
-    if (trainingImages.length < 3) {
-      return NextResponse.json(
-        { error: 'At least 3 training images are required' },
-        { status: 400 }
-      )
-    }
+    // Initialize training service
+    const trainingService = new TrainingService()
 
-    if (trainingImages.length > 20) {
+    // Validate training parameters
+    const validation_result = trainingService.validateTrainingParams({
+      modelName: model.name,
+      triggerWord: model.triggerWord || model.name.toLowerCase().replace(/\s+/g, '_'),
+      trainingImages,
+      userId: session.user.id,
+    })
+
+    if (!validation_result.valid) {
       return NextResponse.json(
-        { error: 'Maximum 20 training images allowed' },
+        { error: `Validation failed: ${validation_result.errors.join(', ')}` },
         { status: 400 }
       )
     }
 
     try {
-      // Initialize Together AI service
-      const together = new TogetherAIService()
-
-      // Prepare training data for Together AI
-      const trainingData = trainingImages.map(img => ({
-        url: img.url,
-        caption: `${model.triggerWord} person`, // Simple caption for now
-      }))
-
-      // Start LoRA training
-      const trainingResult = await together.trainLoRA({
-        name: model.name,
-        description: `Custom LoRA model for ${model.name}`,
-        baseModel: 'black-forest-labs/FLUX.1-dev', // Default base model
-        trainingImages: trainingData,
+      // Start external training workflow
+      const trainingResult = await trainingService.startTraining({
+        modelName: model.name,
         triggerWord: model.triggerWord || model.name.toLowerCase().replace(/\s+/g, '_'),
-        learningRate: 0.0002,
-        epochs: 100,
-        batchSize: 1,
+        description: `Custom FLUX LoRA model for ${model.name}`,
+        trainingImages,
+        userId: session.user.id,
+        baseModel: 'black-forest-labs/FLUX.1-dev',
+        steps: 1000,
+        learningRate: 1e-4,
+        loraRank: 16,
       })
 
-      if (trainingResult.status === 'failed') {
-        throw new Error(trainingResult.error || 'Training failed to start')
+      if (trainingResult.status.status === 'failed') {
+        throw new Error(trainingResult.status.error || 'Training failed to start')
       }
 
-      // Update model with Together AI job ID and status
+      // Update model with external training ID and status
       await prisma.userModel.update({
         where: { id: model.id },
         data: {
           status: 'training',
-          modelId: trainingResult.id, // Store Together AI job ID
+          modelId: trainingResult.trainingId, // Store external training ID
           trainingStartedAt: new Date(),
           trainingImagesCount: trainingImages.length,
+          // Add new fields for external training
+          externalTrainingId: trainingResult.trainingId,
+          externalTrainingService: 'replicate',
         }
       })
 
@@ -113,7 +111,8 @@ export async function POST(request: NextRequest) {
           status: 'running',
           payload: {
             userModelId: model.id,
-            togetherJobId: trainingResult.id,
+            externalTrainingId: trainingResult.trainingId,
+            trainingService: 'replicate',
             trainingImages: trainingImages.map(img => ({ id: img.id, url: img.url })),
           }
         }
@@ -122,16 +121,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         training: {
-          id: trainingResult.id,
-          status: trainingResult.status,
+          id: trainingResult.trainingId,
+          status: trainingResult.status.status,
+          stage: trainingResult.status.stage,
           modelId: model.id,
-          estimatedTimeRemaining: trainingResult.estimatedTimeRemaining,
+          progress: trainingResult.status.progress,
+          estimatedTimeRemaining: trainingResult.status.estimatedTimeRemaining,
         },
-        message: 'Training started successfully with Together AI'
+        message: 'External LoRA training started successfully with Replicate'
       })
 
     } catch (trainingError) {
-      console.error('Together AI training error:', trainingError)
+      console.error('External training error:', trainingError)
       
       // Update model status to failed
       await prisma.userModel.update({
@@ -147,17 +148,17 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           jobType: 'model_training',
           status: 'failed',
-          errorMessage: trainingError instanceof Error ? trainingError.message : 'Training failed',
+          errorMessage: trainingError instanceof Error ? trainingError.message : 'External training failed',
           payload: {
             userModelId: model.id,
-            error: trainingError instanceof Error ? trainingError.message : 'Training failed',
+            error: trainingError instanceof Error ? trainingError.message : 'External training failed',
           }
         }
       })
 
       return NextResponse.json(
         { 
-          error: 'Failed to start training', 
+          error: 'Failed to start external training', 
           details: trainingError instanceof Error ? trainingError.message : 'Unknown error'
         },
         { status: 500 }

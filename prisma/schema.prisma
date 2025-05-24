@@ -36,21 +36,29 @@ model User {
 }
 
 model UserModel {
-  id                    String    @id @default(cuid())
-  userId                String    @map("user_id")
-  name                  String
-  status                String    @default("pending") // pending, training, ready, failed
-  modelId               String?   @map("model_id") // Together AI model ID or LoRA ID
-  triggerWord           String?   @map("trigger_word") // e.g., "johndoe_person"
-  trainingImagesCount   Int?      @map("training_images_count")
-  trainingStartedAt     DateTime? @map("training_started_at")
-  trainingCompletedAt   DateTime? @map("training_completed_at")
-  createdAt             DateTime  @default(now()) @map("created_at")
+  id                     String    @id @default(cuid())
+  userId                 String    @map("user_id")
+  name                   String
+  status                 String    @default("pending") // pending, training, ready, failed
+  modelId                String?   @map("model_id") // Together AI model ID or LoRA ID
+  triggerWord            String?   @map("trigger_word") // e.g., "johndoe_person"
+  trainingImagesCount    Int?      @map("training_images_count")
+  trainingStartedAt      DateTime? @map("training_started_at")
+  trainingCompletedAt    DateTime? @map("training_completed_at")
+  
+  // External training fields
+  externalTrainingId     String?   @map("external_training_id") // Replicate training ID
+  externalTrainingService String?  @map("external_training_service") // 'replicate', 'runpod', etc.
+  huggingfaceRepo        String?   @map("huggingface_repo") // HuggingFace repository path
+  huggingfaceStatus      String?   @map("huggingface_status") // 'uploading', 'ready', 'failed'
+  loraReadyForInference  Boolean   @default(false) @map("lora_ready_for_inference")
+  
+  createdAt              DateTime  @default(now()) @map("created_at")
   
   // Relations
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trainingImages        TrainingImage[]
-  generatedImages       GeneratedImage[]
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingImages         TrainingImage[]
+  generatedImages        GeneratedImage[]
   
   @@map("user_models")
 }

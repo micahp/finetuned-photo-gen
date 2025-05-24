@@ -5,7 +5,7 @@ import { TogetherAIService } from '@/lib/together-ai'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -17,7 +17,7 @@ export async function GET(
       )
     }
 
-    const modelId = params.id
+    const { id: modelId } = await params
 
     // Get the model
     const model = await prisma.userModel.findFirst({

@@ -21,6 +21,9 @@ jest.mock('@/lib/db', () => ({
     user: {
       findUnique: jest.fn(),
     },
+    jobQueue: {
+      create: jest.fn(),
+    },
   },
 }))
 
@@ -69,6 +72,8 @@ describe('Model Management API', () => {
       ;(prisma.userModel.create as jest.Mock).mockResolvedValue(mockModel)
       ;(prisma.trainingImage.findMany as jest.Mock).mockResolvedValue(mockImages)
       ;(prisma.trainingImage.updateMany as jest.Mock).mockResolvedValue({ count: 3 })
+      ;(prisma.jobQueue.create as jest.Mock).mockResolvedValue({ id: 'job-123' })
+      ;(prisma.userModel.update as jest.Mock).mockResolvedValue({ ...mockModel, status: 'training' })
 
       // This will fail until we implement the API endpoint
       const { POST } = await import('@/app/api/models/create/route')
@@ -89,12 +94,13 @@ describe('Model Management API', () => {
       expect(response.status).toBe(201)
       expect(result.success).toBe(true)
       expect(result.model.name).toBe('Test Model')
-      expect(result.model.status).toBe('pending')
+      expect(result.model.status).toBe('training')
       expect(prisma.userModel.create).toHaveBeenCalledWith({
         data: {
           name: 'Test Model',
           status: 'pending',
           userId: 'user-123',
+          triggerWord: 'test_model',
         },
       })
     })

@@ -8,6 +8,10 @@ interface GenerateImageParams {
   steps?: number
   seed?: number
   aspectRatio?: '1:1' | '16:9' | '9:16' | '3:4' | '4:3'
+  imageLoras?: Array<{
+    path: string  // HuggingFace repository path
+    scale?: number
+  }>
 }
 
 interface GenerateImageResponse {
@@ -98,15 +102,28 @@ export class TogetherAIService {
     try {
       const { width, height } = this.getDimensions(params.aspectRatio)
       
-      const requestBody = {
+      // Use LoRA model if LoRAs are specified
+      const model = params.imageLoras && params.imageLoras.length > 0 
+        ? 'black-forest-labs/FLUX.1-dev-lora'
+        : params.model || 'black-forest-labs/FLUX.1-schnell-Free'
+      
+      const requestBody: any = {
         prompt: params.prompt,
-        model: params.model || 'black-forest-labs/FLUX.1-schnell-Free', // Free model for testing
+        model,
         width: params.width || width,
         height: params.height || height,
-        steps: params.steps || 3, // Fast generation for testing
+        steps: params.steps || (params.imageLoras?.length ? 28 : 3), // More steps for LoRA
         seed: params.seed,
         n: 1,
         response_format: 'url'
+      }
+
+      // Add LoRA parameters if specified
+      if (params.imageLoras && params.imageLoras.length > 0) {
+        requestBody.image_loras = params.imageLoras.map(lora => ({
+          path: lora.path,
+          scale: lora.scale || 1.0
+        }))
       }
 
       const response = await fetch(`${this.baseUrl}/images/generations`, {
@@ -144,6 +161,37 @@ export class TogetherAIService {
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       }
     }
+  }
+
+  // Convenience method for generating with LoRA models
+  async generateWithLoRA(params: {
+    prompt: string
+    loraPath: string  // HuggingFace repository path
+    loraScale?: number
+    triggerWord?: string
+    width?: number
+    height?: number
+    steps?: number
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '3:4' | '4:3'
+    seed?: number
+  }): Promise<GenerateImageResponse> {
+    // Enhance prompt with trigger word if provided
+    const enhancedPrompt = params.triggerWord 
+      ? `${params.triggerWord} ${params.prompt}`
+      : params.prompt
+
+    return this.generateImage({
+      prompt: enhancedPrompt,
+      width: params.width,
+      height: params.height,
+      steps: params.steps || 28, // Default to higher steps for LoRA
+      aspectRatio: params.aspectRatio,
+      seed: params.seed,
+      imageLoras: [{
+        path: params.loraPath,
+        scale: params.loraScale || 1.0
+      }]
+    })
   }
 
   // Train LoRA model using uploaded images
