@@ -1,0 +1,126 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String?
+  password            String?
+  subscriptionStatus  String    @default("free") @map("subscription_status")
+  subscriptionPlan    String?   @map("subscription_plan")
+  stripeCustomerId    String?   @map("stripe_customer_id")
+  credits             Int       @default(3)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  userModels          UserModel[]
+  generatedImages     GeneratedImage[]
+  subscriptions       Subscription[]
+  jobQueue            JobQueue[]
+  
+  @@map("users")
+}
+
+model UserModel {
+  id                    String    @id @default(cuid())
+  userId                String    @map("user_id")
+  name                  String
+  status                String    @default("pending") // pending, training, ready, failed
+  modelId               String?   @map("model_id") // Together AI model ID or LoRA ID
+  triggerWord           String?   @map("trigger_word") // e.g., "johndoe_person"
+  trainingImagesCount   Int?      @map("training_images_count")
+  trainingStartedAt     DateTime? @map("training_started_at")
+  trainingCompletedAt   DateTime? @map("training_completed_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingImages        TrainingImage[]
+  generatedImages       GeneratedImage[]
+  
+  @@map("user_models")
+}
+
+model TrainingImage {
+  id                String    @id @default(cuid())
+  userModelId       String    @map("user_model_id")
+  originalFilename  String    @map("original_filename")
+  s3Key             String    @map("s3_key")
+  fileSize          Int?      @map("file_size")
+  width             Int?
+  height            Int?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  userModel         UserModel @relation(fields: [userModelId], references: [id], onDelete: Cascade)
+  
+  @@map("training_images")
+}
+
+model GeneratedImage {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  userModelId       String?   @map("user_model_id")
+  prompt            String
+  imageUrl          String    @map("image_url")
+  s3Key             String?   @map("s3_key")
+  generationParams  Json?     @map("generation_params") // store model settings, seed, etc.
+  creditsUsed       Int       @default(1) @map("credits_used")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userModel         UserModel? @relation(fields: [userModelId], references: [id])
+  
+  @@map("generated_images")
+}
+
+model JobQueue {
+  id              String    @id @default(cuid())
+  userId          String?   @map("user_id")
+  jobType         String    @map("job_type") // 'model_training', 'image_generation'
+  status          String    @default("pending")
+  payload         Json
+  attempts        Int       @default(0)
+  maxAttempts     Int       @default(3) @map("max_attempts")
+  errorMessage    String?   @map("error_message")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  
+  // Relations
+  user            User?     @relation(fields: [userId], references: [id])
+  
+  @@map("job_queue")
+}
+
+model Subscription {
+  id                    String    @id @default(cuid())
+  userId                String    @map("user_id")
+  stripeSubscriptionId  String?   @unique @map("stripe_subscription_id")
+  planName              String    @map("plan_name")
+  status                String
+  currentPeriodStart    DateTime? @map("current_period_start")
+  currentPeriodEnd      DateTime? @map("current_period_end")
+  monthlyCredits        Int?      @map("monthly_credits")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("subscriptions")
+}
