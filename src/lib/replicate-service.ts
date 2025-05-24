@@ -10,8 +10,8 @@ interface TrainingImage {
 interface ReplicateTrainingParams {
   modelName: string
   triggerWord: string
-  trainingImages: TrainingImage[]
-  zipUrl?: string
+  trainingImages: TrainingImage[] // Kept for backwards compatibility but not used
+  zipUrl: string // REQUIRED: Must be a valid ZIP file URL for Replicate training
   steps?: number
   learningRate?: number
   loraRank?: number
@@ -98,11 +98,17 @@ export class ReplicateService {
    */
   async startTraining(params: ReplicateTrainingParams): Promise<ReplicateTrainingResponse> {
     try {
-      // Use provided ZIP URL or create one from training images
-      const imageZipUrl = params.zipUrl || await this.packageImagesForTraining(params.trainingImages)
+      // Ensure we have a valid ZIP URL - this is REQUIRED for Replicate validation
+      if (!params.zipUrl) {
+        throw new Error('ZIP URL is required for Replicate training. Please create a ZIP file of training images first.')
+      }
+
+      // Validate ZIP URL format
+      if (!params.zipUrl.startsWith('http') && !params.zipUrl.startsWith('/api/')) {
+        throw new Error(`Invalid ZIP URL format: ${params.zipUrl}. Must be a valid HTTP URL or API endpoint.`)
+      }
       
-      console.log(`Using training images from: ${params.zipUrl ? 'provided ZIP URL' : 'legacy image URLs'}`)
-      console.log(`ZIP URL: ${imageZipUrl}`)
+      console.log(`Using training images ZIP: ${params.zipUrl}`)
       
       // Step 1: Create destination model if it doesn't exist
       console.log('Creating destination model...')
@@ -114,8 +120,8 @@ export class ReplicateService {
       
       console.log(`Using destination model: ${modelResult.modelId}`)
       
-      // Step 2: Start training with the created model
-      console.log('Starting Replicate training with correct version...')
+      // Step 2: Start training with the created model and ZIP URL
+      console.log('Starting Replicate training with ZIP file...')
       const training = await this.client.trainings.create(
         "ostris",
         "flux-dev-lora-trainer",
@@ -123,7 +129,7 @@ export class ReplicateService {
         {
           destination: modelResult.modelId!,
           input: {
-            input_images: imageZipUrl,
+            input_images: params.zipUrl, // Use the provided ZIP URL
             trigger_word: params.triggerWord,
             steps: params.steps || 1000,
             lora_rank: params.loraRank || 16,
@@ -142,7 +148,7 @@ export class ReplicateService {
         }
       )
 
-      console.log('Replicate training created successfully:', training.id)
+      console.log('✅ Replicate training created successfully:', training.id)
       return {
         id: String(training.id),
         status: training.status as 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled',
@@ -150,7 +156,7 @@ export class ReplicateService {
       }
 
     } catch (error) {
-      console.error('Replicate training error:', error)
+      console.error('❌ Replicate training error:', error)
       console.error('Full error details:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
@@ -202,41 +208,6 @@ export class ReplicateService {
       console.error('Error canceling training:', error)
       return false
     }
-  }
-
-  /**
-   * Package training images into a format suitable for Replicate
-   * For now, this creates a simple image collection URL
-   * In production, you'd want to create an actual ZIP file
-   */
-  private async packageImagesForTraining(images: TrainingImage[]): Promise<string> {
-    // For MVP, we'll create a simple JSON manifest of image URLs
-    // In production, you'd want to create an actual ZIP file and upload it
-    const imageManifest = {
-      images: images.map(img => ({
-        filename: img.filename,
-        url: img.url,
-        size: img.size
-      })),
-      created_at: new Date().toISOString(),
-      total_images: images.length
-    }
-
-    // TODO: In production, implement actual ZIP creation and upload
-    // For now, we'll use the first image URL as a placeholder
-    // Replicate expects either a ZIP file or individual image URLs
-    
-    // Return the manifest as a data URL for now
-    // In production, you'd upload this to S3 or similar and return the URL
-    const manifestJson = JSON.stringify(imageManifest)
-    const manifestUrl = `data:application/json;base64,${Buffer.from(manifestJson).toString('base64')}`
-    
-    // Warning: This is a temporary implementation
-    console.warn('TODO: Implement actual ZIP file creation for Replicate training')
-    console.log('Image manifest:', imageManifest)
-    
-    // For now, return the first image URL since Replicate expects actual image URLs
-    return images[0]?.url || ''
   }
 
   /**

@@ -151,6 +151,7 @@ export class ZipCreationService {
     tempDir: string
   ): Promise<Array<{ path: string; filename: string; size: number }>> {
     const processedImages: Array<{ path: string; filename: string; size: number }> = []
+    const errors: string[] = []
     
     this.debugger?.log('info', TrainingStage.ZIP_CREATION, 'Starting image download and validation', {
       totalImages: images.length
@@ -173,6 +174,8 @@ export class ZipCreationService {
         // Validate image
         const validation = await this.validateImage(imageBuffer, image.filename)
         if (!validation.valid) {
+          const errorMsg = `${image.filename}: ${validation.error}`
+          errors.push(errorMsg)
           this.debugger?.log('warn', TrainingStage.ZIP_CREATION, `Skipping invalid image: ${validation.error}`, {
             filename: image.filename,
             imageId: image.id,
@@ -205,6 +208,8 @@ export class ZipCreationService {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         const isUrlError = errorMessage.includes('HTTP') || errorMessage.includes('File not found') || errorMessage.includes('timeout')
+        const errorMsg = `${image.filename}: ${errorMessage}`
+        errors.push(errorMsg)
         
         this.debugger?.log('warn', TrainingStage.ZIP_CREATION, `Failed to process image: ${image.filename}`, {
           imageId: image.id,
@@ -220,8 +225,24 @@ export class ZipCreationService {
     this.debugger?.log('info', TrainingStage.ZIP_CREATION, 'Image processing completed', {
       originalCount: images.length,
       processedCount: processedImages.length,
-      skippedCount: images.length - processedImages.length
+      skippedCount: images.length - processedImages.length,
+      errorCount: errors.length
     })
+
+    // Fail fast if no images could be processed
+    if (processedImages.length === 0) {
+      const errorSummary = errors.length > 0 
+        ? `All images failed to process:\n${errors.slice(0, 5).map(e => `  - ${e}`).join('\n')}${errors.length > 5 ? `\n  ...and ${errors.length - 5} more errors` : ''}`
+        : 'No images could be processed for unknown reasons'
+      
+      throw new Error(`ZIP creation failed: ${errorSummary}`)
+    }
+
+    // Warn if many images were skipped
+    if (processedImages.length < images.length * 0.5) {
+      this.debugger?.log('warn', TrainingStage.ZIP_CREATION, 
+        `Only ${processedImages.length}/${images.length} images could be processed. Training quality may be affected.`)
+    }
 
     return processedImages
   }
@@ -303,34 +324,29 @@ export class ZipCreationService {
       if (url.startsWith('/api/uploads/')) {
         console.log('🔍 READ FILE DEBUG - Processing /api/uploads/ URL')
         // Parse URL like "/api/uploads/userId/filename"
-        const urlParts = url.split('/')
+        const urlParts = url.split('/').filter(part => part.length > 0) // Remove empty parts
         console.log('🔍 READ FILE DEBUG - URL parts:', urlParts)
-        if (urlParts.length >= 4) {
-          const userId = urlParts[3]
-          const filename = urlParts[4]
+        
+        // Expected format: ['api', 'uploads', 'userId', 'filename']
+        if (urlParts.length >= 4 && urlParts[0] === 'api' && urlParts[1] === 'uploads') {
+          const userId = urlParts[2]
+          const filename = urlParts[3]
           filePath = path.join(process.cwd(), 'public', 'uploads', userId, filename)
           console.log('🔍 READ FILE DEBUG - Constructed file path:', filePath)
         } else {
-          throw new Error(`Invalid upload URL format: ${url}`)
+          throw new Error(`Invalid upload URL format: ${url}. Expected format: /api/uploads/userId/filename`)
         }
       } else if (url.includes('/api/uploads/')) {
         console.log('🔍 READ FILE DEBUG - Processing full localhost URL')
-        // Handle full localhost URLs
+        // Handle full localhost URLs like "http://localhost:3000/api/uploads/userId/filename"
         const apiIndex = url.indexOf('/api/uploads/')
         const apiPath = url.substring(apiIndex)
         console.log('🔍 READ FILE DEBUG - Extracted API path:', apiPath)
-        const urlParts = apiPath.split('/')
-        console.log('🔍 READ FILE DEBUG - API URL parts:', urlParts)
-        if (urlParts.length >= 4) {
-          const userId = urlParts[3]
-          const filename = urlParts[4]
-          filePath = path.join(process.cwd(), 'public', 'uploads', userId, filename)
-          console.log('🔍 READ FILE DEBUG - Constructed file path from full URL:', filePath)
-        } else {
-          throw new Error(`Invalid upload URL format: ${url}`)
-        }
+        
+        // Recursively call this method with the clean API path
+        return this.readLocalFile(apiPath)
       } else {
-        throw new Error(`Unsupported local URL format: ${url}`)
+        throw new Error(`Unsupported local URL format: ${url}. Only /api/uploads/ URLs are supported.`)
       }
 
       this.debugger?.log('debug', TrainingStage.ZIP_CREATION, 'Reading local file', { 
@@ -345,6 +361,20 @@ export class ZipCreationService {
       // Check if file exists
       if (!fs.existsSync(filePath)) {
         console.log('🔍 READ FILE DEBUG - FILE NOT FOUND at path:', filePath)
+        
+        // Try to list directory contents for debugging
+        const dirPath = path.dirname(filePath)
+        try {
+          if (fs.existsSync(dirPath)) {
+            const dirContents = fs.readdirSync(dirPath)
+            console.log('🔍 READ FILE DEBUG - Directory contents:', dirContents)
+          } else {
+            console.log('🔍 READ FILE DEBUG - Directory does not exist:', dirPath)
+          }
+        } catch (e) {
+          console.log('🔍 READ FILE DEBUG - Error listing directory:', e)
+        }
+        
         throw new Error(`File not found: ${filePath}`)
       }
 
