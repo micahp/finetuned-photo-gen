@@ -51,6 +51,9 @@ export class ZipCreationService {
   async createTrainingZip(images: TrainingImage[]): Promise<ZipCreationResult> {
     const startTime = Date.now()
     
+    // Add immediate debugging to see what we're working with
+    console.log('🔍 ZIP CREATION DEBUG - Starting with images:', JSON.stringify(images, null, 2))
+    
     try {
       this.debugger?.startStage(TrainingStage.ZIP_CREATION, 'Starting ZIP creation', {
         imageCount: images.length,
@@ -160,7 +163,8 @@ export class ZipCreationService {
         this.debugger?.log('debug', TrainingStage.ZIP_CREATION, `Processing image ${i + 1}/${images.length}`, {
           imageId: image.id,
           filename: image.filename,
-          url: image.url
+          url: image.url,
+          urlFormat: image.url.startsWith('http') ? 'HTTP' : image.url.startsWith('/api') ? 'API' : 'Unknown'
         })
 
         // Download image
@@ -171,7 +175,8 @@ export class ZipCreationService {
         if (!validation.valid) {
           this.debugger?.log('warn', TrainingStage.ZIP_CREATION, `Skipping invalid image: ${validation.error}`, {
             filename: image.filename,
-            imageId: image.id
+            imageId: image.id,
+            url: image.url
           })
           continue
         }
@@ -198,9 +203,15 @@ export class ZipCreationService {
         })
 
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        const isUrlError = errorMessage.includes('HTTP') || errorMessage.includes('File not found') || errorMessage.includes('timeout')
+        
         this.debugger?.log('warn', TrainingStage.ZIP_CREATION, `Failed to process image: ${image.filename}`, {
           imageId: image.id,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          url: image.url,
+          error: errorMessage,
+          errorType: isUrlError ? 'URL_ACCESS_ERROR' : 'PROCESSING_ERROR',
+          suggestion: isUrlError ? 'Check if the URL is accessible and the file exists' : 'Check if the file is a valid image'
         })
         continue
       }
@@ -219,11 +230,15 @@ export class ZipCreationService {
    * Download image - handles both external URLs and local file paths
    */
   private async downloadImage(url: string): Promise<Buffer> {
+    console.log('🔍 DOWNLOAD DEBUG - Processing URL:', url)
+    
     // Check if this is a local file URL (server-side access)
     if (url.startsWith('/api/uploads/') || url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
+      console.log('🔍 DOWNLOAD DEBUG - Using local file access for:', url)
       return this.readLocalFile(url)
     }
 
+    console.log('🔍 DOWNLOAD DEBUG - Using HTTP fetch for:', url)
     // External URL - use HTTP fetch with retries
     const maxRetries = 3
     let lastError: Error
@@ -279,29 +294,38 @@ export class ZipCreationService {
    * Read file directly from local filesystem (server-side only)
    */
   private async readLocalFile(url: string): Promise<Buffer> {
+    console.log('🔍 READ FILE DEBUG - Starting with URL:', url)
+    
     try {
       // Extract file path from URL
       let filePath: string
       
       if (url.startsWith('/api/uploads/')) {
+        console.log('🔍 READ FILE DEBUG - Processing /api/uploads/ URL')
         // Parse URL like "/api/uploads/userId/filename"
         const urlParts = url.split('/')
+        console.log('🔍 READ FILE DEBUG - URL parts:', urlParts)
         if (urlParts.length >= 4) {
           const userId = urlParts[3]
           const filename = urlParts[4]
           filePath = path.join(process.cwd(), 'public', 'uploads', userId, filename)
+          console.log('🔍 READ FILE DEBUG - Constructed file path:', filePath)
         } else {
           throw new Error(`Invalid upload URL format: ${url}`)
         }
       } else if (url.includes('/api/uploads/')) {
+        console.log('🔍 READ FILE DEBUG - Processing full localhost URL')
         // Handle full localhost URLs
         const apiIndex = url.indexOf('/api/uploads/')
         const apiPath = url.substring(apiIndex)
+        console.log('🔍 READ FILE DEBUG - Extracted API path:', apiPath)
         const urlParts = apiPath.split('/')
+        console.log('🔍 READ FILE DEBUG - API URL parts:', urlParts)
         if (urlParts.length >= 4) {
           const userId = urlParts[3]
           const filename = urlParts[4]
           filePath = path.join(process.cwd(), 'public', 'uploads', userId, filename)
+          console.log('🔍 READ FILE DEBUG - Constructed file path from full URL:', filePath)
         } else {
           throw new Error(`Invalid upload URL format: ${url}`)
         }
@@ -315,8 +339,12 @@ export class ZipCreationService {
         exists: fs.existsSync(filePath)
       })
 
+      console.log('🔍 READ FILE DEBUG - File exists check:', fs.existsSync(filePath))
+      console.log('🔍 READ FILE DEBUG - Full file path being checked:', filePath)
+
       // Check if file exists
       if (!fs.existsSync(filePath)) {
+        console.log('🔍 READ FILE DEBUG - FILE NOT FOUND at path:', filePath)
         throw new Error(`File not found: ${filePath}`)
       }
 
@@ -324,9 +352,11 @@ export class ZipCreationService {
       const buffer = fs.readFileSync(filePath)
       
       if (buffer.length === 0) {
+        console.log('🔍 READ FILE DEBUG - FILE IS EMPTY')
         throw new Error('File is empty')
       }
 
+      console.log('🔍 READ FILE DEBUG - Successfully read file, size:', buffer.length)
       this.debugger?.log('debug', TrainingStage.ZIP_CREATION, 'Successfully read local file', {
         filePath,
         size: buffer.length
@@ -335,6 +365,7 @@ export class ZipCreationService {
       return buffer
 
     } catch (error) {
+      console.log('🔍 READ FILE DEBUG - ERROR occurred:', error)
       this.debugger?.log('error', TrainingStage.ZIP_CREATION, 'Failed to read local file', {
         url,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -347,10 +378,13 @@ export class ZipCreationService {
    * Validate image format and dimensions
    */
   private async validateImage(buffer: Buffer, filename: string): Promise<ImageValidationResult> {
+    console.log('🔍 VALIDATE DEBUG - Starting validation for:', filename, 'Buffer size:', buffer.length)
+    
     try {
       const metadata = await sharp(buffer).metadata()
       
       if (!metadata.format || !this.supportedFormats.includes(metadata.format)) {
+        console.log('🔍 VALIDATE DEBUG - INVALID FORMAT for', filename, '- format:', metadata.format, 'supported:', this.supportedFormats)
         return {
           valid: false,
           error: `Invalid image format: ${metadata.format}. Supported: ${this.supportedFormats.join(', ')}`
@@ -358,6 +392,7 @@ export class ZipCreationService {
       }
 
       if (!metadata.width || !metadata.height) {
+        console.log('🔍 VALIDATE DEBUG - MISSING DIMENSIONS for', filename, '- width:', metadata.width, 'height:', metadata.height)
         return {
           valid: false,
           error: 'Unable to determine image dimensions'
@@ -365,6 +400,7 @@ export class ZipCreationService {
       }
 
       if (metadata.width < this.minDimensions || metadata.height < this.minDimensions) {
+        console.log('🔍 VALIDATE DEBUG - TOO SMALL for', filename, '- dimensions:', metadata.width + 'x' + metadata.height, 'min:', this.minDimensions)
         return {
           valid: false,
           error: `Image too small: ${metadata.width}x${metadata.height}. Minimum: ${this.minDimensions}px`
@@ -372,6 +408,7 @@ export class ZipCreationService {
       }
 
       if (metadata.width > this.maxDimensions || metadata.height > this.maxDimensions) {
+        console.log('🔍 VALIDATE DEBUG - TOO LARGE for', filename, '- dimensions:', metadata.width + 'x' + metadata.height, 'max:', this.maxDimensions)
         return {
           valid: false,
           error: `Image too large: ${metadata.width}x${metadata.height}. Maximum: ${this.maxDimensions}px`
@@ -379,12 +416,14 @@ export class ZipCreationService {
       }
 
       if (buffer.length > this.maxImageSize) {
+        console.log('🔍 VALIDATE DEBUG - FILE TOO LARGE for', filename, '- size:', (buffer.length / 1024 / 1024).toFixed(1) + 'MB', 'max:', this.maxImageSize / 1024 / 1024 + 'MB')
         return {
           valid: false,
           error: `File too large: ${(buffer.length / 1024 / 1024).toFixed(1)}MB. Maximum: ${this.maxImageSize / 1024 / 1024}MB`
         }
       }
 
+      console.log('🔍 VALIDATE DEBUG - VALIDATION PASSED for', filename, '- dimensions:', metadata.width + 'x' + metadata.height, 'format:', metadata.format)
       return {
         valid: true,
         format: metadata.format,
@@ -393,6 +432,7 @@ export class ZipCreationService {
       }
 
     } catch (error) {
+      console.log('🔍 VALIDATE DEBUG - SHARP ERROR for', filename, ':', error)
       return {
         valid: false,
         error: `Image validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -494,4 +534,4 @@ export class ZipCreationService {
       })
     }
   }
-} 
+}

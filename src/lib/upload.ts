@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs'
 import path from 'path'
+import sharp from 'sharp'
 
 // Validation types
 export interface ValidationResult {
@@ -13,14 +14,120 @@ export interface SaveResult {
   error?: string
 }
 
-// Configuration
-const ALLOWED_FORMATS = ['image/jpeg', 'image/png', 'image/webp']
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+export interface DetailedValidationResult {
+  isValid: boolean
+  errors: string[]
+  validFiles: Array<{
+    file: File
+    metadata: {
+      format: string
+      width: number
+      height: number
+      size: number
+    }
+  }>
+}
+
+// Configuration - aligned with ZIP creation requirements
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/tiff']
+const ALLOWED_FORMATS = ['jpeg', 'jpg', 'png', 'webp', 'tiff'] // Sharp formats
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB (aligned with ZIP creation)
+const MIN_DIMENSIONS = 512 // minimum 512px on either side
+const MAX_DIMENSIONS = 2048 // maximum 2048px on either side
 const MAX_FILES = 20
 const UPLOAD_DIR = 'public/uploads'
 
 /**
- * Validate uploaded images for format, size, and count
+ * Enhanced validation using Sharp to check actual image content and dimensions
+ */
+export async function validateTrainingImages(files: File[]): Promise<DetailedValidationResult> {
+  const errors: string[] = []
+  const validFiles: Array<{
+    file: File
+    metadata: {
+      format: string
+      width: number
+      height: number
+      size: number
+    }
+  }> = []
+
+  // Check file count
+  if (files.length > MAX_FILES) {
+    errors.push(`Too many files. Maximum ${MAX_FILES} images allowed.`)
+  }
+
+  if (files.length < 5) {
+    errors.push(`Too few files. Minimum 5 images required for training.`)
+  }
+
+  // Check each file with Sharp
+  for (const file of files) {
+    try {
+      // Basic MIME type check first
+      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+        errors.push(`Invalid file format: ${file.name}. Only JPEG, PNG, WebP, and TIFF are allowed.`)
+        continue
+      }
+
+      // Check file size
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`File too large: ${file.name}. Maximum size is 10MB.`)
+        continue
+      }
+
+      // Convert to buffer for Sharp analysis
+      const arrayBuffer = await file.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
+
+      // Use Sharp to validate actual image content
+      const metadata = await sharp(buffer).metadata()
+
+      if (!metadata.format || !ALLOWED_FORMATS.includes(metadata.format)) {
+        errors.push(`Invalid image format: ${file.name} (${metadata.format}). Supported: JPEG, PNG, WebP, TIFF.`)
+        continue
+      }
+
+      if (!metadata.width || !metadata.height) {
+        errors.push(`Unable to determine dimensions for: ${file.name}`)
+        continue
+      }
+
+      if (metadata.width < MIN_DIMENSIONS || metadata.height < MIN_DIMENSIONS) {
+        errors.push(`Image too small: ${file.name} (${metadata.width}x${metadata.height}). Minimum: ${MIN_DIMENSIONS}px on each side.`)
+        continue
+      }
+
+      if (metadata.width > MAX_DIMENSIONS || metadata.height > MAX_DIMENSIONS) {
+        errors.push(`Image too large: ${file.name} (${metadata.width}x${metadata.height}). Maximum: ${MAX_DIMENSIONS}px on each side.`)
+        continue
+      }
+
+      // If we get here, the file is valid
+      validFiles.push({
+        file,
+        metadata: {
+          format: metadata.format,
+          width: metadata.width,
+          height: metadata.height,
+          size: file.size
+        }
+      })
+
+    } catch (error) {
+      errors.push(`Failed to process ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  return {
+    isValid: errors.length === 0 && validFiles.length >= 5,
+    errors,
+    validFiles
+  }
+}
+
+/**
+ * Validate uploaded images for format, size, and count (legacy function)
  */
 export function validateUploadedImages(files: File[]): ValidationResult {
   const errors: string[] = []
@@ -33,13 +140,13 @@ export function validateUploadedImages(files: File[]): ValidationResult {
   // Check each file
   for (const file of files) {
     // Check file format
-    if (!ALLOWED_FORMATS.includes(file.type)) {
+    if (!ALLOWED_FORMATS.includes(file.name.split('.').pop() || '')) {
       errors.push(`Invalid file format: ${file.name}. Only JPEG, PNG, and WebP are allowed.`)
     }
 
     // Check file size
     if (file.size > MAX_FILE_SIZE) {
-      errors.push(`File too large: ${file.name}. Maximum size is 5MB.`)
+      errors.push(`File too large: ${file.name}. Maximum size is 10MB.`)
     }
   }
 

@@ -59,7 +59,7 @@ export class ReplicateService {
       const training = await this.client.trainings.create(
         "ostris",
         "flux-dev-lora-trainer",
-        "e440909d3512c31646ee2e0c7d6f6f4923224863a6a10c494606e79fb5844497",
+        "c6e78d25",
         {
           destination: `user/flux-lora-${params.modelName.toLowerCase().replace(/\s+/g, '-')}`,
           input: {
@@ -180,7 +180,7 @@ export class ReplicateService {
         id: 'ostris/flux-dev-lora-trainer',
         name: 'FLUX Dev LoRA Trainer',
         description: 'Train LoRA models for FLUX.1-dev',
-        version: 'e440909d3512c31646ee2e0c7d6f6f4923224863a6a10c494606e79fb5844497',
+        version: 'c6e78d25',
         estimatedTime: '10-30 minutes',
         cost: '$0.05 per minute'
       }

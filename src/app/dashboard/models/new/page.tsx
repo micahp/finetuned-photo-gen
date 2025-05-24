@@ -235,10 +235,11 @@ export default function NewModelPage() {
                 <h3 className="font-medium text-blue-900 mb-2">Training Image Guidelines</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
                   <li>• Upload 5-20 high-quality images of the subject</li>
+                  <li>• Images must be at least 512×512 pixels (max 2048×2048)</li>
+                  <li>• Supported formats: JPEG, PNG, WebP, TIFF (max 10MB each)</li>
                   <li>• Use different angles, lighting, and backgrounds</li>
                   <li>• Avoid blurry, low-resolution, or heavily edited images</li>
                   <li>• Focus on the main subject (person, object, or style)</li>
-                  <li>• Images will be used to train your custom AI model</li>
                 </ul>
               </div>
               

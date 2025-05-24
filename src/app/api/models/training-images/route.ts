@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
-import { saveImageToLocal, validateUploadedImages } from '@/lib/upload'
+import { saveImageToLocal, validateTrainingImages } from '@/lib/upload'
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,11 +33,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate files
-    const validation = validateUploadedImages(files)
+    // Enhanced validation using Sharp
+    const validation = await validateTrainingImages(files)
     if (!validation.isValid) {
       return NextResponse.json(
-        { error: validation.errors.join(', ') },
+        { 
+          error: 'Image validation failed',
+          details: validation.errors,
+          validImagesCount: validation.validFiles.length,
+          totalImagesProvided: files.length
+        },
         { status: 400 }
       )
     }
@@ -57,16 +62,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Save images and create database records
+    // Save images and create database records (only valid files)
     const uploadResults = []
     const errors = []
 
-    for (const file of files) {
-      if (!(file instanceof File)) {
-        errors.push('Invalid file format')
-        continue
-      }
-
+    for (const { file, metadata } of validation.validFiles) {
       try {
         // Save to local storage
         const saveResult = await saveImageToLocal(file, session.user.id)
@@ -76,14 +76,15 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // Create database record
+        // Create database record with image metadata
         const trainingImage = await prisma.trainingImage.create({
           data: {
             userModelId: userModelId,
             originalFilename: file.name,
             s3Key: saveResult.filePath!, // Using local path as key
             fileSize: file.size,
-            // We'll add width/height later if needed
+            width: metadata.width,
+            height: metadata.height,
           },
         })
 
@@ -91,9 +92,12 @@ export async function POST(request: NextRequest) {
           id: trainingImage.id,
           filename: file.name,
           localPath: saveResult.filePath,
-          // Create accessible URL for the new API route
-          url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api${saveResult.filePath}`,
+          // Create accessible URL using the request's host instead of hardcoded localhost:3000
+          url: `${request.nextUrl.protocol}//${request.nextUrl.host}/api${saveResult.filePath}`,
           size: file.size,
+          width: metadata.width,
+          height: metadata.height,
+          format: metadata.format,
         })
 
       } catch (error) {

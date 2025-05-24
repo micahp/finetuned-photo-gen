@@ -34,7 +34,7 @@ export async function GET(
     }
 
     // Construct file path
-    const uploadsDir = path.join(process.cwd(), 'uploads')
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
     const fullFilePath = path.join(uploadsDir, userId, filename)
     
     // Check if file exists

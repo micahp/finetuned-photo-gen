@@ -52,9 +52,12 @@ export class CloudStorageService {
 
     // Initialize S3 client for Cloudflare R2 if using cloud storage
     if (!useLocal && this.config.r2Config) {
+      // Ensure endpoint has proper protocol
+      const endpoint = this.normalizeEndpoint(this.config.r2Config.endpoint)
+      
       this.s3Client = new S3Client({
         region: 'auto', // Cloudflare R2 uses 'auto'
-        endpoint: this.config.r2Config.endpoint,
+        endpoint: endpoint,
         credentials: {
           accessKeyId: this.config.r2Config.accessKeyId,
           secretAccessKey: this.config.r2Config.secretAccessKey,
@@ -127,7 +130,7 @@ export class CloudStorageService {
     // Generate public URL
     const publicUrl = this.config.r2Config.publicUrl 
       ? `${this.config.r2Config.publicUrl}/${key}`
-      : `${this.config.r2Config.endpoint}/${this.config.r2Config.bucket}/${key}`
+      : `${this.normalizeEndpoint(this.config.r2Config.endpoint)}/${this.config.r2Config.bucket}/${key}`
 
     console.log(`✅ ZIP uploaded to Cloudflare R2: ${publicUrl}`)
 
@@ -274,5 +277,21 @@ export class CloudStorageService {
         throw new Error('Cloudflare R2 configuration missing. Set CLOUDFLARE_R2_ENDPOINT and CLOUDFLARE_R2_BUCKET')
       }
     }
+  }
+
+  /**
+   * Ensure endpoint URL has proper protocol
+   */
+  private normalizeEndpoint(endpoint: string): string {
+    if (!endpoint) {
+      throw new Error('R2 endpoint is required')
+    }
+    
+    // If endpoint doesn't start with http:// or https://, add https://
+    if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
+      return `https://${endpoint}`
+    }
+    
+    return endpoint
   }
 } 
