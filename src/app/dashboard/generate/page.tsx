@@ -130,6 +130,16 @@ export default function GeneratePage() {
     'Seasonal & Occasions': 'Seasonal'
   }
   
+  // Category emojis mapping
+  const categoryEmojis = {
+    'Dating Apps': '💖',
+    'Professional Headshots': '💼',
+    'Lifestyle & Social': '🌟',
+    'Creative & Artistic': '🎨',
+    'Luxury & Glamour': '👑',
+    'Seasonal & Occasions': '🎉'
+  }
+  
   const [selectedCategory, setSelectedCategory] = useState<string>('Dating Apps')
 
   const form = useForm<GenerateFormData>({
@@ -542,7 +552,7 @@ export default function GeneratePage() {
                                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                                   }`}
                                 >
-                                  {categoryMapping[category] || category}
+                                  {categoryEmojis[category]} {categoryMapping[category] || category}
                                 </button>
                               ))}
                             </div>
