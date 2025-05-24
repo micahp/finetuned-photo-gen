@@ -149,6 +149,22 @@ export class TogetherAIService {
   // Train LoRA model using uploaded images
   async trainLoRA(params: TrainLoRAParams): Promise<TrainLoRAResponse> {
     try {
+      // NOTE: Together AI's fine-tuning API is primarily designed for text models (LLMs),
+      // not image models like FLUX. Image model LoRA training is not currently supported
+      // through their standard fine-tuning API.
+      
+      // For now, we'll return a descriptive error explaining the limitation
+      console.warn('Together AI fine-tuning API does not currently support FLUX/image model LoRA training')
+      
+      return {
+        id: `unsupported_${Date.now()}`,
+        status: 'failed',
+        name: params.name,
+        error: 'Together AI fine-tuning currently supports text models (LLMs) only. FLUX LoRA training is not available through their fine-tuning API. Consider using their image generation endpoints with existing FLUX models instead.'
+      }
+
+      // The code below shows what FLUX LoRA training would look like if it were supported:
+      /*
       const requestBody = {
         model_type: 'lora',
         name: params.name,
@@ -169,6 +185,7 @@ export class TogetherAIService {
         }))
       }
 
+      // Together AI uses client.fine_tuning.create(), not direct API calls
       const response = await fetch(`${this.baseUrl}/fine-tuning/jobs`, {
         method: 'POST',
         headers: {
@@ -192,6 +209,7 @@ export class TogetherAIService {
         progress: 0,
         estimatedTimeRemaining: 1800 // 30 minutes estimate
       }
+      */
 
     } catch (error) {
       console.error('Together AI training error:', error)
