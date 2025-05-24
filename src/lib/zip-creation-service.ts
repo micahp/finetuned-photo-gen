@@ -216,9 +216,15 @@ export class ZipCreationService {
   }
 
   /**
-   * Download image from URL with retry logic and timeout handling
+   * Download image - handles both external URLs and local file paths
    */
   private async downloadImage(url: string): Promise<Buffer> {
+    // Check if this is a local file URL (server-side access)
+    if (url.startsWith('/api/uploads/') || url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
+      return this.readLocalFile(url)
+    }
+
+    // External URL - use HTTP fetch with retries
     const maxRetries = 3
     let lastError: Error
 
@@ -267,6 +273,74 @@ export class ZipCreationService {
     }
 
     throw new Error(`Failed to download after ${maxRetries} attempts: ${lastError!.message}`)
+  }
+
+  /**
+   * Read file directly from local filesystem (server-side only)
+   */
+  private async readLocalFile(url: string): Promise<Buffer> {
+    try {
+      // Extract file path from URL
+      let filePath: string
+      
+      if (url.startsWith('/api/uploads/')) {
+        // Parse URL like "/api/uploads/userId/filename"
+        const urlParts = url.split('/')
+        if (urlParts.length >= 4) {
+          const userId = urlParts[3]
+          const filename = urlParts[4]
+          filePath = path.join(process.cwd(), 'public', 'uploads', userId, filename)
+        } else {
+          throw new Error(`Invalid upload URL format: ${url}`)
+        }
+      } else if (url.includes('/api/uploads/')) {
+        // Handle full localhost URLs
+        const apiIndex = url.indexOf('/api/uploads/')
+        const apiPath = url.substring(apiIndex)
+        const urlParts = apiPath.split('/')
+        if (urlParts.length >= 4) {
+          const userId = urlParts[3]
+          const filename = urlParts[4]
+          filePath = path.join(process.cwd(), 'public', 'uploads', userId, filename)
+        } else {
+          throw new Error(`Invalid upload URL format: ${url}`)
+        }
+      } else {
+        throw new Error(`Unsupported local URL format: ${url}`)
+      }
+
+      this.debugger?.log('debug', TrainingStage.ZIP_CREATION, 'Reading local file', { 
+        url, 
+        filePath,
+        exists: fs.existsSync(filePath)
+      })
+
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`File not found: ${filePath}`)
+      }
+
+      // Read file directly
+      const buffer = fs.readFileSync(filePath)
+      
+      if (buffer.length === 0) {
+        throw new Error('File is empty')
+      }
+
+      this.debugger?.log('debug', TrainingStage.ZIP_CREATION, 'Successfully read local file', {
+        filePath,
+        size: buffer.length
+      })
+
+      return buffer
+
+    } catch (error) {
+      this.debugger?.log('error', TrainingStage.ZIP_CREATION, 'Failed to read local file', {
+        url,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      })
+      throw error
+    }
   }
 
   /**

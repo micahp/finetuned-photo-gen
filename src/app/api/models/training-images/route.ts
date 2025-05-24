@@ -91,8 +91,8 @@ export async function POST(request: NextRequest) {
           id: trainingImage.id,
           filename: file.name,
           localPath: saveResult.filePath,
-          // Create accessible URL for Together AI
-          url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${saveResult.filePath}`,
+          // Create accessible URL for the new API route
+          url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api${saveResult.filePath}`,
           size: file.size,
         })
 
