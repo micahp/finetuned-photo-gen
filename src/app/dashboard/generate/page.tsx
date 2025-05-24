@@ -15,7 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users } from 'lucide-react'
+import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp } from 'lucide-react'
 import { TogetherAIService } from '@/lib/together-ai'
 
 const generateSchema = z.object({
@@ -63,6 +63,7 @@ export default function GeneratePage() {
   const [userModels, setUserModels] = useState<UserModel[]>([])
   const [selectedUserModel, setSelectedUserModel] = useState<UserModel | null>(null)
   const [loadingModels, setLoadingModels] = useState(true)
+  const [showMoreSuggestions, setShowMoreSuggestions] = useState(false)
 
   // Initialize service without API key on client side (will be handled by API route)
   const getTogetherService = () => {
@@ -118,6 +119,16 @@ export default function GeneratePage() {
   const suggestions = together.getPromptSuggestions()
   const quickPrompts = together.getQuickPrompts()
   const categorizedPrompts = together.getCategorizedPrompts()
+  
+  // Simple category name mapping
+  const categoryMapping = {
+    'Dating Apps': 'Dating',
+    'Professional Headshots': 'Professional',
+    'Lifestyle & Social': 'Lifestyle', 
+    'Creative & Artistic': 'Creative',
+    'Luxury & Glamour': 'Luxury',
+    'Seasonal & Occasions': 'Seasonal'
+  }
   
   const [selectedCategory, setSelectedCategory] = useState<string>('Dating Apps')
 
@@ -325,9 +336,9 @@ export default function GeneratePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Generation Form */}
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        {/* Left Panel - Generation Form */}
+        <div className="space-y-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <Card>
@@ -476,6 +487,110 @@ export default function GeneratePage() {
                     )}
                   />
 
+                  {/* Quick Prompts - Right after prompt input */}
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium text-gray-700">Quick Prompts</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {quickPrompts.map((prompt, index) => (
+                        <Button
+                          key={index}
+                          type="button"
+                          variant="outline"
+                          className="h-10 px-3 justify-start text-sm"
+                          onClick={() => handlePromptUse(prompt.prompt)}
+                        >
+                          <span className="mr-2 text-base">{prompt.emoji}</span>
+                          <span className="truncate">{prompt.label}</span>
+                        </Button>
+                      ))}
+                    </div>
+                    
+                    {/* Expandable More Suggestions */}
+                    <div className="space-y-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowMoreSuggestions(!showMoreSuggestions)}
+                        className="h-8 px-3 text-sm text-gray-600 hover:text-gray-900"
+                      >
+                        {showMoreSuggestions ? (
+                          <>
+                            <ChevronUp className="h-4 w-4 mr-2" />
+                            Hide suggestions
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-4 w-4 mr-2" />
+                            Show more suggestions
+                          </>
+                        )}
+                      </Button>
+                      
+                      {showMoreSuggestions && (
+                        <div className="p-4 border rounded-lg bg-gray-50 space-y-4">
+                          <div className="space-y-3">
+                            <div className="flex gap-2 bg-white rounded-md p-1">
+                              {Object.keys(categorizedPrompts).map((category) => (
+                                <button
+                                  key={category}
+                                  type="button"
+                                  onClick={() => setSelectedCategory(category)}
+                                  className={`flex-1 px-3 py-2 text-sm font-medium rounded transition-colors ${
+                                    selectedCategory === category
+                                      ? 'bg-blue-500 text-white'
+                                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  {categoryMapping[category] || category}
+                                </button>
+                              ))}
+                            </div>
+                            
+                            <div className="space-y-3">
+                              {categorizedPrompts[selectedCategory]?.map((item, index) => (
+                                <div key={index} className="p-3 border rounded-lg bg-white">
+                                  <div className="flex justify-between items-start gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium mb-2 text-gray-900">{item.description}</p>
+                                      <p className="text-sm text-gray-600 break-words leading-relaxed">{item.prompt}</p>
+                                    </div>
+                                    <div className="flex gap-2 ml-3">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handlePromptCopy(item.prompt)}
+                                        className="h-8 w-8 p-0 flex-shrink-0"
+                                        title="Copy prompt"
+                                      >
+                                        {copiedPrompt === item.prompt ? (
+                                          <span className="text-green-600 text-sm">✓</span>
+                                        ) : (
+                                          <Copy className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handlePromptUse(item.prompt)}
+                                        className="h-8 w-8 p-0 flex-shrink-0"
+                                        title="Use prompt"
+                                      >
+                                        <Plus className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Style */}
                   <FormField
                     control={form.control}
@@ -607,17 +722,20 @@ export default function GeneratePage() {
               )}
             </form>
           </Form>
+        </div>
 
-          {/* Generated Image */}
-          {generatedImage && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Star className="h-5 w-5" />
-                  Generated Image
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+        {/* Right Panel - Generated Image & Library */}
+        <div className="space-y-6">
+          {/* Generated Image - Always visible at top */}
+          <Card className="sticky top-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Star className="h-5 w-5" />
+                {generatedImage ? 'Generated Image' : 'Your Image Will Appear Here'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {generatedImage ? (
                 <div className="space-y-4">
                   <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                     <img
@@ -626,105 +744,26 @@ export default function GeneratePage() {
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="space-y-3">
                     <div className="text-sm text-gray-600">
                       <p className="font-medium">Prompt:</p>
-                      <p className="break-words">{generatedImage.prompt}</p>
+                      <p className="break-words text-xs bg-gray-50 p-2 rounded">{generatedImage.prompt}</p>
                     </div>
-                    <Button onClick={downloadImage} size="sm">
+                    <Button onClick={downloadImage} className="w-full">
                       <Download className="h-4 w-4 mr-2" />
-                      Download
+                      Download Image
                     </Button>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Quick Prompts */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lightbulb className="h-5 w-5" />
-                Quick Prompts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {quickPrompts.map((prompt, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    className="w-full justify-start text-left h-auto p-3"
-                    onClick={() => handlePromptUse(prompt.prompt)}
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className="text-lg">{prompt.emoji}</span>
-                      <div>
-                        <div className="font-medium text-sm">{prompt.label}</div>
-                        <div className="text-xs text-gray-600 mt-1">{prompt.prompt}</div>
-                      </div>
-                    </div>
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Prompt Categories */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Prompt Library</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
-                <TabsList className="grid w-full grid-cols-2">
-                  {Object.keys(categorizedPrompts).map((category) => (
-                    <TabsTrigger key={category} value={category} className="text-xs">
-                      {category.split(' ')[0]}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                {Object.entries(categorizedPrompts).map(([category, prompts]) => (
-                  <TabsContent key={category} value={category} className="space-y-2 mt-4">
-                    {prompts.map((item, index) => (
-                      <div key={index} className="p-3 border rounded-lg">
-                        <div className="flex justify-between items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium mb-1">{item.description}</p>
-                            <p className="text-xs text-gray-600 break-words">{item.prompt}</p>
-                          </div>
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handlePromptCopy(item.prompt)}
-                              className="h-6 w-6 p-0"
-                            >
-                              {copiedPrompt === item.prompt ? (
-                                <span className="text-green-600">✓</span>
-                              ) : (
-                                <Copy className="h-3 w-3" />
-                              )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handlePromptUse(item.prompt)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </TabsContent>
-                ))}
-              </Tabs>
+              ) : (
+                <div className="aspect-square bg-gray-50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-200">
+                  <div className="text-center text-gray-500">
+                    <Sparkles className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p className="text-sm font-medium">Ready to generate</p>
+                    <p className="text-xs">Fill out the form and click generate</p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
