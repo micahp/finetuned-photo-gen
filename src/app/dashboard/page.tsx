@@ -73,17 +73,17 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle>Generate Images</CardTitle>
                 <CardDescription>
-                  Use AI to create personalized images with custom prompts
+                  Create stunning AI images using FLUX models - no custom model required
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button asChild variant="outline" className="w-full" disabled>
+                <Button asChild className="w-full">
                   <Link href="/dashboard/generate">
                     Generate Images
                   </Link>
                 </Button>
                 <p className="text-xs text-gray-500 mt-2">
-                  Create a model first to enable image generation
+                  Start with base FLUX models or use your trained models
                 </p>
               </CardContent>
             </Card>
