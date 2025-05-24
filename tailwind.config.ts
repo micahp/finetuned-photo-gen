@@ -7,6 +7,23 @@ export default {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  // Prevent CSS purging issues in development
+  safelist: [
+    // Common utility patterns that might get purged
+    {
+      pattern: /^(bg|text|border|hover|focus|active|group-hover)-(gray|red|green|blue|yellow|purple|pink|indigo)-(50|100|200|300|400|500|600|700|800|900)$/,
+    },
+    {
+      pattern: /^(w|h|p|m|space|gap)-(1|2|3|4|5|6|8|10|12|16|20|24|32|40|48|64)$/,
+    },
+    // Specific classes used in the app
+    'opacity-0',
+    'opacity-100',
+    'group-hover:opacity-100',
+    'transition-opacity',
+    'truncate',
+    'leading-tight',
+  ],
   theme: {
   	extend: {
   		colors: {
@@ -59,4 +76,8 @@ export default {
   	}
   },
   plugins: [require("tailwindcss-animate")],
+  // Development optimizations
+  experimental: {
+    optimizeUniversalDefaults: true
+  }
 } satisfies Config;
