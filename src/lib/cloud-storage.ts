@@ -117,12 +117,24 @@ export class CloudStorageService {
       Key: key,
       Body: fileBuffer,
       ContentType: options?.contentType || 'application/zip',
+      // ⚠️ IMPORTANT: R2 doesn't support ACL - bucket must be configured for public access
+      // Add CORS and cache headers to ensure external access
+      CacheControl: 'public, max-age=3600',
       // Add metadata for auto-cleanup
       Metadata: {
         'upload-time': new Date().toISOString(),
-        'ttl-hours': (options?.ttlHours || 24).toString()
+        'ttl-hours': (options?.ttlHours || 24).toString(),
+        'purpose': 'training-zip-for-replicate'
       }
     }
+
+    console.log('🔍 R2 UPLOAD DEBUG - Upload params:', {
+      bucket: this.config.r2Config.bucket,
+      key: key,
+      size: fileBuffer.length,
+      contentType: uploadParams.ContentType,
+      note: 'R2 bucket must be configured for public access via Cloudflare dashboard'
+    })
 
     const command = new PutObjectCommand(uploadParams)
     await this.s3Client.send(command)
@@ -133,6 +145,9 @@ export class CloudStorageService {
       : `${this.normalizeEndpoint(this.config.r2Config.endpoint)}/${this.config.r2Config.bucket}/${key}`
 
     console.log(`✅ ZIP uploaded to Cloudflare R2: ${publicUrl}`)
+    
+    // Test URL accessibility
+    await this.testZipAccessibility(publicUrl)
 
     return {
       success: true,
@@ -293,5 +308,44 @@ export class CloudStorageService {
     }
     
     return endpoint
+  }
+
+  /**
+   * Test if the uploaded ZIP file is publicly accessible
+   */
+  private async testZipAccessibility(url: string): Promise<void> {
+    try {
+      console.log('🔍 TESTING ZIP ACCESSIBILITY:', url)
+      
+      const response = await fetch(url, {
+        method: 'HEAD', // Just check headers, don't download content
+        headers: {
+          'User-Agent': 'TrainingService/1.0 (URL-Accessibility-Test)'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`ZIP file not accessible: ${response.status} ${response.statusText}`)
+      }
+
+      const contentType = response.headers.get('content-type')
+      const contentLength = response.headers.get('content-length')
+      
+      console.log('✅ ZIP ACCESSIBILITY TEST PASSED:', {
+        status: response.status,
+        contentType,
+        contentLength,
+        url
+      })
+
+      // Verify it's actually a ZIP file
+      if (!contentType?.includes('application/zip') && !contentType?.includes('application/x-zip')) {
+        console.warn('⚠️ Warning: Content-Type is not application/zip:', contentType)
+      }
+
+    } catch (error) {
+      console.error('❌ ZIP ACCESSIBILITY TEST FAILED:', error)
+      throw new Error(`Uploaded ZIP file is not publicly accessible: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 } 

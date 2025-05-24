@@ -29,6 +29,7 @@ interface ReplicateTrainingResponse {
   error?: string
   output?: any
   logs?: string
+  input?: any
 }
 
 export class ReplicateService {
@@ -178,6 +179,19 @@ export class ReplicateService {
     try {
       const training = await this.client.trainings.get(trainingId)
       
+      // Log detailed status for debugging
+      if (training.status === 'failed' || training.error) {
+        console.log('🔍 REPLICATE STATUS DEBUG - Training failed details:', {
+          id: training.id,
+          status: training.status,
+          error: training.error,
+          logs: training.logs,
+          input: training.input, // This might show us what input Replicate received
+          created_at: training.created_at,
+          completed_at: training.completed_at
+        })
+      }
+      
       return {
         id: String(training.id),
         status: training.status as 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled',
@@ -185,6 +199,7 @@ export class ReplicateService {
         output: training.output,
         logs: typeof training.logs === 'string' ? training.logs : undefined,
         error: typeof training.error === 'string' ? training.error : undefined,
+        input: training.input, // Capture input parameters to see what Replicate received
       }
 
     } catch (error) {

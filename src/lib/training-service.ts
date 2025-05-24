@@ -180,10 +180,43 @@ export class TrainingService {
 
         case 'failed':
         case 'canceled':
+          // Enhanced error logging with detailed diagnosis
+          const replicateError = replicateStatus.error || 'Training was canceled or failed'
+          
+          // Log comprehensive error details for debugging
+          console.error('🔴 REPLICATE TRAINING FAILED - Full details:', {
+            trainingId,
+            replicateStatus: replicateStatus.status,
+            errorMessage: replicateError,
+            logs: replicateStatus.logs,
+            inputUrl: replicateStatus.input?.input_images, // Check what URL Replicate tried to use
+            allReplicateData: replicateStatus
+          })
+          
+          // Analyze error type and provide specific guidance
+          let enhancedError = replicateError
+          if (replicateError.includes('400') || replicateError.includes('Bad Request')) {
+            enhancedError = `ZIP file access error: ${replicateError}. This usually means the ZIP file URL is not publicly accessible to Replicate. Check R2 bucket permissions.`
+          } else if (replicateError.includes('403') || replicateError.includes('Forbidden')) {
+            enhancedError = `Access denied: ${replicateError}. The ZIP file exists but Replicate cannot access it due to permissions.`
+          } else if (replicateError.includes('404') || replicateError.includes('Not Found')) {
+            enhancedError = `ZIP file not found: ${replicateError}. The uploaded ZIP file URL is invalid or the file was deleted.`
+          }
+          
           const error = this.debugger.logError(
             TrainingStage.REPLICATE_TRAINING,
-            new Error(replicateStatus.error || 'Training failed'),
-            'Replicate training failed'
+            new Error(enhancedError),
+            'Replicate training failed',
+            {
+              originalError: replicateError,
+              statusCode: replicateStatus.status,
+              inputUrl: replicateStatus.input?.input_images,
+              troubleshooting: {
+                'URL_ACCESS_ERROR': 'Check if ZIP file URL is publicly accessible',
+                'BUCKET_PERMISSIONS': 'Verify R2 bucket has public-read ACL',
+                'CORS_CONFIGURATION': 'Ensure R2 bucket allows external access'
+              }
+            }
           )
 
           return {
@@ -191,7 +224,7 @@ export class TrainingService {
             status: 'failed',
             progress: 0,
             stage: 'Training failed',
-            error: replicateStatus.error || 'Training was canceled or failed',
+            error: enhancedError,
             logs: replicateStatus.logs,
             debugData: this.debugger.getDebugSummary()
           }
