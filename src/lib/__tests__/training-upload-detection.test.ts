@@ -68,12 +68,27 @@ describe('Training Upload Detection', () => {
         logs: 'Training completed successfully'
       })
 
-      // Mock database to return model with HuggingFace repo
-      mockPrisma.userModel.findFirst.mockResolvedValue({
+      // Mock database to return model with HuggingFace repo but not ready status
+      const initialModel = {
         id: 'model-123',
         huggingfaceRepo: huggingFaceRepo,
-        externalTrainingId: trainingId
-      })
+        externalTrainingId: trainingId,
+        status: 'training', // Not ready yet
+        loraReadyForInference: false // Not ready yet
+      }
+      
+      mockPrisma.userModel.findFirst.mockResolvedValue(initialModel)
+
+      // Mock the database update to return the updated model
+      const updatedModel = {
+        ...initialModel,
+        status: 'ready',
+        huggingfaceStatus: 'ready',
+        loraReadyForInference: true,
+        trainingCompletedAt: new Date()
+      }
+      
+      mockPrisma.userModel.update.mockResolvedValue(updatedModel)
 
       // Mock HuggingFace model exists (successful upload was done manually)
       mockHuggingFaceInstance.getRepoStatus.mockResolvedValue({
@@ -101,6 +116,17 @@ describe('Training Upload Detection', () => {
       expect(mockHuggingFaceInstance.uploadModel).not.toHaveBeenCalled()
       expect(mockPrisma.userModel.findFirst).toHaveBeenCalledWith({
         where: { externalTrainingId: trainingId }
+      })
+      
+      // Verify that the database was updated to reflect the HuggingFace model status
+      expect(mockPrisma.userModel.update).toHaveBeenCalledWith({
+        where: { id: 'model-123' },
+        data: {
+          status: 'ready',
+          huggingfaceStatus: 'ready',
+          loraReadyForInference: true,
+          trainingCompletedAt: expect.any(Date)
+        }
       })
     })
 

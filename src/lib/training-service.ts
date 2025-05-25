@@ -47,17 +47,21 @@ export class TrainingService {
   // Track completed uploads to avoid re-upload
   public static completedUploads = new Set<string>()
 
-  constructor() {
-    this.replicate = new ReplicateService()
-    this.huggingface = new HuggingFaceService()
-    this.zipService = new ZipCreationService()
+  constructor(
+    replicateService?: ReplicateService,
+    huggingfaceService?: HuggingFaceService,
+    zipService?: ZipCreationService
+  ) {
+    this.replicate = replicateService || new ReplicateService()
+    this.huggingface = huggingfaceService || new HuggingFaceService()
+    this.zipService = zipService || new ZipCreationService()
   }
 
   /**
    * Start the complete LoRA training workflow with debugging
    */
-  async startTraining(params: StartTrainingParams): Promise<{ trainingId: string; zipFilename: string; status: TrainingStatus }> {
-    const trainingId = `training_${Date.now()}_${Math.random().toString(36).substring(7)}`
+  async startTraining(params: StartTrainingParams, customTrainingId?: string): Promise<{ trainingId: string; zipFilename: string; status: TrainingStatus }> {
+    const trainingId = customTrainingId || `training_${Date.now()}_${Math.random().toString(36).substring(7)}`
     this.debugger = new TrainingDebugger(trainingId)
     
     try {
@@ -72,12 +76,11 @@ export class TrainingService {
       // Step 1: Create ZIP file with training images
       this.debugger.startStage(TrainingStage.ZIP_CREATION, 'Creating training images ZIP file')
       
-      // Pass training ID to zip service for consistent filename generation
-      this.zipService = new ZipCreationService(trainingId)
+      // Use the injected zip service instead of creating a new instance
       const zipResult = await this.zipService.createTrainingZip(params.trainingImages)
       
-      if (!zipResult.success) {
-        throw new Error(`ZIP creation failed: ${zipResult.error}`)
+      if (!zipResult || !zipResult.success) {
+        throw new Error(`ZIP creation failed: ${zipResult?.error || 'Unknown ZIP creation error'}`)
       }
 
       this.debugger.endStage(TrainingStage.ZIP_CREATION, 'ZIP creation completed', {
@@ -100,8 +103,8 @@ export class TrainingService {
         loraRank: params.loraRank,
       })
 
-      if (replicateResponse.status === 'failed') {
-        throw new Error(replicateResponse.error || 'Failed to start Replicate training')
+      if (!replicateResponse || replicateResponse.status === 'failed') {
+        throw new Error(replicateResponse?.error || 'Failed to start Replicate training')
       }
 
       this.debugger.endStage(TrainingStage.REPLICATE_TRAINING, 'Replicate training started', {
@@ -172,9 +175,14 @@ export class TrainingService {
       })
       
       // Get user model status
-      const userModel = await prisma.userModel.findFirst({
+      let userModel = await prisma.userModel.findFirst({
         where: { externalTrainingId: trainingId }
       })
+      
+      // If Replicate training succeeded, verify HuggingFace model existence and update database if needed
+      if (replicateStatus.status === 'succeeded' && userModel) {
+        userModel = await this.verifyAndUpdateHuggingFaceStatus(userModel, trainingId)
+      }
       
       // Build status sources
       const sources: StatusSources = {
@@ -242,6 +250,62 @@ export class TrainingService {
         error: error instanceof Error ? error.message : 'Status check failed',
         debugData: this.debugger?.getDebugSummary()
       }
+    }
+  }
+
+  /**
+   * Verify HuggingFace model existence and update database status accordingly
+   */
+  private async verifyAndUpdateHuggingFaceStatus(userModel: any, trainingId: string): Promise<any> {
+    try {
+      const { prisma } = await import('@/lib/db')
+      
+      // If model has a HuggingFace repo, verify it exists
+      if (userModel.huggingfaceRepo) {
+        try {
+          const repoStatus = await this.huggingface.getRepoStatus(userModel.huggingfaceRepo)
+          
+          // If model exists and is ready, but database doesn't reflect this
+          if (repoStatus.modelReady && (userModel.status !== 'ready' || !userModel.loraReadyForInference)) {
+            console.log(`Detected existing HuggingFace model ${userModel.huggingfaceRepo}, updating database status`)
+            
+            const updatedModel = await prisma.userModel.update({
+              where: { id: userModel.id },
+              data: {
+                status: 'ready',
+                huggingfaceStatus: 'ready',
+                loraReadyForInference: true,
+                trainingCompletedAt: userModel.trainingCompletedAt || new Date()
+              }
+            })
+            
+            return updatedModel
+          }
+          
+          return userModel
+          
+        } catch (error) {
+          // HuggingFace model doesn't exist, clear database reference
+          console.log(`HuggingFace model ${userModel.huggingfaceRepo} not found, clearing database reference`)
+          
+          const updatedModel = await prisma.userModel.update({
+            where: { id: userModel.id },
+            data: {
+              huggingfaceRepo: null,
+              huggingfaceStatus: null,
+              loraReadyForInference: false
+            }
+          })
+          
+          return updatedModel
+        }
+      }
+      
+      return userModel
+      
+    } catch (error) {
+      console.error('Error verifying HuggingFace status:', error)
+      return userModel
     }
   }
 

@@ -41,12 +41,12 @@ describe('File Upload System', () => {
       const largeImage = {
         name: 'large.jpg',
         type: 'image/jpeg',
-        size: 10 * 1024 * 1024, // 10MB
+        size: 15 * 1024 * 1024, // 15MB - exceeds 10MB limit
       } as File
 
       const result = validateUploadedImages([largeImage])
       expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('File too large: large.jpg. Maximum size is 5MB.')
+      expect(result.errors).toContain('File too large: large.jpg. Maximum size is 10MB.')
     })
 
     it('should reject too many images', () => {
