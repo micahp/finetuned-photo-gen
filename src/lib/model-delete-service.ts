@@ -304,8 +304,6 @@ export class ModelDeleteService {
         return { success: false, error: 'Replicate API token not available' }
       }
 
-      console.log(`🔑 Using Replicate API token (${token.substring(0, 8)}...)`)
-
       // Use direct HTTP API call since the JS client doesn't support model deletion
       const url = `https://api.replicate.com/v1/models/${owner}/${name}`
       console.log(`📡 Making DELETE request to: ${url}`)

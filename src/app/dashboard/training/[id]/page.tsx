@@ -191,7 +191,7 @@ export default function TrainingDetailsPage() {
 
   const retryUpload = async () => {
     if (!trainingJob?.modelId) return
-    
+    console.log('Retrying upload for modelId:', trainingJob.modelId)
     setRetrying(true)
     try {
       const response = await fetch('/api/models/retry-upload', {

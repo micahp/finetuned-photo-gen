@@ -62,13 +62,18 @@ export async function POST(request: NextRequest) {
 
       // Training succeeded, so we can retry the upload using the manual trigger
       const trainingService = new TrainingService()
+      console.log('🔄 Calling triggerHuggingFaceUpload...')
       const uploadResult = await trainingService.triggerHuggingFaceUpload(
         model.externalTrainingId,
-        model.name
+        model.name,
+        true // Wait for completion
       )
+      
+      console.log('🔄 Upload result:', JSON.stringify(uploadResult, null, 2))
 
       // Update model status based on retry result
       if (uploadResult.status === 'completed' && uploadResult.huggingFaceRepo) {
+        console.log('✅ Upload completed successfully, updating model status...')
         await prisma.userModel.update({
           where: { id: model.id },
           data: {
@@ -90,10 +95,15 @@ export async function POST(request: NextRequest) {
           }
         })
       } else {
+        console.log('❌ Upload result does not match expected format:')
+        console.log('   Status:', uploadResult.status)
+        console.log('   HuggingFace Repo:', uploadResult.huggingFaceRepo)
+        console.log('   Full result:', uploadResult)
+        
         return NextResponse.json({
           success: false,
-          error: uploadResult.error || 'Upload retry failed',
-          details: uploadResult.debugData
+          error: uploadResult.error || 'Upload retry failed - unexpected result format',
+          details: uploadResult
         }, { status: 500 })
       }
 

@@ -530,7 +530,11 @@ export class TrainingService {
    * Manually trigger HuggingFace upload for a completed training
    * This is used for retry upload functionality
    */
-  async triggerHuggingFaceUpload(trainingId: string, modelName: string): Promise<TrainingStatus> {
+  async triggerHuggingFaceUpload(
+    trainingId: string, 
+    modelName: string, 
+    waitForCompletion: boolean = false
+  ): Promise<TrainingStatus> {
     try {
       // Get the current Replicate status
       const replicateStatus = await this.replicate.getTrainingStatus(trainingId)
@@ -539,22 +543,28 @@ export class TrainingService {
         throw new Error(`Cannot upload model - Replicate training status is: ${replicateStatus.status}`)
       }
 
-      // For manual triggers, return uploading status immediately and start upload in background
-      // This ensures the UI shows "uploading" state for manual retry actions
-      const uploadingStatus: TrainingStatus = {
-        id: trainingId,
-        status: 'uploading',
-        progress: 90,
-        stage: 'Training completed, uploading to HuggingFace...',
-        debugData: this.debugger?.getDebugSummary()
+      if (waitForCompletion) {
+        // For retry API calls, wait for the actual upload to complete
+        console.log('🔄 Waiting for upload completion...')
+        return await this.handleTrainingCompletion(trainingId, modelName, replicateStatus)
+      } else {
+        // For manual triggers, return uploading status immediately and start upload in background
+        // This ensures the UI shows "uploading" state for manual retry actions
+        const uploadingStatus: TrainingStatus = {
+          id: trainingId,
+          status: 'uploading',
+          progress: 90,
+          stage: 'Training completed, uploading to HuggingFace...',
+          debugData: this.debugger?.getDebugSummary()
+        }
+
+        // Start the upload process in background (don't await)
+        this.handleTrainingCompletion(trainingId, modelName, replicateStatus).catch(error => {
+          console.error('Background upload failed:', error)
+        })
+
+        return uploadingStatus
       }
-
-      // Start the upload process in background (don't await)
-      this.handleTrainingCompletion(trainingId, modelName, replicateStatus).catch(error => {
-        console.error('Background upload failed:', error)
-      })
-
-      return uploadingStatus
 
     } catch (error) {
       console.error('Manual upload trigger error:', error)

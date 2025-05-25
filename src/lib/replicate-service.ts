@@ -46,7 +46,7 @@ export class ReplicateService {
       throw new Error('Replicate API token is required. Please set REPLICATE_API_TOKEN environment variable.')
     }
     
-    console.log(`✅ Replicate API token loaded (${token.substring(0, 8)}...)`)
+    // console.log(`✅ Replicate API token loaded (${token.substring(0, 8)}...)`)
     
     this.client = new Replicate({
       auth: token,

@@ -106,14 +106,20 @@ export async function GET(
     // If job has external training ID, use unified status resolution
     if (payload?.externalTrainingId && ['running', 'pending', 'succeeded', 'completed'].includes(job.status)) {
       try {
+        console.log(`🔍 Attempting unified status resolution for training ${payload.externalTrainingId}`)
+        
         // Get all sources of truth for unified status resolution
         const replicateService = new ReplicateService()
+        console.log('📡 Getting Replicate status...')
         const replicateStatus = await replicateService.getTrainingStatus(payload.externalTrainingId)
+        console.log(`📡 Replicate status: ${replicateStatus.status}`)
         
         // Get user model status
+        console.log('🗄️ Getting user model status...')
         const userModel = await prisma.userModel.findFirst({
           where: { externalTrainingId: payload.externalTrainingId }
         })
+        console.log(`🗄️ User model status: ${userModel?.status || 'not found'}`)
         
         // Build status sources
         const sources: StatusSources = {
@@ -135,12 +141,14 @@ export async function GET(
           }
         }
         
+        console.log('🧠 Calling TrainingStatusResolver.resolveStatus...')
         // Resolve unified status
         const unifiedStatus = TrainingStatusResolver.resolveStatus(
           payload.externalTrainingId,
           payload?.name || 'Unknown Model',
           sources
         )
+        console.log(`🧠 Unified status resolved: ${unifiedStatus.status}`)
         
         trainingStatus = {
           status: unifiedStatus.status,
@@ -170,7 +178,9 @@ export async function GET(
         }
         
       } catch (statusError) {
-        console.error(`Failed to get unified status for training ${payload.externalTrainingId}:`, statusError)
+        console.error(`❌ Failed to get unified status for training ${payload.externalTrainingId}:`, statusError)
+        console.error('❌ Error stack:', statusError.stack)
+        
         // Fall back to database status for completed/failed jobs
         if (job.status === 'completed') {
           trainingStatus.progress = 100
