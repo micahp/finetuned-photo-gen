@@ -49,6 +49,7 @@ model UserModel {
   // External training fields
   externalTrainingId     String?   @map("external_training_id") // Replicate training ID
   externalTrainingService String?  @map("external_training_service") // 'replicate', 'runpod', etc.
+  trainingZipFilename    String?   @map("training_zip_filename") // ZIP filename in R2 for cleanup tracking
   huggingfaceRepo        String?   @map("huggingface_repo") // HuggingFace repository path
   huggingfaceStatus      String?   @map("huggingface_status") // 'uploading', 'ready', 'failed'
   loraReadyForInference  Boolean   @default(false) @map("lora_ready_for_inference")

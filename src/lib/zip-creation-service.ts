@@ -16,6 +16,7 @@ interface ZipCreationResult {
   success: boolean
   zipUrl?: string
   zipPath?: string
+  zipFilename?: string
   totalSize?: number
   imageCount?: number
   error?: string
@@ -37,12 +38,14 @@ export class ZipCreationService {
   private readonly maxImageSize = 10 * 1024 * 1024 // 10MB
   private readonly minDimensions = 512 // minimum 512px on either side
   private readonly maxDimensions = 2048 // maximum 2048px on either side
+  private trainingId?: string
 
   constructor(trainingId?: string) {
     if (trainingId) {
       this.debugger = new TrainingDebugger(trainingId)
     }
     this.cloudStorage = new CloudStorageService()
+    this.trainingId = trainingId // Store training ID for filename generation
   }
 
   /**
@@ -73,11 +76,15 @@ export class ZipCreationService {
 
       // Create temporary directory for processing
       const tempDir = await this.createTempDirectory()
-      const zipPath = path.join(tempDir, `training_images_${Date.now()}.zip`)
+      
+      // Generate consistent filename for cleanup tracking
+      const zipFilename = this.generateZipFilename()
+      const zipPath = path.join(tempDir, zipFilename)
       
       this.debugger?.log('info', TrainingStage.ZIP_CREATION, 'Created temporary directory', {
         tempDir,
-        zipPath
+        zipPath,
+        zipFilename
       })
 
       // Download and validate images
@@ -90,9 +97,9 @@ export class ZipCreationService {
       // Create ZIP file
       const zipResult = await this.createZipFile(processedImages, zipPath)
       
-      // Upload to cloud storage
+      // Upload to cloud storage with consistent filename
       this.debugger?.log('info', TrainingStage.ZIP_CREATION, 'Uploading ZIP to cloud storage')
-      const uploadResult = await this.cloudStorage.uploadZipFile(zipPath, undefined, {
+      const uploadResult = await this.cloudStorage.uploadZipFile(zipPath, zipFilename, {
         ttlHours: 48, // Auto-delete after 48 hours
         contentType: 'application/zip'
       })
@@ -108,6 +115,7 @@ export class ZipCreationService {
         success: true,
         zipUrl: uploadResult.url,
         zipPath: uploadResult.filePath || zipPath, // For local storage
+        zipFilename, // Include filename for tracking
         totalSize: zipResult.totalSize,
         imageCount: processedImages.length,
         debugData: this.debugger?.getDebugSummary()
@@ -117,6 +125,7 @@ export class ZipCreationService {
         finalImageCount: processedImages.length,
         zipSize: zipResult.totalSize,
         zipUrl: uploadResult.url,
+        zipFilename,
         storageProvider: this.cloudStorage.getStorageInfo().provider,
         duration: Date.now() - startTime
       })
@@ -563,5 +572,20 @@ export class ZipCreationService {
         error: error instanceof Error ? error.message : 'Unknown error'
       })
     }
+  }
+
+  /**
+   * Generate consistent ZIP filename for cleanup tracking
+   */
+  private generateZipFilename(): string {
+    if (this.trainingId) {
+      // Use training ID directly for consistent cleanup
+      return `training_images_${this.trainingId}.zip`
+    }
+    
+    // Fallback to timestamp-based naming if no training ID
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).substring(7)
+    return `training_${timestamp}_${random}.zip`
   }
 }

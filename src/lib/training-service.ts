@@ -56,7 +56,7 @@ export class TrainingService {
   /**
    * Start the complete LoRA training workflow with debugging
    */
-  async startTraining(params: StartTrainingParams): Promise<{ trainingId: string; status: TrainingStatus }> {
+  async startTraining(params: StartTrainingParams): Promise<{ trainingId: string; zipFilename: string; status: TrainingStatus }> {
     const trainingId = `training_${Date.now()}_${Math.random().toString(36).substring(7)}`
     this.debugger = new TrainingDebugger(trainingId)
     
@@ -72,6 +72,8 @@ export class TrainingService {
       // Step 1: Create ZIP file with training images
       this.debugger.startStage(TrainingStage.ZIP_CREATION, 'Creating training images ZIP file')
       
+      // Pass training ID to zip service for consistent filename generation
+      this.zipService = new ZipCreationService(trainingId)
       const zipResult = await this.zipService.createTrainingZip(params.trainingImages)
       
       if (!zipResult.success) {
@@ -80,6 +82,7 @@ export class TrainingService {
 
       this.debugger.endStage(TrainingStage.ZIP_CREATION, 'ZIP creation completed', {
         zipUrl: zipResult.zipUrl,
+        zipFilename: zipResult.zipFilename,
         imageCount: zipResult.imageCount,
         totalSize: zipResult.totalSize
       })
@@ -102,44 +105,42 @@ export class TrainingService {
       }
 
       this.debugger.endStage(TrainingStage.REPLICATE_TRAINING, 'Replicate training started', {
-        replicateId: replicateResponse.id,
+        trainingId: replicateResponse.id, // Use 'id' property from response
         status: replicateResponse.status
       })
 
-      const initialStatus: TrainingStatus = {
-        id: trainingId,
-        status: 'starting',
-        progress: 5,
-        stage: 'Training environment prepared, starting LoRA training',
-        estimatedTimeRemaining: 1800, // 30 minutes
-        debugData: this.debugger.getDebugSummary()
-      }
+      // Map Replicate status to our training status
+      const mappedStatus = this.mapReplicateStatus(replicateResponse.status)
 
+      // Return training result with zip filename for database storage
       return {
-        trainingId: replicateResponse.id, // Return Replicate ID for status checking
-        status: initialStatus
+        trainingId: replicateResponse.id, // Use 'id' property from response
+        zipFilename: zipResult.zipFilename || '', // Include empty filename for failed cases
+        status: {
+          id: replicateResponse.id,
+          status: mappedStatus,
+          progress: 0,
+          stage: 'Training started successfully',
+          debugData: this.debugger.getDebugSummary()
+        }
       }
 
     } catch (error) {
-      const trainingError = this.debugger?.logError(
-        TrainingStage.INITIALIZING,
-        error,
-        'Failed to start training workflow'
-      )
-
-      console.error('Training service error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Training workflow error:', errorMessage)
       
       const errorStatus: TrainingStatus = {
         id: trainingId,
         status: 'failed',
         progress: 0,
-        stage: 'Failed to start training',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        stage: 'Training failed to start',
+        error: errorMessage,
         debugData: this.debugger?.getDebugSummary()
       }
 
       return {
         trainingId: trainingId,
+        zipFilename: '', // Empty filename for failed cases
         status: errorStatus
       }
     }
@@ -683,6 +684,25 @@ export class TrainingService {
     } catch (error) {
       console.error('Error checking for existing HuggingFace model:', error)
       return null
+    }
+  }
+
+  /**
+   * Map Replicate status to our training status
+   */
+  private mapReplicateStatus(status: string): TrainingStatus['status'] {
+    switch (status) {
+      case 'starting':
+        return 'starting'
+      case 'processing':
+        return 'training'
+      case 'succeeded':
+        return 'completed'
+      case 'failed':
+      case 'canceled':
+        return 'failed'
+      default:
+        return 'training'
     }
   }
 } 

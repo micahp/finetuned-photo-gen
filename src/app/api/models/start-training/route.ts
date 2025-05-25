@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
           // Add new fields for external training
           externalTrainingId: trainingResult.trainingId,
           externalTrainingService: 'replicate',
+          trainingZipFilename: trainingResult.zipFilename, // Store zip filename for cleanup
         }
       })
 
