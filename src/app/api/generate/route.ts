@@ -11,6 +11,7 @@ const generateImageSchema = z.object({
   aspectRatio: z.enum(['1:1', '16:9', '9:16', '3:4', '4:3']).default('1:1'),
   steps: z.number().min(1).max(50).optional(),
   seed: z.number().optional(),
+  userModelId: z.string().optional(), // For custom trained models
 })
 
 export async function POST(request: NextRequest) {
@@ -48,10 +49,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { prompt, modelId, style, aspectRatio, steps, seed } = validation.data
+    const { prompt, modelId, style, aspectRatio, steps, seed, userModelId } = validation.data
 
     // Initialize Together AI service
     const together = new TogetherAIService()
+
+    // Check if using a custom user model
+    let selectedUserModel = null
+    if (userModelId) {
+      selectedUserModel = await prisma.userModel.findFirst({
+        where: {
+          id: userModelId,
+          userId: session.user.id,
+          status: 'ready',
+          loraReadyForInference: true,
+          huggingfaceRepo: { not: null }
+        }
+      })
+
+      if (!selectedUserModel) {
+        return NextResponse.json(
+          { error: 'Custom model not found, not ready, or not available for inference' },
+          { status: 400 }
+        )
+      }
+
+      if (!selectedUserModel.huggingfaceRepo) {
+        return NextResponse.json(
+          { error: 'Custom model does not have a HuggingFace repository configured' },
+          { status: 400 }
+        )
+      }
+    }
 
     // Build full prompt with style
     let fullPrompt = prompt
@@ -63,14 +92,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate image
-    const result = await together.generateImage({
-      prompt: fullPrompt,
-      model: modelId,
-      aspectRatio,
-      steps,
-      seed
-    })
+    // Generate image - use LoRA if custom model is selected
+    let result
+    if (selectedUserModel) {
+      // Use LoRA generation with HuggingFace repository
+      result = await together.generateWithLoRA({
+        prompt: fullPrompt,
+        loraPath: selectedUserModel.huggingfaceRepo,
+        triggerWord: selectedUserModel.triggerWord,
+        aspectRatio,
+        steps: steps || 28, // Use more steps for LoRA by default
+        seed
+      })
+    } else {
+      // Use base model generation
+      result = await together.generateImage({
+        prompt: fullPrompt,
+        model: modelId,
+        aspectRatio,
+        steps,
+        seed
+      })
+    }
 
     if (result.status === 'failed') {
       return NextResponse.json(
@@ -91,15 +134,21 @@ export async function POST(request: NextRequest) {
       const generatedImage = await prisma.generatedImage.create({
         data: {
           userId: session.user.id,
-          userModelId: null, // No custom model for base generation
+          userModelId: selectedUserModel?.id || null,
           prompt: fullPrompt,
           imageUrl: result.images[0].url,
           generationParams: {
-            model: modelId || 'black-forest-labs/FLUX.1-schnell-Free',
+            model: selectedUserModel ? 'black-forest-labs/FLUX.1-dev-lora' : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
             aspectRatio,
-            steps,
+            steps: selectedUserModel ? (steps || 28) : steps,
             seed,
-            style
+            style,
+            userModel: selectedUserModel ? {
+              id: selectedUserModel.id,
+              name: selectedUserModel.name,
+              huggingfaceRepo: selectedUserModel.huggingfaceRepo,
+              triggerWord: selectedUserModel.triggerWord
+            } : undefined
           },
           creditsUsed: 1
         }
@@ -112,7 +161,12 @@ export async function POST(request: NextRequest) {
           url: result.images[0].url,
           prompt: fullPrompt,
           aspectRatio,
-          createdAt: generatedImage.createdAt
+          createdAt: generatedImage.createdAt,
+          userModel: selectedUserModel ? {
+            id: selectedUserModel.id,
+            name: selectedUserModel.name,
+            triggerWord: selectedUserModel.triggerWord
+          } : undefined
         },
         creditsRemaining: user.credits - 1
       })
