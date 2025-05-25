@@ -143,7 +143,7 @@ describe('Training Integration Pipeline', () => {
       )
 
       // Simulate training completion check
-      const statusResult = await trainingService.getTrainingStatus(trainingId, mockTrainingParams.modelName)
+      const statusResult = await trainingService.getTrainingStatus(trainingId, mockTrainingParams.modelName, true)
       
       expect(statusResult.status).toBe('completed')
       expect(statusResult.progress).toBe(100)
@@ -153,7 +153,7 @@ describe('Training Integration Pipeline', () => {
       // Verify HuggingFace upload was called
       expect(mockHuggingFaceService.uploadModel).toHaveBeenCalledWith(
         expect.objectContaining({
-          modelName: 'test-model',
+          modelName: expect.stringContaining('test-model'),
           modelPath: 'https://replicate.delivery/output/model.safetensors',
           description: expect.stringContaining('Custom FLUX LoRA model'),
           tags: expect.arrayContaining(['flux', 'lora', 'text-to-image']),
@@ -260,11 +260,55 @@ describe('Training Integration Pipeline', () => {
       })
 
       await trainingService.startTraining(mockTrainingParams)
-      const statusResult = await trainingService.getTrainingStatus(trainingId, mockTrainingParams.modelName)
+      const statusResult = await trainingService.getTrainingStatus(trainingId, mockTrainingParams.modelName, true)
       
       expect(statusResult.status).toBe('failed')
       expect(statusResult.error).toContain('Authentication failed')
       expect(statusResult.progress).toBe(95) // Almost complete but failed at upload
+    })
+
+    it('should not trigger multiple uploads for the same completed training', async () => {
+      const trainingId = 'test-training-no-duplicate'
+      
+      // Mock successful ZIP and Replicate training
+      mockZipService.createTrainingZip.mockResolvedValue({
+        success: true,
+        zipUrl: 'https://storage.example.com/training-images.zip',
+        totalSize: 5120000,
+        imageCount: 5
+      })
+
+      mockReplicateService.startTraining.mockResolvedValue({
+        id: trainingId,
+        status: 'starting'
+      })
+
+      mockReplicateService.getTrainingStatus.mockResolvedValue({
+        id: trainingId,
+        status: 'succeeded',
+        output: 'https://replicate.delivery/output/model.safetensors'
+      })
+
+      mockHuggingFaceService.uploadModel.mockResolvedValue({
+        repoId: `test-user/${mockTrainingParams.modelName}`,
+        repoUrl: 'https://huggingface.co/test-user/test-model',
+        status: 'completed'
+      })
+
+      // First call with allowUpload=true should trigger upload
+      const firstResult = await trainingService.getTrainingStatus(trainingId, mockTrainingParams.modelName, true)
+      expect(firstResult.status).toBe('completed')
+      expect(mockHuggingFaceService.uploadModel).toHaveBeenCalledTimes(1)
+
+      // Second call with allowUpload=true should NOT trigger another upload
+      const secondResult = await trainingService.getTrainingStatus(trainingId, mockTrainingParams.modelName, true)
+      expect(secondResult.status).toBe('completed')
+      expect(mockHuggingFaceService.uploadModel).toHaveBeenCalledTimes(1) // Still only called once
+
+      // Call with allowUpload=false should also not trigger upload
+      const thirdResult = await trainingService.getTrainingStatus(trainingId, mockTrainingParams.modelName, false)
+      expect(thirdResult.status).toBe('completed')
+      expect(mockHuggingFaceService.uploadModel).toHaveBeenCalledTimes(1) // Still only called once
     })
   })
 

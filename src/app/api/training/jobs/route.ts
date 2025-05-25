@@ -68,7 +68,8 @@ export async function GET(request: NextRequest) {
             const trainingService = new TrainingService()
             const currentStatus = await trainingService.getTrainingStatus(
               payload.externalTrainingId,
-              payload?.name || 'Unknown Model'
+              payload?.name || 'Unknown Model',
+              false // Don't allow automatic uploads on status checks
             )
             
             trainingStatus = {

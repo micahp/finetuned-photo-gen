@@ -40,6 +40,11 @@ export class TrainingService {
   private huggingface: HuggingFaceService
   private zipService: ZipCreationService
   private debugger: TrainingDebugger | null = null
+  
+  // Track ongoing uploads to prevent duplicates
+  private static ongoingUploads = new Set<string>()
+  // Track completed uploads to avoid re-upload
+  private static completedUploads = new Set<string>()
 
   constructor() {
     this.replicate = new ReplicateService()
@@ -142,7 +147,7 @@ export class TrainingService {
   /**
    * Check training status and handle workflow progression with debugging
    */
-  async getTrainingStatus(trainingId: string, modelName: string): Promise<TrainingStatus> {
+  async getTrainingStatus(trainingId: string, modelName: string, allowUpload: boolean = false): Promise<TrainingStatus> {
     // Initialize debugger if not exists (for status checks)
     if (!this.debugger) {
       this.debugger = new TrainingDebugger(trainingId)
@@ -151,6 +156,9 @@ export class TrainingService {
     try {
       // Check Replicate training status
       const replicateStatus = await this.replicate.getTrainingStatus(trainingId)
+      
+      // Update job queue status to match external training status
+      await this.updateJobQueueStatus(trainingId, replicateStatus.status, replicateStatus.error)
       
       switch (replicateStatus.status) {
         case 'starting':
@@ -176,56 +184,52 @@ export class TrainingService {
           }
 
         case 'succeeded':
-          // Training completed, now upload to HuggingFace
-          return await this.handleTrainingCompletion(trainingId, modelName, replicateStatus)
-
-        case 'failed':
-        case 'canceled':
-          // Enhanced error logging with detailed diagnosis
-          const replicateError = replicateStatus.error || 'Training was canceled or failed'
-          
-          // Log comprehensive error details for debugging
-          console.error('🔴 REPLICATE TRAINING FAILED - Full details:', {
-            trainingId,
-            replicateStatus: replicateStatus.status,
-            errorMessage: replicateError,
-            logs: replicateStatus.logs,
-            inputUrl: replicateStatus.input?.input_images, // Check what URL Replicate tried to use
-            allReplicateData: replicateStatus
-          })
-          
-          // Analyze error type and provide specific guidance
-          let enhancedError = replicateError
-          if (replicateError.includes('400') || replicateError.includes('Bad Request')) {
-            enhancedError = `ZIP file access error: ${replicateError}. This usually means the ZIP file URL is not publicly accessible to Replicate. Check R2 bucket permissions.`
-          } else if (replicateError.includes('403') || replicateError.includes('Forbidden')) {
-            enhancedError = `Access denied: ${replicateError}. The ZIP file exists but Replicate cannot access it due to permissions.`
-          } else if (replicateError.includes('404') || replicateError.includes('Not Found')) {
-            enhancedError = `ZIP file not found: ${replicateError}. The uploaded ZIP file URL is invalid or the file was deleted.`
+          // Check if upload was already completed for this training
+          if (TrainingService.completedUploads.has(trainingId)) {
+            return {
+              id: trainingId,
+              status: 'completed',
+              progress: 100,
+              stage: 'Training completed successfully and model uploaded to HuggingFace',
+              logs: replicateStatus.logs,
+              debugData: this.debugger.getDebugSummary()
+            }
           }
           
-          const error = this.debugger.logError(
-            TrainingStage.REPLICATE_TRAINING,
-            new Error(enhancedError),
-            'Replicate training failed',
-            {
-              originalError: replicateError,
-              statusCode: replicateStatus.status,
-              inputUrl: replicateStatus.input?.input_images,
-              troubleshooting: {
-                'URL_ACCESS_ERROR': 'Check if ZIP file URL is publicly accessible',
-                'BUCKET_PERMISSIONS': 'Verify R2 bucket has public-read ACL',
-                'CORS_CONFIGURATION': 'Ensure R2 bucket allows external access'
-              }
+          // Check if upload is currently in progress
+          if (TrainingService.ongoingUploads.has(trainingId)) {
+            return {
+              id: trainingId,
+              status: 'uploading',
+              progress: 95,
+              stage: 'Training completed, uploading to HuggingFace...',
+              logs: replicateStatus.logs,
+              debugData: this.debugger.getDebugSummary()
             }
-          )
+          }
+          
+          // Only proceed with upload if explicitly allowed
+          if (allowUpload) {
+            return await this.handleTrainingCompletion(trainingId, modelName, replicateStatus)
+          } else {
+            // Training succeeded but upload not initiated - return status indicating upload needed
+            return {
+              id: trainingId,
+              status: 'uploading', // Use uploading status to indicate transition state
+              progress: 90,
+              stage: 'Training completed successfully, ready for upload to HuggingFace',
+              logs: replicateStatus.logs,
+              debugData: this.debugger.getDebugSummary()
+            }
+          }
 
+        case 'failed':
           return {
             id: trainingId,
             status: 'failed',
             progress: 0,
             stage: 'Training failed',
-            error: enhancedError,
+            error: replicateStatus.error || 'Replicate training failed',
             logs: replicateStatus.logs,
             debugData: this.debugger.getDebugSummary()
           }
@@ -233,29 +237,30 @@ export class TrainingService {
         default:
           return {
             id: trainingId,
-            status: 'training',
-            progress: 20,
-            stage: 'Training in progress',
-            estimatedTimeRemaining: 1500,
+            status: 'starting',
+            progress: 5,
+            stage: `Unknown status: ${replicateStatus.status}`,
+            logs: replicateStatus.logs,
             debugData: this.debugger.getDebugSummary()
           }
       }
 
     } catch (error) {
-      const trainingError = this.debugger.logError(
+      const trainingError = this.debugger?.logError(
         TrainingStage.REPLICATE_TRAINING,
         error,
         'Failed to check training status'
       )
 
-      console.error('Error checking training status:', error)
+      console.error('Training status check error:', error)
+      
       return {
         id: trainingId,
         status: 'failed',
         progress: 0,
-        stage: 'Status check failed',
-        error: trainingError.message,
-        debugData: this.debugger.getDebugSummary()
+        stage: 'Failed to check training status',
+        error: error instanceof Error ? error.message : 'Status check failed',
+        debugData: this.debugger?.getDebugSummary()
       }
     }
   }
@@ -272,6 +277,30 @@ export class TrainingService {
     if (!this.debugger) {
       this.debugger = new TrainingDebugger(trainingId)
     }
+
+    // Check if upload is already in progress or completed
+    if (TrainingService.ongoingUploads.has(trainingId)) {
+      return {
+        id: trainingId,
+        status: 'uploading',
+        progress: 95,
+        stage: 'Training completed, uploading to HuggingFace...',
+        debugData: this.debugger.getDebugSummary()
+      }
+    }
+
+    if (TrainingService.completedUploads.has(trainingId)) {
+      return {
+        id: trainingId,
+        status: 'completed',
+        progress: 100,
+        stage: 'Training completed successfully and model uploaded to HuggingFace',
+        debugData: this.debugger.getDebugSummary()
+      }
+    }
+
+    // Mark upload as in progress
+    TrainingService.ongoingUploads.add(trainingId)
 
     try {
       this.debugger.startStage(TrainingStage.HUGGINGFACE_UPLOAD, 'Starting HuggingFace upload')
@@ -364,6 +393,10 @@ export class TrainingService {
           })
           
           if (retryResponse.status === 'completed') {
+            // Mark upload as completed and remove from ongoing
+            TrainingService.completedUploads.add(trainingId)
+            TrainingService.ongoingUploads.delete(trainingId)
+            
             // Use the retry result
             this.debugger.endStage(TrainingStage.HUGGINGFACE_UPLOAD, 'HuggingFace upload completed (retry)', {
               repoId: retryResponse.repoId,
@@ -383,6 +416,9 @@ export class TrainingService {
           }
         }
 
+        // Remove from ongoing uploads on failure
+        TrainingService.ongoingUploads.delete(trainingId)
+
         const error = this.debugger.logError(
           TrainingStage.HUGGINGFACE_UPLOAD,
           new Error(errorMessage),
@@ -399,6 +435,10 @@ export class TrainingService {
           debugData: this.debugger.getDebugSummary()
         }
       }
+
+      // Mark upload as completed and remove from ongoing
+      TrainingService.completedUploads.add(trainingId)
+      TrainingService.ongoingUploads.delete(trainingId)
 
       this.debugger.endStage(TrainingStage.HUGGINGFACE_UPLOAD, 'HuggingFace upload completed', {
         repoId: uploadResponse.repoId,
@@ -419,6 +459,9 @@ export class TrainingService {
       }
 
     } catch (error) {
+      // Remove from ongoing uploads on error
+      TrainingService.ongoingUploads.delete(trainingId)
+
       const trainingError = this.debugger.logError(
         TrainingStage.HUGGINGFACE_UPLOAD,
         error,
@@ -435,6 +478,34 @@ export class TrainingService {
         stage: 'Training completed successfully, but HuggingFace upload failed',
         error: `Model training completed successfully, but failed to upload to HuggingFace: ${error instanceof Error ? error.message : 'Upload failed'}`,
         debugData: this.debugger.getDebugSummary()
+      }
+    }
+  }
+
+  /**
+   * Manually trigger HuggingFace upload for a completed training
+   * This is used for retry upload functionality
+   */
+  async triggerHuggingFaceUpload(trainingId: string, modelName: string): Promise<TrainingStatus> {
+    try {
+      // Get the current Replicate status
+      const replicateStatus = await this.replicate.getTrainingStatus(trainingId)
+      
+      if (replicateStatus.status !== 'succeeded') {
+        throw new Error(`Cannot upload model - Replicate training status is: ${replicateStatus.status}`)
+      }
+
+      // Force upload by calling handleTrainingCompletion with allowUpload = true
+      return await this.handleTrainingCompletion(trainingId, modelName, replicateStatus)
+
+    } catch (error) {
+      console.error('Manual upload trigger error:', error)
+      return {
+        id: trainingId,
+        status: 'failed',
+        progress: 0,
+        stage: 'Failed to trigger upload',
+        error: error instanceof Error ? error.message : 'Upload trigger failed'
       }
     }
   }
@@ -522,6 +593,66 @@ export class TrainingService {
     return {
       valid: errors.length === 0,
       errors
+    }
+  }
+
+  /**
+   * Update job queue status based on external training status
+   */
+  private async updateJobQueueStatus(trainingId: string, status: string, errorMessage?: string): Promise<void> {
+    try {
+      const { prisma } = await import('@/lib/db')
+      
+      // Find the job with this external training ID
+      const job = await prisma.jobQueue.findFirst({
+        where: {
+          jobType: 'model_training',
+          payload: {
+            path: ['externalTrainingId'],
+            equals: trainingId
+          }
+        }
+      })
+      
+      if (!job) {
+        console.warn(`No job found for external training ID: ${trainingId}`)
+        return
+      }
+      
+      // Map external status to job status
+      let jobStatus = status
+      switch (status) {
+        case 'starting':
+        case 'training':
+          jobStatus = 'running'
+          break
+        case 'uploading':
+          jobStatus = 'running' // Keep as running during upload
+          break
+        case 'completed':
+          jobStatus = 'completed'
+          break
+        case 'failed':
+          jobStatus = 'failed'
+          break
+      }
+      
+      // Only update if status changed
+      if (job.status !== jobStatus) {
+        console.log(`🔄 Updating job ${job.id} status: ${job.status} → ${jobStatus}`)
+        
+        await prisma.jobQueue.update({
+          where: { id: job.id },
+          data: {
+            status: jobStatus,
+            errorMessage: errorMessage || job.errorMessage,
+            completedAt: ['completed', 'failed'].includes(jobStatus) ? new Date() : job.completedAt
+          }
+        })
+      }
+      
+    } catch (error) {
+      console.error('Failed to update job queue status:', error)
     }
   }
 } 

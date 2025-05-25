@@ -60,6 +60,29 @@ export async function GET(
       })
     }
 
+    // If still not found, try searching by userModelId in case it's being used as identifier
+    if (!job) {
+      job = await prisma.jobQueue.findFirst({
+        where: {
+          userId: session.user.id,
+          jobType: 'model_training',
+          payload: {
+            path: ['userModelId'],
+            equals: trainingId
+          }
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
+      })
+    }
+
     if (!job) {
       return NextResponse.json(
         { error: 'Training job not found or access denied' },
@@ -86,7 +109,8 @@ export async function GET(
         // Add timeout to prevent hanging on external API calls
         const statusPromise = trainingService.getTrainingStatus(
           payload.externalTrainingId,
-          payload?.name || 'Unknown Model'
+          payload?.name || 'Unknown Model',
+          false // Don't allow automatic uploads on status checks
         )
         
         const timeoutPromise = new Promise((_, reject) => {
@@ -106,8 +130,16 @@ export async function GET(
         }
       } catch (statusError) {
         console.error(`Failed to get status for training ${payload.externalTrainingId}:`, statusError)
-        // Don't fail the whole request, just use basic status
-        trainingStatus.error = 'Unable to fetch current status (external service timeout)'
+        // Fall back to database status for completed/failed jobs
+        if (job.status === 'completed') {
+          trainingStatus.progress = 100
+          trainingStatus.stage = 'Training completed successfully'
+        } else if (job.status === 'failed') {
+          trainingStatus.stage = 'Training failed'
+          trainingStatus.error = job.errorMessage || 'Training failed for unknown reason'
+        } else {
+          trainingStatus.error = 'Unable to fetch current status (external service timeout)'
+        }
       }
     } else if (job.status === 'completed') {
       trainingStatus.progress = 100

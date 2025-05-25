@@ -60,7 +60,12 @@ export async function GET(request: NextRequest) {
               serviceName: serviceName
             })
             
-            const trainingStatus = await trainingService.getTrainingStatus(model.externalTrainingId, model.name)
+            // Pass allowUpload=false to prevent automatic uploads on status checks
+            const trainingStatus = await trainingService.getTrainingStatus(
+              model.externalTrainingId, 
+              model.name, 
+              false // Don't allow automatic uploads
+            )
             
             console.log(`📊 Training status for ${model.name}:`, {
               id: model.externalTrainingId,
@@ -78,7 +83,8 @@ export async function GET(request: NextRequest) {
                 newStatus = 'training'
                 break
               case 'uploading':
-                newStatus = 'training' // Still in progress
+                // Keep as training in database until upload completes
+                newStatus = 'training'
                 break
               case 'completed':
                 newStatus = 'ready'

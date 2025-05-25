@@ -30,10 +30,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Model not found' }, { status: 404 })
     }
 
-    // Check if model has external training ID but failed status
-    if (!model.externalTrainingId || model.status !== 'failed') {
+    // Check if model has external training ID and is eligible for retry
+    if (!model.externalTrainingId) {
       return NextResponse.json(
-        { error: 'Model is not eligible for upload retry. Must have failed with external training ID.' },
+        { error: 'Model is not eligible for upload retry. No external training ID found.' },
+        { status: 400 }
+      )
+    }
+    
+    // Accept models with either 'failed' status (legacy) or 'training' status (training succeeded but needs upload)
+    if (!['failed', 'training'].includes(model.status)) {
+      return NextResponse.json(
+        { error: `Model is not eligible for upload retry. Current status: ${model.status}. Must be 'failed' or 'training'.` },
         { status: 400 }
       )
     }
@@ -52,9 +60,9 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // Training succeeded, so we can retry the upload
+      // Training succeeded, so we can retry the upload using the manual trigger
       const trainingService = new TrainingService()
-      const uploadResult = await trainingService.getTrainingStatus(
+      const uploadResult = await trainingService.triggerHuggingFaceUpload(
         model.externalTrainingId,
         model.name
       )
