@@ -190,6 +190,13 @@ export class TrainingStatusResolver {
       progress = 0
       error = replicate.error || jobQueue.errorMessage || 'Training failed'
     }
+    // Case 4b: Replicate canceled (treat as failed)
+    else if (replicate.status === 'canceled') {
+      resolvedStatus = 'failed'
+      stage = this.getFailureStage(replicate.error, jobQueue.errorMessage)
+      progress = 0
+      error = replicate.error || jobQueue.errorMessage || 'Training was canceled'
+    }
     // Case 5: Replicate in progress - use log-based progress
     else if (replicate.status === 'processing') {
       resolvedStatus = 'training'
