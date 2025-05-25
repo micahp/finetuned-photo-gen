@@ -38,10 +38,10 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Accept models with either 'failed' status (legacy) or 'training' status (training succeeded but needs upload)
-    if (!['failed', 'training'].includes(model.status)) {
+    // Accept models with 'failed', 'training', or 'uploading' status
+    if (!['failed', 'training', 'uploading'].includes(model.status)) {
       return NextResponse.json(
-        { error: `Model is not eligible for upload retry. Current status: ${model.status}. Must be 'failed' or 'training'.` },
+        { error: `Model is not eligible for upload retry. Current status: ${model.status}. Must be 'failed', 'training', or 'uploading'.` },
         { status: 400 }
       )
     }

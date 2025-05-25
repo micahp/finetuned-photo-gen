@@ -226,10 +226,8 @@ export default function TrainingDetailsPage() {
 
   const getStageStatus = (stage: string, debugData: any): DebugStage => {
     if (!debugData) {
-      return {
-        stage,
-        status: 'pending'
-      }
+      // If no debug data, infer from main training status
+      return inferStageFromTrainingStatus(stage, trainingJob?.status, trainingJob?.stage)
     }
     
     // Check stageTimings array from debug data
@@ -292,9 +290,77 @@ export default function TrainingDetailsPage() {
       }
     }
 
-    return {
-      stage,
-      status: 'pending'
+    // Fallback to inference from training status
+    return inferStageFromTrainingStatus(stage, trainingJob?.status, trainingJob?.stage)
+  }
+
+  const inferStageFromTrainingStatus = (stage: string, trainingStatus?: string, trainingStage?: string): DebugStage => {
+    if (!trainingStatus) {
+      return { stage, status: 'pending' }
+    }
+
+    const stageOrder = ['initializing', 'zip_creation', 'replicate_training', 'huggingface_upload', 'completion']
+    const currentStageIndex = stageOrder.indexOf(stage)
+    
+    switch (trainingStatus) {
+      case 'starting':
+        if (stage === 'initializing') {
+          return { stage, status: 'in_progress' }
+        } else if (stage === 'zip_creation') {
+          return { stage, status: 'in_progress' }
+        }
+        return { stage, status: 'pending' }
+        
+      case 'training':
+        if (currentStageIndex <= 1) {
+          return { stage, status: 'completed' }
+        } else if (stage === 'replicate_training') {
+          return { stage, status: 'in_progress' }
+        }
+        return { stage, status: 'pending' }
+        
+      case 'uploading':
+        if (currentStageIndex <= 2) {
+          return { stage, status: 'completed' }
+        } else if (stage === 'huggingface_upload') {
+          // Check if ready for upload vs actively uploading
+          if (trainingStage?.includes('ready for upload')) {
+            return { stage, status: 'pending' }
+          }
+          return { stage, status: 'in_progress' }
+        }
+        return { stage, status: 'pending' }
+        
+      case 'completed':
+        if (stage === 'completion') {
+          return { stage, status: 'completed' }
+        } else if (currentStageIndex < stageOrder.length - 1) {
+          return { stage, status: 'completed' }
+        }
+        return { stage, status: 'completed' }
+        
+      case 'failed':
+        // Determine which stage failed based on the training stage description
+        if (trainingStage?.toLowerCase().includes('initializing') || trainingStage?.toLowerCase().includes('preparing')) {
+          if (stage === 'initializing') return { stage, status: 'failed' }
+          return { stage, status: 'pending' }
+        } else if (trainingStage?.toLowerCase().includes('zip') || trainingStage?.toLowerCase().includes('image')) {
+          if (currentStageIndex <= 0) return { stage, status: 'completed' }
+          if (stage === 'zip_creation') return { stage, status: 'failed' }
+          return { stage, status: 'pending' }
+        } else if (trainingStage?.toLowerCase().includes('training') || trainingStage?.toLowerCase().includes('lora')) {
+          if (currentStageIndex <= 1) return { stage, status: 'completed' }
+          if (stage === 'replicate_training') return { stage, status: 'failed' }
+          return { stage, status: 'pending' }
+        } else if (trainingStage?.toLowerCase().includes('upload') || trainingStage?.toLowerCase().includes('huggingface')) {
+          if (currentStageIndex <= 2) return { stage, status: 'completed' }
+          if (stage === 'huggingface_upload') return { stage, status: 'failed' }
+          return { stage, status: 'pending' }
+        }
+        return { stage, status: 'failed' }
+        
+      default:
+        return { stage, status: 'pending' }
     }
   }
 
@@ -433,6 +499,21 @@ export default function TrainingDetailsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Temporary Debug Section - Remove after fixing */}
+      <Card className="mb-8 border-yellow-200 bg-yellow-50">
+        <CardContent className="p-4">
+          <h3 className="text-sm font-medium text-yellow-800 mb-2">Debug Info:</h3>
+          <div className="text-xs text-yellow-700 space-y-1">
+            <div>Status: <code>{trainingJob.status}</code></div>
+            <div>Stage: <code>{trainingJob.stage}</code></div>
+            <div>Has Error: <code>{!!trainingJob.error}</code></div>
+            <div>Error: <code>{trainingJob.error || 'None'}</code></div>
+            <div>HuggingFace Repo: <code>{trainingJob.huggingFaceRepo || 'None'}</code></div>
+            <div>Model ID: <code>{trainingJob.modelId}</code></div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Progress Bar */}
       {['starting', 'training', 'uploading'].includes(trainingJob.status) && (
@@ -658,8 +739,9 @@ export default function TrainingDetailsPage() {
               </Card>
             )}
 
-            {/* Upload Section for Completed Jobs without HuggingFace repo */}
-            {trainingJob.status === 'completed' && !trainingJob.huggingFaceRepo && !trainingJob.error && (
+            {/* Upload Section for Jobs that need upload */}
+            {((trainingJob.status === 'completed' && !trainingJob.huggingFaceRepo && !trainingJob.error) ||
+              (trainingJob.status === 'uploading' && !trainingJob.huggingFaceRepo && !trainingJob.error)) && (
               <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50">
                 <CardHeader className="pb-4">
                   <div className="flex items-center space-x-3">
