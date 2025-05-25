@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
         }
 
         // If job has external training ID, fetch current status
-        if (payload?.externalTrainingId && ['running', 'pending'].includes(job.status)) {
+        if (payload?.externalTrainingId && ['running', 'pending', 'succeeded'].includes(job.status)) {
           try {
             const trainingService = new TrainingService()
             const currentStatus = await trainingService.getTrainingStatus(

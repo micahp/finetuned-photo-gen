@@ -428,10 +428,10 @@ export class TrainingService {
         // Training succeeded but upload failed - be specific about this
         return {
           id: trainingId,
-          status: 'failed',
-          progress: 95,
+          status: 'uploading', // Changed from 'failed' to 'uploading' to trigger retry UI
+          progress: 90,
           stage: 'Training completed successfully, but HuggingFace upload failed',
-          error: `Model training completed successfully, but failed to upload to HuggingFace: ${errorMessage}`,
+          error: `Model training completed successfully, but failed to upload to HuggingFace: ${error instanceof Error ? error.message : 'Upload failed'}`,
           debugData: this.debugger.getDebugSummary()
         }
       }
@@ -473,7 +473,7 @@ export class TrainingService {
       // Training succeeded but upload failed - be specific about this
       return {
         id: trainingId,
-        status: 'failed',
+        status: 'uploading', // Changed from 'failed' to 'uploading' to trigger retry UI
         progress: 90,
         stage: 'Training completed successfully, but HuggingFace upload failed',
         error: `Model training completed successfully, but failed to upload to HuggingFace: ${error instanceof Error ? error.message : 'Upload failed'}`,

@@ -75,10 +75,11 @@ const statusConfig = {
 }
 
 const stageConfig = {
-  zip_creation: { label: 'ZIP Creation', icon: Archive, description: 'Creating training images bundle' },
+  initializing: { label: 'Initialization', icon: Settings, description: 'Setting up training environment' },
+  zip_creation: { label: 'Image Preparation', icon: Archive, description: 'Creating training images bundle' },
   replicate_training: { label: 'LoRA Training', icon: Zap, description: 'Training the LoRA model with Replicate' },
   huggingface_upload: { label: 'Model Upload', icon: Upload, description: 'Uploading trained model to HuggingFace' },
-  completion: { label: 'Completion', icon: CheckCircle, description: 'Training workflow completed' },
+  completion: { label: 'Completion', icon: CheckCircle, description: 'Training workflow completed successfully' },
 }
 
 export default function TrainingDetailsPage() {
@@ -224,13 +225,21 @@ export default function TrainingDetailsPage() {
   }
 
   const getStageStatus = (stage: string, debugData: any): DebugStage => {
+    if (!debugData) {
+      return {
+        stage,
+        status: 'pending'
+      }
+    }
+    
+    // Check stageTimings array from debug data
     const stageTimings = debugData?.stageTimings || []
     const stageTiming = stageTimings.find((s: any) => s.stage === stage)
     
     if (stageTiming) {
       return {
         stage,
-        status: stageTiming.completed ? 'completed' : 'in_progress',
+        status: stageTiming.duration !== null ? 'completed' : 'in_progress',
         duration: stageTiming.duration,
         startTime: stageTiming.startTime,
         endTime: stageTiming.endTime
@@ -252,6 +261,34 @@ export default function TrainingDetailsPage() {
         stage,
         status: 'failed',
         error: lastError.message
+      }
+    }
+
+    // Check recent logs to see if stage was mentioned
+    const recentLogs = debugData?.recentLogs || []
+    const stageLog = recentLogs.find((log: any) => log.stage === stage)
+    
+    if (stageLog) {
+      if (stageLog.level === 'error') {
+        return {
+          stage,
+          status: 'failed',
+          error: stageLog.message,
+          startTime: stageLog.timestamp
+        }
+      } else if (stageLog.message?.includes('Starting:')) {
+        return {
+          stage,
+          status: 'in_progress',
+          startTime: stageLog.timestamp
+        }
+      } else if (stageLog.message?.includes('Completed:')) {
+        return {
+          stage,
+          status: 'completed',
+          endTime: stageLog.timestamp,
+          duration: stageLog.duration
+        }
       }
     }
 
@@ -578,7 +615,9 @@ export default function TrainingDetailsPage() {
                   {/* Action Section */}
                   {(trainingJob.error?.includes('Model training completed successfully') || 
                     trainingJob.debugData?.lastError?.stage === 'huggingface_upload' ||
-                    trainingJob.status === 'uploading') && (
+                    trainingJob.status === 'uploading' ||
+                    // Show retry upload for jobs that completed training but don't have HF repo
+                    (trainingJob.status === 'completed' && !trainingJob.huggingFaceRepo)) && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                       <div className="flex items-start space-x-3">
                         <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
@@ -615,19 +654,72 @@ export default function TrainingDetailsPage() {
                       </div>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            )}
 
-                  {/* Support Information */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            {/* Upload Section for Completed Jobs without HuggingFace repo */}
+            {trainingJob.status === 'completed' && !trainingJob.huggingFaceRepo && !trainingJob.error && (
+              <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <Upload className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <CardTitle className="text-blue-800 text-lg font-semibold">
+                        Ready for Upload
+                      </CardTitle>
+                      <p className="text-sm text-blue-600 mt-1">
+                        Your model training completed successfully and is ready to be uploaded to HuggingFace.
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="bg-white/60 border border-blue-200 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-blue-800 mb-2 flex items-center space-x-2">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                      <span>Training Completed Successfully</span>
+                    </h4>
+                    <p className="text-sm text-blue-700 leading-relaxed">
+                      Your LoRA model has been trained and is safely stored on Replicate. 
+                      Upload it to HuggingFace to make it available for image generation.
+                    </p>
+                  </div>
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mt-0.5">
-                        <span className="text-gray-600 text-sm font-medium">?</span>
+                      <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                        <Globe className="h-4 w-4 text-blue-600" />
                       </div>
-                      <div className="flex-1">
-                        <h4 className="text-sm font-medium text-gray-800 mb-1">Need Help?</h4>
-                        <p className="text-sm text-gray-600">
-                          If you continue to experience issues, please contact our support team with the training ID: 
-                          <code className="mx-1 px-2 py-0.5 bg-gray-200 rounded text-xs font-mono">{trainingJob.id}</code>
-                        </p>
+                      <div className="flex-1 space-y-3">
+                        <div>
+                          <h4 className="text-sm font-medium text-blue-800 mb-1">Upload to HuggingFace</h4>
+                          <p className="text-sm text-blue-700">
+                            Upload your trained model to HuggingFace to make it publicly available 
+                            and usable in the image generation interface.
+                          </p>
+                        </div>
+                        
+                        <Button
+                          onClick={retryUpload}
+                          disabled={retrying}
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                        >
+                          {retrying ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              Uploading to HuggingFace...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4 mr-2" />
+                              Upload to HuggingFace
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </div>
                   </div>
