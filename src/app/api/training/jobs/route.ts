@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { TrainingService } from '@/lib/training-service'
+import { TrainingStatusResolver, type StatusSources } from '@/lib/training-status-resolver'
+import { ReplicateService } from '@/lib/replicate-service'
 
 export async function GET(request: NextRequest) {
   try {
@@ -62,26 +64,85 @@ export async function GET(request: NextRequest) {
           error: job.errorMessage || null
         }
 
-        // If job has external training ID, fetch current status
-        if (payload?.externalTrainingId && ['running', 'pending', 'succeeded'].includes(job.status)) {
+        // If job has external training ID, use unified status resolution
+        if (payload?.externalTrainingId && ['running', 'pending', 'succeeded', 'completed'].includes(job.status)) {
           try {
-            const trainingService = new TrainingService()
-            const currentStatus = await trainingService.getTrainingStatus(
+            // Get user model status for this training
+            const userModel = await prisma.userModel.findFirst({
+              where: { externalTrainingId: payload.externalTrainingId },
+              select: {
+                status: true,
+                huggingfaceRepo: true,
+                loraReadyForInference: true,
+                trainingCompletedAt: true
+              }
+            })
+            
+            // For list view, we need to call Replicate to get accurate status
+            // This is necessary because job queue status can be outdated
+            const replicateService = new ReplicateService()
+            let replicateStatus
+            
+            try {
+              replicateStatus = await replicateService.getTrainingStatus(payload.externalTrainingId)
+            } catch (replicateError) {
+              console.warn(`Failed to get Replicate status for ${payload.externalTrainingId}:`, replicateError)
+              // Fall back to inferring from job queue status
+              replicateStatus = {
+                status: job.status === 'succeeded' ? 'succeeded' : 
+                        job.status === 'failed' ? 'failed' : 
+                        job.status === 'running' ? 'processing' : 'starting',
+                error: job.errorMessage || undefined,
+                logs: undefined
+              }
+            }
+            
+            // Build status sources with real Replicate data
+            const sources: StatusSources = {
+              jobQueue: {
+                status: job.status,
+                errorMessage: job.errorMessage,
+                completedAt: job.completedAt
+              },
+              replicate: replicateStatus,
+              userModel: {
+                status: userModel?.status || 'unknown',
+                huggingfaceRepo: userModel?.huggingfaceRepo,
+                loraReadyForInference: userModel?.loraReadyForInference || false,
+                trainingCompletedAt: userModel?.trainingCompletedAt
+              }
+            }
+            
+            // Resolve unified status
+            const unifiedStatus = TrainingStatusResolver.resolveStatus(
               payload.externalTrainingId,
               payload?.name || 'Unknown Model',
-              false // Don't allow automatic uploads on status checks
+              sources
             )
             
             trainingStatus = {
-              status: currentStatus.status,
-              progress: currentStatus.progress,
-              stage: currentStatus.stage,
-              estimatedTimeRemaining: currentStatus.estimatedTimeRemaining as number | undefined,
-              debugData: currentStatus.debugData,
-              error: currentStatus.error || null
+              status: unifiedStatus.status,
+              progress: unifiedStatus.progress,
+              stage: unifiedStatus.stage,
+              estimatedTimeRemaining: unifiedStatus.estimatedTimeRemaining as number | undefined,
+              debugData: {
+                sources: unifiedStatus.sources,
+                needsUpload: unifiedStatus.needsUpload,
+                canRetryUpload: unifiedStatus.canRetryUpload
+              },
+              error: unifiedStatus.error || null
             }
+            
           } catch (statusError) {
-            console.error(`Failed to get status for training ${payload.externalTrainingId}:`, statusError)
+            console.error(`Failed to get unified status for training ${payload.externalTrainingId}:`, statusError)
+            // Fall back to basic status interpretation
+            if (job.status === 'completed') {
+              trainingStatus.progress = 100
+              trainingStatus.stage = 'Training completed successfully'
+            } else if (job.status === 'failed') {
+              trainingStatus.stage = 'Training failed'
+              trainingStatus.error = job.errorMessage || 'Training failed for unknown reason'
+            }
           }
         } else if (job.status === 'completed') {
           trainingStatus.progress = 100

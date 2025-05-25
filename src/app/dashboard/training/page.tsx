@@ -71,6 +71,7 @@ export default function TrainingPage() {
   const [filteredJobs, setFilteredJobs] = useState<TrainingJob[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [backgroundUpdating, setBackgroundUpdating] = useState(false)
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     status: 'all',
@@ -80,9 +81,14 @@ export default function TrainingPage() {
   const [selectedJob, setSelectedJob] = useState<TrainingJob | null>(null)
 
   // Fetch training jobs from API
-  const fetchTrainingJobs = useCallback(async () => {
+  const fetchTrainingJobs = useCallback(async (isBackgroundUpdate = false) => {
     try {
-      setLoading(true)
+      // Only show loading spinner on initial load, not background updates
+      if (!isBackgroundUpdate) {
+        setLoading(true)
+      } else {
+        setBackgroundUpdating(true)
+      }
       
       const params = new URLSearchParams()
       if (filters.status !== 'all') {
@@ -97,17 +103,26 @@ export default function TrainingPage() {
         setFilteredJobs(data.jobs)
       } else {
         console.error('Failed to fetch training jobs:', data.error)
-        // Fallback to empty array
-        setTrainingJobs([])
-        setFilteredJobs([])
+        // Don't clear existing data on background update failures
+        if (!isBackgroundUpdate) {
+          setTrainingJobs([])
+          setFilteredJobs([])
+        }
       }
     } catch (error) {
       console.error('Failed to fetch training jobs:', error)
-      // Fallback to empty array
-      setTrainingJobs([])
-      setFilteredJobs([])
+      // Don't clear existing data on background update failures
+      if (!isBackgroundUpdate) {
+        setTrainingJobs([])
+        setFilteredJobs([])
+      }
     } finally {
-      setLoading(false)
+      // Only hide loading spinner if this was initial load
+      if (!isBackgroundUpdate) {
+        setLoading(false)
+      } else {
+        setBackgroundUpdating(false)
+      }
     }
   }, [filters.status])
 
@@ -116,6 +131,23 @@ export default function TrainingPage() {
       fetchTrainingJobs()
     }
   }, [session, fetchTrainingJobs])
+
+  // Auto-refresh for active training jobs
+  useEffect(() => {
+    const hasActiveJobs = trainingJobs.some(job => 
+      ['starting', 'training', 'uploading'].includes(job.status)
+    )
+    
+    if (!hasActiveJobs) {
+      return
+    }
+
+    const interval = setInterval(() => {
+      fetchTrainingJobs(true) // Background update - no loading spinner
+    }, 15000) // Refresh every 15 seconds for list view
+
+    return () => clearInterval(interval)
+  }, [trainingJobs, fetchTrainingJobs])
 
   // Apply filters
   useEffect(() => {
@@ -181,7 +213,7 @@ export default function TrainingPage() {
 
   const refreshJobs = async () => {
     setRefreshing(true)
-    await fetchTrainingJobs()
+    await fetchTrainingJobs(true) // Background update - no loading spinner
     setRefreshing(false)
   }
 
@@ -228,10 +260,18 @@ export default function TrainingPage() {
             <h1 className="text-3xl font-bold text-gray-900">Training Management</h1>
             <p className="text-gray-600 mt-2">Monitor and manage your LoRA training jobs</p>
           </div>
-          <Button onClick={refreshJobs} disabled={refreshing} className="flex items-center gap-2">
-            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </Button>
+          <div className="flex items-center space-x-2">
+            {backgroundUpdating && (
+              <div className="flex items-center text-sm text-gray-500">
+                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                <span>Updating...</span>
+              </div>
+            )}
+            <Button onClick={refreshJobs} disabled={refreshing} className="flex items-center gap-2">
+              <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -405,7 +445,15 @@ export default function TrainingPage() {
                           )}
                         </div>
                         
-                        <p className="text-sm text-gray-600 mt-1">{job.stage}</p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {/* Use parsed log progress for better stage descriptions */}
+                          {job.debugData?.logProgress?.stageDescription || job.stage}
+                          {job.debugData?.logProgress?.currentStep && job.debugData?.logProgress?.totalSteps && (
+                            <span className="text-xs text-gray-500 ml-2">
+                              ({job.debugData.logProgress.currentStep}/{job.debugData.logProgress.totalSteps} steps)
+                            </span>
+                          )}
+                        </p>
                         
                         <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                           <span>ID: {job.id}</span>

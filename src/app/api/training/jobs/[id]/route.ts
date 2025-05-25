@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { TrainingService } from '@/lib/training-service'
+import { TrainingStatusResolver, type StatusSources } from '@/lib/training-status-resolver'
+import { ReplicateService } from '@/lib/replicate-service'
 
 export async function GET(
   request: NextRequest,
@@ -101,48 +103,74 @@ export async function GET(
       logs: ''
     }
 
-    // If job has external training ID, fetch current status with detailed info
-    if (payload?.externalTrainingId && ['running', 'pending', 'succeeded'].includes(job.status)) {
+    // If job has external training ID, use unified status resolution
+    if (payload?.externalTrainingId && ['running', 'pending', 'succeeded', 'completed'].includes(job.status)) {
       try {
-        const trainingService = new TrainingService()
+        // Get all sources of truth for unified status resolution
+        const replicateService = new ReplicateService()
+        const replicateStatus = await replicateService.getTrainingStatus(payload.externalTrainingId)
         
-        // Add timeout to prevent hanging on external API calls
-        const statusPromise = trainingService.getTrainingStatus(
-          payload.externalTrainingId,
-          payload?.name || 'Unknown Model',
-          false // Don't allow automatic uploads on status checks
-        )
-        
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Training status fetch timeout')), 3000)
+        // Get user model status
+        const userModel = await prisma.userModel.findFirst({
+          where: { externalTrainingId: payload.externalTrainingId }
         })
         
-        const currentStatus = await Promise.race([statusPromise, timeoutPromise]) as any
+        // Build status sources
+        const sources: StatusSources = {
+          jobQueue: {
+            status: job.status,
+            errorMessage: job.errorMessage,
+            completedAt: job.completedAt
+          },
+          replicate: {
+            status: replicateStatus.status,
+            error: replicateStatus.error,
+            logs: replicateStatus.logs
+          },
+          userModel: {
+            status: userModel?.status || 'unknown',
+            huggingfaceRepo: userModel?.huggingfaceRepo,
+            loraReadyForInference: userModel?.loraReadyForInference || false,
+            trainingCompletedAt: userModel?.trainingCompletedAt
+          }
+        }
+        
+        // Resolve unified status
+        const unifiedStatus = TrainingStatusResolver.resolveStatus(
+          payload.externalTrainingId,
+          payload?.name || 'Unknown Model',
+          sources
+        )
         
         trainingStatus = {
-          status: currentStatus.status,
-          progress: currentStatus.progress,
-          stage: currentStatus.stage,
-          estimatedTimeRemaining: currentStatus.estimatedTimeRemaining,
-          debugData: currentStatus.debugData,
-          error: currentStatus.error || null,
-          logs: currentStatus.logs || ''
+          status: unifiedStatus.status,
+          progress: unifiedStatus.progress,
+          stage: unifiedStatus.stage,
+          estimatedTimeRemaining: unifiedStatus.estimatedTimeRemaining,
+          debugData: {
+            sources: unifiedStatus.sources,
+            needsUpload: unifiedStatus.needsUpload,
+            canRetryUpload: unifiedStatus.canRetryUpload
+          },
+          error: unifiedStatus.error || null,
+          logs: unifiedStatus.logs || ''
         }
         
         // Sync job queue status if there's a mismatch
-        if (job.status !== currentStatus.status && ['completed', 'failed'].includes(currentStatus.status)) {
-          console.log(`🔄 Syncing job queue status: ${job.status} → ${currentStatus.status}`)
+        if (job.status !== unifiedStatus.status && ['completed', 'failed'].includes(unifiedStatus.status)) {
+          console.log(`🔄 Syncing job queue status: ${job.status} → ${unifiedStatus.status}`)
           await prisma.jobQueue.update({
             where: { id: job.id },
             data: {
-              status: currentStatus.status,
-              errorMessage: currentStatus.error || null,
-              completedAt: currentStatus.status === 'completed' ? new Date() : job.completedAt
+              status: unifiedStatus.status,
+              errorMessage: unifiedStatus.error || null,
+              completedAt: unifiedStatus.status === 'completed' ? new Date() : job.completedAt
             }
           })
         }
+        
       } catch (statusError) {
-        console.error(`Failed to get status for training ${payload.externalTrainingId}:`, statusError)
+        console.error(`Failed to get unified status for training ${payload.externalTrainingId}:`, statusError)
         // Fall back to database status for completed/failed jobs
         if (job.status === 'completed') {
           trainingStatus.progress = 100

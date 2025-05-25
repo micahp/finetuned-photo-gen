@@ -2,6 +2,7 @@ import { ReplicateService } from './replicate-service'
 import { HuggingFaceService } from './huggingface-service'
 import { ZipCreationService } from './zip-creation-service'
 import { TrainingDebugger, TrainingStage } from './training-debug'
+import { TrainingStatusResolver, type UnifiedTrainingStatus, type StatusSources } from './training-status-resolver'
 
 interface TrainingImage {
   id: string
@@ -154,112 +155,73 @@ export class TrainingService {
     }
 
     try {
-      // Check Replicate training status
+      // Get all sources of truth
       const replicateStatus = await this.replicate.getTrainingStatus(trainingId)
       
-      // Update job queue status to match external training status
-      await this.updateJobQueueStatus(trainingId, replicateStatus.status, replicateStatus.error)
+      // Get job queue status
+      const { prisma } = await import('@/lib/db')
+      const job = await prisma.jobQueue.findFirst({
+        where: {
+          jobType: 'model_training',
+          payload: {
+            path: ['externalTrainingId'],
+            equals: trainingId
+          }
+        }
+      })
       
-      switch (replicateStatus.status) {
-        case 'starting':
-          return {
-            id: trainingId,
-            status: 'starting',
-            progress: 10,
-            stage: 'Preparing training environment',
-            estimatedTimeRemaining: 1800,
-            logs: replicateStatus.logs,
-            debugData: this.debugger.getDebugSummary()
-          }
-
-        case 'processing':
-          return {
-            id: trainingId,
-            status: 'training',
-            progress: 40,
-            stage: 'Training LoRA model (this may take 15-30 minutes)',
-            estimatedTimeRemaining: 1200,
-            logs: replicateStatus.logs,
-            debugData: this.debugger.getDebugSummary()
-          }
-
-        case 'succeeded':
-          // Check if upload was already completed for this training
-          if (TrainingService.completedUploads.has(trainingId)) {
-            return {
-              id: trainingId,
-              status: 'completed',
-              progress: 100,
-              stage: 'Training completed successfully and model uploaded to HuggingFace',
-              logs: replicateStatus.logs,
-              debugData: this.debugger.getDebugSummary()
-            }
-          }
-          
-          // Check if upload is currently in progress
-          if (TrainingService.ongoingUploads.has(trainingId)) {
-            return {
-              id: trainingId,
-              status: 'uploading',
-              progress: 95,
-              stage: 'Training completed, uploading to HuggingFace...',
-              logs: replicateStatus.logs,
-              debugData: this.debugger.getDebugSummary()
-            }
-          }
-          
-          // Check if a HuggingFace model already exists for this training
-          // This handles cases where upload was completed but in-memory tracking was lost
-          const existingRepo = await this.checkForExistingHuggingFaceModel(trainingId, modelName)
-          if (existingRepo) {
-            // Mark as completed in our tracking and return completed status
-            TrainingService.completedUploads.add(trainingId)
-            return {
-              id: trainingId,
-              status: 'completed',
-              progress: 100,
-              stage: 'Training completed successfully and model uploaded to HuggingFace',
-              huggingFaceRepo: existingRepo,
-              logs: replicateStatus.logs,
-              debugData: this.debugger.getDebugSummary()
-            }
-          }
-          
-          // Only proceed with upload if explicitly allowed
-          if (allowUpload) {
-            return await this.handleTrainingCompletion(trainingId, modelName, replicateStatus)
-          } else {
-            // Training succeeded but upload not initiated - return status indicating upload needed
-            return {
-              id: trainingId,
-              status: 'uploading', // Use uploading status to indicate transition state
-              progress: 90,
-              stage: 'Training completed successfully, ready for upload to HuggingFace',
-              logs: replicateStatus.logs,
-              debugData: this.debugger.getDebugSummary()
-            }
-          }
-
-        case 'failed':
-          return {
-            id: trainingId,
-            status: 'failed',
-            progress: 0,
-            stage: 'Training failed',
-            error: replicateStatus.error || 'Replicate training failed',
-            logs: replicateStatus.logs,
-            debugData: this.debugger.getDebugSummary()
-          }
-
-        default:
-          return {
-            id: trainingId,
-            status: 'starting',
-            progress: 5,
-            stage: `Unknown status: ${replicateStatus.status}`,
-            logs: replicateStatus.logs,
-            debugData: this.debugger.getDebugSummary()
-          }
+      // Get user model status
+      const userModel = await prisma.userModel.findFirst({
+        where: { externalTrainingId: trainingId }
+      })
+      
+      // Build status sources
+      const sources: StatusSources = {
+        jobQueue: {
+          status: job?.status || 'unknown',
+          errorMessage: job?.errorMessage,
+          completedAt: job?.completedAt
+        },
+        replicate: {
+          status: replicateStatus.status,
+          error: replicateStatus.error,
+          logs: replicateStatus.logs
+        },
+        userModel: {
+          status: userModel?.status || 'unknown',
+          huggingfaceRepo: userModel?.huggingfaceRepo,
+          loraReadyForInference: userModel?.loraReadyForInference || false,
+          trainingCompletedAt: userModel?.trainingCompletedAt
+        }
+      }
+      
+      // Resolve unified status
+      const unifiedStatus = TrainingStatusResolver.resolveStatus(trainingId, modelName, sources)
+      
+      // Update job queue status to match resolved status if needed
+      await this.updateJobQueueStatus(trainingId, unifiedStatus.status, unifiedStatus.error)
+      
+      // Handle upload logic if needed and allowed
+      if (unifiedStatus.needsUpload && allowUpload) {
+        return await this.handleTrainingCompletion(trainingId, modelName, replicateStatus)
+      }
+      
+      // Convert unified status to TrainingStatus format
+      return {
+        id: unifiedStatus.id,
+        status: unifiedStatus.status,
+        progress: unifiedStatus.progress,
+        stage: unifiedStatus.stage,
+        estimatedTimeRemaining: unifiedStatus.estimatedTimeRemaining,
+        huggingFaceRepo: unifiedStatus.huggingFaceRepo,
+        error: unifiedStatus.error,
+        logs: unifiedStatus.logs,
+        debugData: {
+          ...this.debugger.getDebugSummary(),
+          sources: unifiedStatus.sources,
+          needsUpload: unifiedStatus.needsUpload,
+          canRetryUpload: unifiedStatus.canRetryUpload
+        }
       }
 
     } catch (error) {
@@ -636,7 +598,7 @@ export class TrainingService {
         return
       }
       
-      // Map external status to job status
+      // Map unified status to job status
       let jobStatus = status
       switch (status) {
         case 'starting':
@@ -644,13 +606,21 @@ export class TrainingService {
           jobStatus = 'running'
           break
         case 'uploading':
-          jobStatus = 'running' // Keep as running during upload
+          // For uploading status, check if it needs upload or is actively uploading
+          // If it needs upload, keep as 'succeeded' to indicate Replicate training is done
+          // If actively uploading, use 'running'
+          jobStatus = 'succeeded' // Default to succeeded since Replicate training is done
           break
         case 'completed':
-          jobStatus = 'completed'
+          // Use 'succeeded' to match what the status resolver expects
+          // The resolver will map this to 'completed' when HuggingFace upload is done
+          jobStatus = 'succeeded'
           break
         case 'failed':
           jobStatus = 'failed'
+          break
+        default:
+          jobStatus = 'running'
           break
       }
       
@@ -663,7 +633,7 @@ export class TrainingService {
           data: {
             status: jobStatus,
             errorMessage: errorMessage || job.errorMessage,
-            completedAt: ['completed', 'failed'].includes(jobStatus) ? new Date() : job.completedAt
+            completedAt: ['succeeded', 'failed'].includes(jobStatus) ? new Date() : job.completedAt
           }
         })
       }

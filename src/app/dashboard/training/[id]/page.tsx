@@ -30,6 +30,7 @@ import {
   Globe
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { TrainingStatusResolver } from '@/lib/training-status-resolver'
 
 interface TrainingJob {
   id: string
@@ -93,11 +94,17 @@ export default function TrainingDetailsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const [backgroundUpdating, setBackgroundUpdating] = useState(false)
 
   // Fetch training job details from API
-  const fetchTrainingJob = useCallback(async () => {
+  const fetchTrainingJob = useCallback(async (isBackgroundUpdate = false) => {
     try {
-      setLoading(true)
+      // Only show loading spinner on initial load, not background updates
+      if (!isBackgroundUpdate) {
+        setLoading(true)
+      } else {
+        setBackgroundUpdating(true)
+      }
       
       // Add timeout to prevent hanging
       const controller = new AbortController()
@@ -125,7 +132,10 @@ export default function TrainingDetailsPage() {
         setTrainingJob(data.job)
       } else {
         console.error('Failed to fetch training job:', data.error)
-        setTrainingJob(null)
+        // Don't clear existing data on background update failures
+        if (!isBackgroundUpdate) {
+          setTrainingJob(null)
+        }
       }
     } catch (error) {
       console.error('Failed to fetch training job:', error)
@@ -136,9 +146,17 @@ export default function TrainingDetailsPage() {
         }
       }
       
-      setTrainingJob(null)
+      // Don't clear existing data on background update failures
+      if (!isBackgroundUpdate) {
+        setTrainingJob(null)
+      }
     } finally {
-      setLoading(false)
+      // Only hide loading spinner if this was initial load
+      if (!isBackgroundUpdate) {
+        setLoading(false)
+      } else {
+        setBackgroundUpdating(false)
+      }
     }
   }, [trainingId])
 
@@ -155,7 +173,7 @@ export default function TrainingDetailsPage() {
     }
 
     const interval = setInterval(() => {
-      fetchTrainingJob()
+      fetchTrainingJob(true) // Background update - no loading spinner
     }, 10000) // Refresh every 10 seconds
 
     return () => clearInterval(interval)
@@ -163,7 +181,7 @@ export default function TrainingDetailsPage() {
 
   const refreshJob = async () => {
     setRefreshing(true)
-    await fetchTrainingJob()
+    await fetchTrainingJob(true) // Background update - no loading spinner
     setRefreshing(false)
   }
 
@@ -225,6 +243,31 @@ export default function TrainingDetailsPage() {
   }
 
   const getStageStatus = (stage: string, debugData: any): DebugStage => {
+    // If we have unified status data from the new resolver, use it
+    if (debugData?.sources && trainingJob) {
+      const unifiedStatus = {
+        id: trainingJob.id,
+        status: trainingJob.status,
+        progress: trainingJob.progress,
+        stage: trainingJob.stage,
+        error: trainingJob.error,
+        needsUpload: debugData.needsUpload || false,
+        canRetryUpload: debugData.canRetryUpload || false,
+        sources: debugData.sources
+      }
+      
+      const pipelineStatus = TrainingStatusResolver.getPipelineStageStatus(stage, unifiedStatus)
+      return {
+        stage,
+        status: pipelineStatus.status,
+        error: pipelineStatus.error,
+        startTime: pipelineStatus.startTime,
+        endTime: pipelineStatus.endTime,
+        duration: pipelineStatus.duration
+      }
+    }
+    
+    // Fallback to original logic if no unified status data
     if (!debugData) {
       // If no debug data, infer from main training status
       return inferStageFromTrainingStatus(stage, trainingJob?.status, trainingJob?.stage)
@@ -427,6 +470,12 @@ export default function TrainingDetailsPage() {
           </div>
 
           <div className="flex items-center space-x-2">
+            {backgroundUpdating && (
+              <div className="flex items-center text-sm text-gray-500">
+                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                <span>Updating...</span>
+              </div>
+            )}
             <Button 
               onClick={refreshJob} 
               disabled={refreshing} 
@@ -532,7 +581,15 @@ export default function TrainingDetailsPage() {
               />
             </div>
             <div className="flex justify-between text-sm text-gray-600">
-              <span>{trainingJob.stage}</span>
+              <span>
+                {/* Use parsed log progress for better stage descriptions */}
+                {trainingJob.debugData?.logProgress?.stageDescription || trainingJob.stage}
+                {trainingJob.debugData?.logProgress?.currentStep && trainingJob.debugData?.logProgress?.totalSteps && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    ({trainingJob.debugData.logProgress.currentStep}/{trainingJob.debugData.logProgress.totalSteps} steps)
+                  </span>
+                )}
+              </span>
               <span>{trainingJob.progress}%</span>
             </div>
             {trainingJob.estimatedTimeRemaining && (
@@ -739,9 +796,10 @@ export default function TrainingDetailsPage() {
               </Card>
             )}
 
-            {/* Upload Section for Jobs that need upload */}
-            {((trainingJob.status === 'completed' && !trainingJob.huggingFaceRepo && !trainingJob.error) ||
-              (trainingJob.status === 'uploading' && !trainingJob.huggingFaceRepo && !trainingJob.error)) && (
+            {/* Upload Section - Show if training completed but no HuggingFace repo */}
+            {((trainingJob.debugData?.canRetryUpload) ||
+              (trainingJob.status === 'completed' && !trainingJob.huggingFaceRepo && !trainingJob.error) ||
+              (trainingJob.status === 'uploading' && trainingJob.debugData?.needsUpload)) && (
               <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50">
                 <CardHeader className="pb-4">
                   <div className="flex items-center space-x-3">
@@ -750,10 +808,13 @@ export default function TrainingDetailsPage() {
                     </div>
                     <div className="flex-1">
                       <CardTitle className="text-blue-800 text-lg font-semibold">
-                        Ready for Upload
+                        {trainingJob.debugData?.needsUpload ? 'Ready for Upload' : 'Upload to HuggingFace'}
                       </CardTitle>
                       <p className="text-sm text-blue-600 mt-1">
-                        Your model training completed successfully and is ready to be uploaded to HuggingFace.
+                        {trainingJob.debugData?.needsUpload 
+                          ? 'Your model training completed successfully and is ready to be uploaded to HuggingFace.'
+                          : 'Your model training completed successfully. Upload it to HuggingFace to make it available for inference.'
+                        }
                       </p>
                     </div>
                   </div>
@@ -934,9 +995,62 @@ export default function TrainingDetailsPage() {
             <CardHeader>
               <CardTitle>Training Logs</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm max-h-96 overflow-y-auto">
-                <pre className="whitespace-pre-wrap">{trainingJob.logs || 'No logs available yet...'}</pre>
+            <CardContent className="space-y-4">
+              {/* Training Progress Summary */}
+              {trainingJob.logs && trainingJob.debugData?.logProgress && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-blue-800 mb-3">Current Training Progress</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs text-blue-600 uppercase tracking-wide">Stage</p>
+                      <p className="text-sm font-medium text-blue-900">
+                        {trainingJob.debugData.logProgress.stage === 'uploading_images' && 'Uploading Images'}
+                        {trainingJob.debugData.logProgress.stage === 'loading_model' && 'Loading Model'}
+                        {trainingJob.debugData.logProgress.stage === 'training' && 'Training'}
+                        {trainingJob.debugData.logProgress.stage === 'completed' && 'Completed'}
+                        {trainingJob.debugData.logProgress.stage === 'unknown' && 'Initializing'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-blue-600 uppercase tracking-wide">Progress</p>
+                      <p className="text-sm font-medium text-blue-900">
+                        {trainingJob.debugData.logProgress.progress}%
+                        {trainingJob.debugData.logProgress.currentStep && trainingJob.debugData.logProgress.totalSteps && (
+                          <span className="text-xs text-blue-700 ml-1">
+                            ({trainingJob.debugData.logProgress.currentStep}/{trainingJob.debugData.logProgress.totalSteps} steps)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-blue-600 uppercase tracking-wide">Status</p>
+                      <p className="text-sm font-medium text-blue-900">
+                        {trainingJob.debugData.logProgress.stageDescription}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Raw Logs */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-gray-700">Raw Training Logs</h4>
+                  {trainingJob.logs && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => copyToClipboard(trainingJob.logs || '')}
+                      className="text-xs"
+                    >
+                      <Copy className="h-3 w-3 mr-1" />
+                      Copy Logs
+                    </Button>
+                  )}
+                </div>
+                <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm max-h-96 overflow-y-auto">
+                  <pre className="whitespace-pre-wrap">{trainingJob.logs || 'No logs available yet...'}</pre>
+                </div>
               </div>
             </CardContent>
           </Card>
