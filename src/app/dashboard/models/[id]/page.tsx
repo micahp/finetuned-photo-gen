@@ -48,6 +48,9 @@ interface ModelDetails {
     creditsUsed: number
     createdAt: string
   }>
+  validationStatus?: string
+  validationErrorType?: string
+  validationError?: string
 }
 
 interface TrainingStatus {
@@ -314,7 +317,7 @@ export default function ModelDetailsPage() {
               Refresh
             </Button>
           )}
-          {model.status === 'ready' && model.loraReadyForInference && (
+          {model.status === 'ready' && model.loraReadyForInference && model.validationStatus !== 'invalid' && (
             <Link href={`/dashboard/generate?model=${model.id}`}>
               <Button className="flex items-center gap-2">
                 <Play className="h-4 w-4" />
@@ -332,6 +335,29 @@ export default function ModelDetailsPage() {
           )}
         </div>
       </div>
+
+      {/* Model Corruption Warning */}
+      {model.status === 'ready' && model.validationStatus === 'invalid' && model.validationErrorType === 'corrupted_safetensors' && (
+        <Card className="mb-6 border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-800">
+              <AlertCircle className="h-5 w-5" />
+              Model Corrupted
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-red-700">
+              This model cannot be used for image generation. The safetensors file is corrupted and needs to be regenerated. 
+              You may need to retrain the model to fix this issue.
+            </p>
+            {model.validationError && (
+              <p className="text-sm text-red-600 mt-2 font-mono bg-red-100 p-2 rounded">
+                {model.validationError}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Training Progress (for active training) */}
       {model.status === 'training' && trainingStatus && (

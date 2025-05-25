@@ -31,6 +31,8 @@ interface AdminModel {
     trainingImages: number
     generatedImages: number
   }
+  validationStatus?: string
+  validationErrorType?: string
 }
 
 export default function AdminPage() {
@@ -273,6 +275,11 @@ export default function AdminPage() {
                         {model.externalTrainingService && (
                           <Badge variant="outline" className="text-xs">
                             {model.externalTrainingService}
+                          </Badge>
+                        )}
+                        {model.validationStatus === 'invalid' && model.validationErrorType === 'corrupted_safetensors' && (
+                          <Badge variant="destructive" className="text-xs">
+                            Corrupted
                           </Badge>
                         )}
                       </div>

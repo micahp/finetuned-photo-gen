@@ -137,7 +137,18 @@ export class TogetherAIService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error?.message || `API request failed: ${response.status}`)
+        let errorMessage = errorData.error?.message || `API request failed: ${response.status}`
+        
+        // Provide more helpful error messages for common issues
+        if (errorMessage.includes('HeaderTooLarge') || errorMessage.includes('Error while deserializing header')) {
+          errorMessage = `The LoRA model file appears to be corrupted or incompatible. This usually happens when the safetensors file was generated incorrectly during training. Please re-train the model or check the file integrity.`
+        }
+        
+        return {
+          status: 'failed' as const,
+          error: errorMessage,
+          id: ''
+        }
       }
 
       const data = await response.json()
@@ -180,6 +191,14 @@ export class TogetherAIService {
       ? `${params.triggerWord} ${params.prompt}`
       : params.prompt
 
+    // Format the LoRA path as a full HuggingFace URL if it's just a repository path
+    let formattedLoraPath = params.loraPath
+    if (!params.loraPath.startsWith('http') && !params.loraPath.includes('huggingface.co')) {
+      // Together.AI accepts HuggingFace repository URLs directly
+      // Try the repository URL first as it's simpler and more reliable
+      formattedLoraPath = `https://huggingface.co/${params.loraPath}`
+    }
+
     return this.generateImage({
       prompt: enhancedPrompt,
       width: params.width,
@@ -188,7 +207,7 @@ export class TogetherAIService {
       aspectRatio: params.aspectRatio,
       seed: params.seed,
       imageLoras: [{
-        path: params.loraPath,
+        path: formattedLoraPath,
         scale: params.loraScale || 1.0
       }]
     })

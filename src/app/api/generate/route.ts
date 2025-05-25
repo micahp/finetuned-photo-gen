@@ -116,6 +116,40 @@ export async function POST(request: NextRequest) {
     }
 
     if (result.status === 'failed') {
+      // Check if this is a corruption error for a custom model
+      if (selectedUserModel && result.error) {
+        const errorMessage = result.error.toLowerCase()
+        
+        // Check for various corruption indicators
+        const isCorruptionError = 
+          errorMessage.includes('headertoolarge') || 
+          errorMessage.includes('header too large') ||
+          errorMessage.includes('corrupted') ||
+          errorMessage.includes('invalid safetensors') ||
+          errorMessage.includes('error while deserializing header') ||
+          errorMessage.includes('lora model file appears to be corrupted') ||
+          errorMessage.includes('safetensors file was generated incorrectly') ||
+          errorMessage.includes('incompatible') ||
+          errorMessage.includes('malformed')
+        
+        if (isCorruptionError) {
+          // Mark the model as corrupted in the database
+          try {
+            await prisma.userModel.update({
+              where: { id: selectedUserModel.id },
+              data: {
+                validationStatus: 'invalid',
+                validationErrorType: 'corrupted_safetensors',
+                validationError: result.error,
+                lastValidationCheck: new Date()
+              }
+            })
+          } catch (dbError) {
+            console.error('Failed to update model corruption status:', dbError)
+          }
+        }
+      }
+      
       return NextResponse.json(
         { error: result.error || 'Generation failed' },
         { status: 500 }

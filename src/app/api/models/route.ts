@@ -157,6 +157,11 @@ export async function GET(request: NextRequest) {
         trainingCompletedAt: model.trainingCompletedAt,
         createdAt: model.createdAt,
         huggingfaceRepo: model.huggingfaceRepo,
+        loraReadyForInference: model.loraReadyForInference,
+        validationStatus: model.validationStatus,
+        validationError: model.validationError,
+        validationErrorType: model.validationErrorType,
+        lastValidationCheck: model.lastValidationCheck,
         _count: model._count,
       })),
     })

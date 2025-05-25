@@ -74,63 +74,86 @@ export async function GET(request: NextRequest) {
                 status: true,
                 huggingfaceRepo: true,
                 loraReadyForInference: true,
-                trainingCompletedAt: true
+                trainingCompletedAt: true,
+                validationStatus: true,
+                validationError: true,
+                validationErrorType: true,
+                lastValidationCheck: true
               }
             })
             
-            // For list view, we need to call Replicate to get accurate status
-            // This is necessary because job queue status can be outdated
-            const replicateService = new ReplicateService()
-            let replicateStatus
-            
-            try {
-              replicateStatus = await replicateService.getTrainingStatus(payload.externalTrainingId)
-            } catch (replicateError) {
-              console.warn(`Failed to get Replicate status for ${payload.externalTrainingId}:`, replicateError)
-              // Fall back to inferring from job queue status
-              replicateStatus = {
-                status: job.status === 'succeeded' ? 'succeeded' : 
-                        job.status === 'failed' ? 'failed' : 
-                        job.status === 'running' ? 'processing' : 'starting',
-                error: job.errorMessage || undefined,
-                logs: undefined
+            // Check if model is corrupted during upload phase
+            if (userModel?.validationStatus === 'invalid' && userModel?.validationErrorType === 'corrupted_safetensors') {
+              // Model was successfully trained and uploaded, but corruption detected during generation
+              trainingStatus = {
+                status: 'completed',
+                progress: 100, // Training and upload completed successfully
+                stage: 'Training completed - Model corrupted during generation',
+                estimatedTimeRemaining: undefined,
+                debugData: {
+                  sources: null,
+                  needsUpload: false,
+                  canRetryUpload: false,
+                  corruptionDetected: true
+                },
+                error: `Model corruption detected during generation: ${userModel.validationError || 'Safetensors file is corrupted and cannot be used for image generation'}`
               }
-            }
-            
-            // Build status sources with real Replicate data
-            const sources: StatusSources = {
-              jobQueue: {
-                status: job.status,
-                errorMessage: job.errorMessage,
-                completedAt: job.completedAt
-              },
-              replicate: replicateStatus,
-              userModel: {
-                status: userModel?.status || 'unknown',
-                huggingfaceRepo: userModel?.huggingfaceRepo,
-                loraReadyForInference: userModel?.loraReadyForInference || false,
-                trainingCompletedAt: userModel?.trainingCompletedAt
+            } else {
+              // Continue with normal unified status resolution
+              // For list view, we need to call Replicate to get accurate status
+              // This is necessary because job queue status can be outdated
+              const replicateService = new ReplicateService()
+              let replicateStatus
+              
+              try {
+                replicateStatus = await replicateService.getTrainingStatus(payload.externalTrainingId)
+              } catch (replicateError) {
+                console.warn(`Failed to get Replicate status for ${payload.externalTrainingId}:`, replicateError)
+                // Fall back to inferring from job queue status
+                replicateStatus = {
+                  status: job.status === 'succeeded' ? 'succeeded' : 
+                          job.status === 'failed' ? 'failed' : 
+                          job.status === 'running' ? 'processing' : 'starting',
+                  error: job.errorMessage || undefined,
+                  logs: undefined
+                }
               }
-            }
-            
-            // Resolve unified status
-            const unifiedStatus = TrainingStatusResolver.resolveStatus(
-              payload.externalTrainingId,
-              payload?.name || 'Unknown Model',
-              sources
-            )
-            
-            trainingStatus = {
-              status: unifiedStatus.status,
-              progress: unifiedStatus.progress,
-              stage: unifiedStatus.stage,
-              estimatedTimeRemaining: unifiedStatus.estimatedTimeRemaining as number | undefined,
-              debugData: {
-                sources: unifiedStatus.sources,
-                needsUpload: unifiedStatus.needsUpload,
-                canRetryUpload: unifiedStatus.canRetryUpload
-              },
-              error: unifiedStatus.error || null
+              
+              // Build status sources with real Replicate data
+              const sources: StatusSources = {
+                jobQueue: {
+                  status: job.status,
+                  errorMessage: job.errorMessage,
+                  completedAt: job.completedAt
+                },
+                replicate: replicateStatus,
+                userModel: {
+                  status: userModel?.status || 'unknown',
+                  huggingfaceRepo: userModel?.huggingfaceRepo,
+                  loraReadyForInference: userModel?.loraReadyForInference || false,
+                  trainingCompletedAt: userModel?.trainingCompletedAt
+                }
+              }
+              
+              // Resolve unified status
+              const unifiedStatus = TrainingStatusResolver.resolveStatus(
+                payload.externalTrainingId,
+                payload?.name || 'Unknown Model',
+                sources
+              )
+              
+              trainingStatus = {
+                status: unifiedStatus.status,
+                progress: unifiedStatus.progress,
+                stage: unifiedStatus.stage,
+                estimatedTimeRemaining: unifiedStatus.estimatedTimeRemaining as number | undefined,
+                debugData: {
+                  sources: unifiedStatus.sources,
+                  needsUpload: unifiedStatus.needsUpload,
+                  canRetryUpload: unifiedStatus.canRetryUpload
+                },
+                error: unifiedStatus.error || null
+              }
             }
             
           } catch (statusError) {
@@ -156,6 +179,42 @@ export async function GET(request: NextRequest) {
         const imageCount = payload?.trainingImages?.length || payload?.imageIds?.length || 10
         const estimatedCost = (imageCount * 0.15) + 1.25 // Base cost + per image
 
+        // Get validation info from user model if available
+        let validationInfo = {
+          validationStatus: null,
+          validationError: null,
+          validationErrorType: null,
+          lastValidationCheck: null
+        }
+
+        // Try to get user model for validation info
+        if (payload?.userModelId || payload?.externalTrainingId) {
+          try {
+            const userModel = await prisma.userModel.findFirst({
+              where: payload?.userModelId 
+                ? { id: payload.userModelId }
+                : { externalTrainingId: payload.externalTrainingId },
+              select: {
+                validationStatus: true,
+                validationError: true,
+                validationErrorType: true,
+                lastValidationCheck: true
+              }
+            })
+
+            if (userModel) {
+              validationInfo = {
+                validationStatus: userModel.validationStatus,
+                validationError: userModel.validationError,
+                validationErrorType: userModel.validationErrorType,
+                lastValidationCheck: userModel.lastValidationCheck?.toISOString() || null
+              }
+            }
+          } catch (validationError) {
+            console.warn('Failed to fetch validation info:', validationError)
+          }
+        }
+
         return {
           id: payload?.externalTrainingId || job.id,
           modelId: payload?.userModelId || 'unknown',
@@ -177,7 +236,12 @@ export async function GET(request: NextRequest) {
             learningRate: payload?.learningRate || 1e-4,
             loraRank: payload?.loraRank || 16,
             baseModel: payload?.baseModel || 'black-forest-labs/FLUX.1-dev'
-          }
+          },
+          // Add validation information
+          validationStatus: validationInfo.validationStatus,
+          validationError: validationInfo.validationError,
+          validationErrorType: validationInfo.validationErrorType,
+          lastValidationCheck: validationInfo.lastValidationCheck
         }
       })
     )

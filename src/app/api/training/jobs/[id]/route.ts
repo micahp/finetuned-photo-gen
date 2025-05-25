@@ -248,12 +248,54 @@ export async function GET(
 
     // Get HuggingFace repo from user model if available
     let huggingFaceRepo = payload?.huggingFaceRepo
+    let validationInfo = {
+      validationStatus: null,
+      validationError: null,
+      validationErrorType: null,
+      lastValidationCheck: null
+    }
+    
     if (!huggingFaceRepo && payload?.externalTrainingId) {
       const userModel = await prisma.userModel.findFirst({
         where: { externalTrainingId: payload.externalTrainingId },
-        select: { huggingfaceRepo: true }
+        select: { 
+          huggingfaceRepo: true,
+          validationStatus: true,
+          validationError: true,
+          validationErrorType: true,
+          lastValidationCheck: true
+        }
       })
       huggingFaceRepo = userModel?.huggingfaceRepo
+      
+      if (userModel) {
+        validationInfo = {
+          validationStatus: userModel.validationStatus,
+          validationError: userModel.validationError,
+          validationErrorType: userModel.validationErrorType,
+          lastValidationCheck: userModel.lastValidationCheck?.toISOString() || null
+        }
+      }
+    } else if (payload?.userModelId) {
+      // Get validation info by user model ID
+      const userModel = await prisma.userModel.findFirst({
+        where: { id: payload.userModelId },
+        select: {
+          validationStatus: true,
+          validationError: true,
+          validationErrorType: true,
+          lastValidationCheck: true
+        }
+      })
+      
+      if (userModel) {
+        validationInfo = {
+          validationStatus: userModel.validationStatus,
+          validationError: userModel.validationError,
+          validationErrorType: userModel.validationErrorType,
+          lastValidationCheck: userModel.lastValidationCheck?.toISOString() || null
+        }
+      }
     }
 
     // Calculate estimated cost (simplified calculation)
@@ -282,7 +324,11 @@ export async function GET(
         learningRate: payload?.learningRate || 1e-4,
         loraRank: payload?.loraRank || 16,
         baseModel: payload?.baseModel || 'black-forest-labs/FLUX.1-dev'
-      }
+      },
+      validationStatus: validationInfo.validationStatus,
+      validationError: validationInfo.validationError,
+      validationErrorType: validationInfo.validationErrorType,
+      lastValidationCheck: validationInfo.lastValidationCheck
     }
 
     return NextResponse.json({

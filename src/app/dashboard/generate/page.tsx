@@ -45,6 +45,10 @@ interface UserModel {
   triggerWord?: string
   huggingfaceRepo?: string
   loraReadyForInference: boolean
+  validationStatus?: string
+  validationError?: string
+  validationErrorType?: string
+  lastValidationCheck?: string
   _count: {
     generatedImages: number
   }
@@ -183,8 +187,21 @@ export default function GeneratePage() {
       const response = await fetch('/api/models')
       if (response.ok) {
         const data = await response.json()
+        
+        // Filter models that are ready and either:
+        // 1. Have validation status 'valid', OR
+        // 2. Have unknown validation status (for backward compatibility), OR
+        // 3. Haven't been validated yet (lastValidationCheck is null)
         const readyModels = (data.models || []).filter(
-          (model: UserModel) => model.status === 'ready' && model.loraReadyForInference
+          (model: UserModel) => {
+            const isReady = model.status === 'ready' && model.loraReadyForInference
+            const isValidated = model.validationStatus === 'valid' || 
+                               model.validationStatus === 'unknown' || 
+                               !model.lastValidationCheck
+            const isNotInvalid = model.validationStatus !== 'invalid'
+            
+            return isReady && isValidated && isNotInvalid
+          }
         )
         setUserModels(readyModels)
       }
@@ -232,7 +249,20 @@ export default function GeneratePage() {
         throw new Error(result.error || 'Generation failed')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+      setError(errorMessage)
+      
+      // If the error indicates model corruption, refresh the models list
+      if (errorMessage.toLowerCase().includes('corrupted') || 
+          errorMessage.toLowerCase().includes('disabled') ||
+          errorMessage.toLowerCase().includes('safetensors')) {
+        await fetchUserModels()
+        // Clear the selected model if it was corrupted
+        if (selectedUserModel) {
+          setSelectedUserModel(null)
+          form.setValue('userModelId', undefined)
+        }
+      }
     } finally {
       setIsGenerating(false)
     }

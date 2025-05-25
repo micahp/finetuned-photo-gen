@@ -48,6 +48,10 @@ interface TrainingJob {
     loraRank: number
     baseModel: string
   }
+  validationStatus?: string | null
+  validationError?: string | null
+  validationErrorType?: string | null
+  lastValidationCheck?: string | null
 }
 
 interface FilterState {
@@ -431,6 +435,11 @@ export default function TrainingPage() {
                           <Badge variant="outline" className={cn("", statusIcon.textColor)}>
                             {statusIcon.label}
                           </Badge>
+                          {job.validationStatus === 'invalid' && job.validationErrorType === 'corrupted_safetensors' && (
+                            <Badge variant="destructive" className="text-xs">
+                              Corrupted
+                            </Badge>
+                          )}
                           {job.huggingFaceRepo && (
                             <Badge variant="secondary">
                               <a 

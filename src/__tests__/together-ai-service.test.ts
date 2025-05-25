@@ -180,7 +180,7 @@ describe('TogetherAIService', () => {
       expect(requestBody.model).toBe('black-forest-labs/FLUX.1-dev-lora')
       expect(requestBody.steps).toBe(30)
       expect(requestBody.image_loras).toEqual([{
-        path: 'geoppls/geo-1748133826702-np1tbn',
+        path: 'https://huggingface.co/geoppls/geo-1748133826702-np1tbn',
         scale: 1.0
       }])
     })
