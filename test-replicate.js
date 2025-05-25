@@ -3,10 +3,7 @@ import { ReplicateService } from './src/lib/replicate-service.js';
 async function testReplicate() {
   try {
     console.log('Testing Replicate API connection...');
-    
-    // Set the token explicitly for testing
-    process.env.REPLICATE_API_TOKEN = "***REMOVED***";
-    
+        
     const replicateService = new ReplicateService();
     
     console.log('Testing with mock training data...');
