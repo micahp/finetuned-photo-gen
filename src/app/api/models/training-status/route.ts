@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       const trainingStatus = await trainingService.getTrainingStatus(
         model.externalTrainingId,
         model.name,
-        false // Don't allow automatic uploads on status checks
+        true // Allow automatic uploads for completed trainings
       )
 
       // Update model status in database if training completed

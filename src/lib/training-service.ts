@@ -212,7 +212,10 @@ export class TrainingService {
       
       // Handle upload logic if needed and allowed
       if (unifiedStatus.needsUpload && allowUpload) {
+        console.log(`🚀 AUTOMATIC UPLOAD TRIGGERED: Training ${trainingId} completed successfully, starting HuggingFace upload for model "${modelName}"`)
         return await this.handleTrainingCompletion(trainingId, modelName, replicateStatus)
+      } else if (unifiedStatus.needsUpload && !allowUpload) {
+        console.log(`⏸️ UPLOAD NEEDED BUT DISABLED: Training ${trainingId} completed successfully but allowUpload=false for model "${modelName}"`)
       }
       
       // Convert unified status to TrainingStatus format
@@ -324,6 +327,7 @@ export class TrainingService {
 
     // Check if upload is already in progress or completed
     if (TrainingService.ongoingUploads.has(trainingId)) {
+      console.log(`🔄 UPLOAD IN PROGRESS: Training ${trainingId} upload already in progress, returning uploading status`)
       return {
         id: trainingId,
         status: 'uploading',
@@ -334,6 +338,7 @@ export class TrainingService {
     }
 
     if (TrainingService.completedUploads.has(trainingId)) {
+      console.log(`✅ UPLOAD COMPLETED: Training ${trainingId} upload already completed, returning completed status`)
       return {
         id: trainingId,
         status: 'completed',
@@ -344,6 +349,7 @@ export class TrainingService {
     }
 
     // Mark upload as in progress
+    console.log(`📤 STARTING UPLOAD: Marking training ${trainingId} as upload in progress`)
     TrainingService.ongoingUploads.add(trainingId)
 
     try {

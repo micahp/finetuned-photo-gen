@@ -60,11 +60,11 @@ export async function GET(request: NextRequest) {
               serviceName: serviceName
             })
             
-            // Pass allowUpload=false to prevent automatic uploads on status checks
+            // Allow automatic uploads when training completes successfully
             const trainingStatus = await trainingService.getTrainingStatus(
               model.externalTrainingId, 
               model.name, 
-              false // Don't allow automatic uploads
+              true // Allow automatic uploads for completed trainings
             )
             
             console.log(`📊 Training status for ${model.name}:`, {
