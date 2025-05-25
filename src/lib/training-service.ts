@@ -42,9 +42,9 @@ export class TrainingService {
   private debugger: TrainingDebugger | null = null
   
   // Track ongoing uploads to prevent duplicates
-  private static ongoingUploads = new Set<string>()
+  public static ongoingUploads = new Set<string>()
   // Track completed uploads to avoid re-upload
-  private static completedUploads = new Set<string>()
+  public static completedUploads = new Set<string>()
 
   constructor() {
     this.replicate = new ReplicateService()
@@ -203,6 +203,23 @@ export class TrainingService {
               status: 'uploading',
               progress: 95,
               stage: 'Training completed, uploading to HuggingFace...',
+              logs: replicateStatus.logs,
+              debugData: this.debugger.getDebugSummary()
+            }
+          }
+          
+          // Check if a HuggingFace model already exists for this training
+          // This handles cases where upload was completed but in-memory tracking was lost
+          const existingRepo = await this.checkForExistingHuggingFaceModel(trainingId, modelName)
+          if (existingRepo) {
+            // Mark as completed in our tracking and return completed status
+            TrainingService.completedUploads.add(trainingId)
+            return {
+              id: trainingId,
+              status: 'completed',
+              progress: 100,
+              stage: 'Training completed successfully and model uploaded to HuggingFace',
+              huggingFaceRepo: existingRepo,
               logs: replicateStatus.logs,
               debugData: this.debugger.getDebugSummary()
             }
@@ -653,6 +670,49 @@ export class TrainingService {
       
     } catch (error) {
       console.error('Failed to update job queue status:', error)
+    }
+  }
+
+  /**
+   * Check if a HuggingFace model already exists for a training
+   */
+  private async checkForExistingHuggingFaceModel(trainingId: string, modelName: string): Promise<string | null> {
+    try {
+      const { prisma } = await import('@/lib/db')
+      
+      // Find the model with this external training ID
+      const model = await prisma.userModel.findFirst({
+        where: {
+          externalTrainingId: trainingId
+        }
+      })
+      
+      if (model?.huggingfaceRepo) {
+        // Verify the HuggingFace model actually exists
+        try {
+          const repoStatus = await this.huggingface.getRepoStatus(model.huggingfaceRepo)
+          if (repoStatus.modelReady) {
+            return model.huggingfaceRepo
+          }
+        } catch (error) {
+          // Model doesn't exist on HuggingFace, clear the database reference
+          console.log(`HuggingFace model ${model.huggingfaceRepo} not found, clearing database reference`)
+          await prisma.userModel.update({
+            where: { id: model.id },
+            data: {
+              huggingfaceRepo: null,
+              huggingfaceStatus: null,
+              loraReadyForInference: false
+            }
+          })
+          return null
+        }
+      }
+      
+      return null
+    } catch (error) {
+      console.error('Error checking for existing HuggingFace model:', error)
+      return null
     }
   }
 } 

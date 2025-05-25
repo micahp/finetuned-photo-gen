@@ -128,6 +128,19 @@ export async function GET(
           error: currentStatus.error || null,
           logs: currentStatus.logs || ''
         }
+        
+        // Sync job queue status if there's a mismatch
+        if (job.status !== currentStatus.status && ['completed', 'failed'].includes(currentStatus.status)) {
+          console.log(`🔄 Syncing job queue status: ${job.status} → ${currentStatus.status}`)
+          await prisma.jobQueue.update({
+            where: { id: job.id },
+            data: {
+              status: currentStatus.status,
+              errorMessage: currentStatus.error || null,
+              completedAt: currentStatus.status === 'completed' ? new Date() : job.completedAt
+            }
+          })
+        }
       } catch (statusError) {
         console.error(`Failed to get status for training ${payload.externalTrainingId}:`, statusError)
         // Fall back to database status for completed/failed jobs
@@ -135,8 +148,36 @@ export async function GET(
           trainingStatus.progress = 100
           trainingStatus.stage = 'Training completed successfully'
         } else if (job.status === 'failed') {
-          trainingStatus.stage = 'Training failed'
-          trainingStatus.error = job.errorMessage || 'Training failed for unknown reason'
+          // Check if user model shows success despite job queue failure
+          const userModel = await prisma.userModel.findFirst({
+            where: { externalTrainingId: payload.externalTrainingId }
+          })
+          
+          if (userModel?.status === 'ready' && userModel.huggingfaceRepo) {
+            // Override failed status with actual success
+            trainingStatus = {
+              status: 'completed',
+              progress: 100,
+              stage: 'Training completed successfully and model uploaded to HuggingFace',
+              estimatedTimeRemaining: undefined,
+              debugData: null,
+              error: null,
+              logs: ''
+            }
+            
+            // Update job queue to reflect reality
+            await prisma.jobQueue.update({
+              where: { id: job.id },
+              data: {
+                status: 'completed',
+                errorMessage: null,
+                completedAt: userModel.trainingCompletedAt || new Date()
+              }
+            })
+          } else {
+            trainingStatus.stage = 'Training failed'
+            trainingStatus.error = job.errorMessage || 'Training failed for unknown reason'
+          }
         } else {
           trainingStatus.error = 'Unable to fetch current status (external service timeout)'
         }
@@ -145,8 +186,46 @@ export async function GET(
       trainingStatus.progress = 100
       trainingStatus.stage = 'Training completed successfully'
     } else if (job.status === 'failed') {
-      trainingStatus.stage = 'Training failed'
-      trainingStatus.error = job.errorMessage || 'Training failed for unknown reason'
+      // Check if user model shows success despite job queue failure
+      const userModel = await prisma.userModel.findFirst({
+        where: { externalTrainingId: payload?.externalTrainingId }
+      })
+      
+      if (userModel?.status === 'ready' && userModel.huggingfaceRepo) {
+        // Override failed status with actual success
+        trainingStatus = {
+          status: 'completed',
+          progress: 100,
+          stage: 'Training completed successfully and model uploaded to HuggingFace',
+          estimatedTimeRemaining: undefined,
+          debugData: null,
+          error: null,
+          logs: ''
+        }
+        
+        // Update job queue to reflect reality
+        await prisma.jobQueue.update({
+          where: { id: job.id },
+          data: {
+            status: 'completed',
+            errorMessage: null,
+            completedAt: userModel.trainingCompletedAt || new Date()
+          }
+        })
+      } else {
+        trainingStatus.stage = 'Training failed'
+        trainingStatus.error = job.errorMessage || 'Training failed for unknown reason'
+      }
+    }
+
+    // Get HuggingFace repo from user model if available
+    let huggingFaceRepo = payload?.huggingFaceRepo
+    if (!huggingFaceRepo && payload?.externalTrainingId) {
+      const userModel = await prisma.userModel.findFirst({
+        where: { externalTrainingId: payload.externalTrainingId },
+        select: { huggingfaceRepo: true }
+      })
+      huggingFaceRepo = userModel?.huggingfaceRepo
     }
 
     // Calculate estimated cost (simplified calculation)
@@ -163,7 +242,7 @@ export async function GET(
       creditsUsed: Math.floor(estimatedCost * 20), // Convert cost to credits
       estimatedCost: estimatedCost,
       estimatedTimeRemaining: trainingStatus.estimatedTimeRemaining,
-      huggingFaceRepo: payload?.huggingFaceRepo,
+      huggingFaceRepo: huggingFaceRepo,
       error: trainingStatus.error,
       logs: trainingStatus.logs,
       debugData: trainingStatus.debugData,
