@@ -77,83 +77,64 @@ export async function GET(request: NextRequest) {
                 trainingCompletedAt: true,
                 validationStatus: true,
                 validationError: true,
-                validationErrorType: true,
                 lastValidationCheck: true
               }
             })
             
-            // Check if model is corrupted during upload phase
-            if (userModel?.validationStatus === 'invalid' && userModel?.validationErrorType === 'corrupted_safetensors') {
-              // Model was successfully trained and uploaded, but corruption detected during generation
-              trainingStatus = {
-                status: 'completed',
-                progress: 100, // Training and upload completed successfully
-                stage: 'Training completed - Model corrupted during generation',
-                estimatedTimeRemaining: undefined,
-                debugData: {
-                  sources: null,
-                  needsUpload: false,
-                  canRetryUpload: false,
-                  corruptionDetected: true
-                },
-                error: `Model corruption detected during generation: ${userModel.validationError || 'Safetensors file is corrupted and cannot be used for image generation'}`
+            // Continue with normal unified status resolution
+            // For list view, we need to call Replicate to get accurate status
+            // This is necessary because job queue status can be outdated
+            const replicateService = new ReplicateService()
+            let replicateStatus
+            
+            try {
+              replicateStatus = await replicateService.getTrainingStatus(payload.externalTrainingId)
+            } catch (replicateError) {
+              console.warn(`Failed to get Replicate status for ${payload.externalTrainingId}:`, replicateError)
+              // Fall back to inferring from job queue status
+              replicateStatus = {
+                status: job.status === 'succeeded' ? 'succeeded' : 
+                        job.status === 'failed' ? 'failed' : 
+                        job.status === 'running' ? 'processing' : 'starting',
+                error: job.errorMessage || undefined,
+                logs: undefined
               }
-            } else {
-              // Continue with normal unified status resolution
-              // For list view, we need to call Replicate to get accurate status
-              // This is necessary because job queue status can be outdated
-              const replicateService = new ReplicateService()
-              let replicateStatus
-              
-              try {
-                replicateStatus = await replicateService.getTrainingStatus(payload.externalTrainingId)
-              } catch (replicateError) {
-                console.warn(`Failed to get Replicate status for ${payload.externalTrainingId}:`, replicateError)
-                // Fall back to inferring from job queue status
-                replicateStatus = {
-                  status: job.status === 'succeeded' ? 'succeeded' : 
-                          job.status === 'failed' ? 'failed' : 
-                          job.status === 'running' ? 'processing' : 'starting',
-                  error: job.errorMessage || undefined,
-                  logs: undefined
-                }
+            }
+            
+            // Build status sources with real Replicate data
+            const sources: StatusSources = {
+              jobQueue: {
+                status: job.status,
+                errorMessage: job.errorMessage,
+                completedAt: job.completedAt
+              },
+              replicate: replicateStatus,
+              userModel: {
+                status: userModel?.status || 'unknown',
+                huggingfaceRepo: userModel?.huggingfaceRepo,
+                loraReadyForInference: userModel?.loraReadyForInference || false,
+                trainingCompletedAt: userModel?.trainingCompletedAt
               }
-              
-              // Build status sources with real Replicate data
-              const sources: StatusSources = {
-                jobQueue: {
-                  status: job.status,
-                  errorMessage: job.errorMessage,
-                  completedAt: job.completedAt
-                },
-                replicate: replicateStatus,
-                userModel: {
-                  status: userModel?.status || 'unknown',
-                  huggingfaceRepo: userModel?.huggingfaceRepo,
-                  loraReadyForInference: userModel?.loraReadyForInference || false,
-                  trainingCompletedAt: userModel?.trainingCompletedAt
-                }
-              }
-              
-              // Resolve unified status
-              const unifiedStatus = TrainingStatusResolver.resolveStatus(
-                payload.externalTrainingId,
-                payload?.name || 'Unknown Model',
-                sources
-              )
-              
-              trainingStatus = {
-                status: unifiedStatus.status,
-                progress: unifiedStatus.progress,
-                stage: unifiedStatus.stage,
-                estimatedTimeRemaining: unifiedStatus.estimatedTimeRemaining as number | undefined,
-                debugData: {
-                  sources: unifiedStatus.sources,
-                  needsUpload: unifiedStatus.needsUpload,
-                  canRetryUpload: unifiedStatus.canRetryUpload
-                },
-                error: unifiedStatus.error || null
-              }
+            }
+            
+            // Resolve unified status
+            const unifiedStatus = TrainingStatusResolver.resolveStatus(
+              payload.externalTrainingId,
+              payload?.name || 'Unknown Model',
+              sources
+            )
+            
+            trainingStatus = {
+              status: unifiedStatus.status,
+              progress: unifiedStatus.progress,
+              stage: unifiedStatus.stage,
+              estimatedTimeRemaining: unifiedStatus.estimatedTimeRemaining as number | undefined,
+              debugData: {
+                sources: unifiedStatus.sources,
+                needsUpload: unifiedStatus.needsUpload,
+                canRetryUpload: unifiedStatus.canRetryUpload
+              },
+              error: unifiedStatus.error || null
             }
             
           } catch (statusError) {
@@ -183,7 +164,6 @@ export async function GET(request: NextRequest) {
         let validationInfo = {
           validationStatus: null,
           validationError: null,
-          validationErrorType: null,
           lastValidationCheck: null
         }
 
@@ -197,7 +177,6 @@ export async function GET(request: NextRequest) {
               select: {
                 validationStatus: true,
                 validationError: true,
-                validationErrorType: true,
                 lastValidationCheck: true
               }
             })
@@ -206,7 +185,6 @@ export async function GET(request: NextRequest) {
               validationInfo = {
                 validationStatus: userModel.validationStatus,
                 validationError: userModel.validationError,
-                validationErrorType: userModel.validationErrorType,
                 lastValidationCheck: userModel.lastValidationCheck?.toISOString() || null
               }
             }
@@ -240,7 +218,6 @@ export async function GET(request: NextRequest) {
           // Add validation information
           validationStatus: validationInfo.validationStatus,
           validationError: validationInfo.validationError,
-          validationErrorType: validationInfo.validationErrorType,
           lastValidationCheck: validationInfo.lastValidationCheck
         }
       })

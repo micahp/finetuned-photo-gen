@@ -30,6 +30,18 @@ interface ReplicateTrainingResponse {
   output?: any
   logs?: string
   input?: any
+  destinationModelId?: string // The destination model ID created for training
+}
+
+interface ReplicateGenerationResponse {
+  id: string
+  status: 'completed' | 'failed' | 'processing'
+  images?: Array<{
+    url: string
+    width: number
+    height: number
+  }>
+  error?: string
 }
 
 export class ReplicateService {
@@ -46,11 +58,17 @@ export class ReplicateService {
       throw new Error('Replicate API token is required. Please set REPLICATE_API_TOKEN environment variable.')
     }
     
-    // console.log(`✅ Replicate API token loaded (${token.substring(0, 8)}...)`)
+    console.log(`✅ Replicate API token loaded (${token.substring(0, 8)}...)`)
     
-    this.client = new Replicate({
-      auth: token,
-    })
+    try {
+      this.client = new Replicate({
+        auth: token,
+      })
+      console.log('✅ Replicate client initialized successfully')
+    } catch (error) {
+      console.error('❌ Failed to initialize Replicate client:', error)
+      throw error
+    }
   }
 
   /**
@@ -154,6 +172,7 @@ export class ReplicateService {
         id: String(training.id),
         status: training.status as 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled',
         urls: training.urls,
+        destinationModelId: modelResult.modelId, // Include the destination model ID
       }
 
     } catch (error) {
@@ -209,6 +228,299 @@ export class ReplicateService {
         status: 'failed',
         error: error instanceof Error ? error.message : 'Failed to get status'
       }
+    }
+  }
+
+  /**
+   * Generate image with trained Replicate model directly
+   */
+  async generateWithTrainedModel(params: {
+    prompt: string
+    replicateModelId: string  // e.g., "micahp/flux-lora-xyz"
+    triggerWord?: string
+    width?: number
+    height?: number
+    steps?: number
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '3:4' | '4:3'
+    seed?: number
+  }): Promise<ReplicateGenerationResponse> {
+    try {
+      console.log('🎨 Starting Replicate trained model generation:', {
+        prompt: params.prompt,
+        replicateModelId: params.replicateModelId,
+        triggerWord: params.triggerWord
+      })
+
+      // Build the enhanced prompt with trigger word
+      let enhancedPrompt = params.prompt
+      if (params.triggerWord && !params.prompt.toLowerCase().includes(params.triggerWord.toLowerCase())) {
+        enhancedPrompt = `${params.triggerWord}, ${params.prompt}`
+      }
+
+      // Calculate dimensions based on aspect ratio
+      const dimensions = this.getDimensions(params.aspectRatio)
+      const width = params.width || dimensions.width
+      const height = params.height || dimensions.height
+
+      // Validate model ID format
+      if (!params.replicateModelId || !params.replicateModelId.includes('/') || !params.replicateModelId.includes(':')) {
+        throw new Error(`Invalid Replicate model ID format: ${params.replicateModelId}. Expected format: owner/model:version`)
+      }
+
+      // Extract version from replicateModelId
+      const version = params.replicateModelId.split(':').pop()
+      if (!version) {
+        throw new Error(`Could not extract version from replicateModelId: ${params.replicateModelId}`)
+      }
+
+      console.log('🔧 Replicate trained model parameters:', {
+        prompt: enhancedPrompt,
+        model: params.replicateModelId,
+        width,
+        height,
+        num_inference_steps: params.steps || 28,
+        seed: params.seed
+      })
+
+      // Use predictions.create() to get full prediction object with status
+      console.log('📡 Creating Replicate prediction...')
+      const prediction = await this.client.predictions.create({
+        version: version, // Use extracted version ID here
+        input: {
+          prompt: enhancedPrompt,
+          width,
+          height,
+          num_inference_steps: params.steps || 28,
+          seed: params.seed,
+          guidance_scale: 3.5,
+          num_outputs: 1,
+          output_format: "webp",
+          output_quality: 90
+        }
+      })
+      console.log('📡 Replicate prediction created:', prediction.id)
+
+      // Wait for the prediction to complete
+      console.log('⏳ Waiting for prediction to complete...')
+      const completedPrediction = await this.client.wait(prediction)
+      console.log('✅ Prediction completed with status:', completedPrediction.status)
+
+      // Enhanced logging to debug the response structure
+      console.log('🔍 FULL Replicate response structure:', {
+        prediction: completedPrediction,
+        predictionType: typeof completedPrediction,
+        predictionKeys: completedPrediction ? Object.keys(completedPrediction) : 'null',
+        id: completedPrediction?.id,
+        status: completedPrediction?.status,
+        output: completedPrediction?.output,
+        error: completedPrediction?.error,
+        urls: completedPrediction?.urls
+      })
+
+      console.log('🎨 Replicate trained model generation completed:', {
+        id: completedPrediction?.id,
+        status: completedPrediction?.status,
+        hasOutput: !!completedPrediction?.output,
+        outputType: typeof completedPrediction?.output,
+        outputLength: Array.isArray(completedPrediction?.output) ? completedPrediction.output.length : 'not array'
+      })
+
+      // Check if prediction is null or undefined
+      if (!completedPrediction) {
+        console.error('❌ Prediction is null or undefined')
+        return {
+          id: `replicate_null_${Date.now()}`,
+          status: 'failed',
+          error: 'Replicate returned null response'
+        }
+      }
+
+      // Handle the response with more robust checking
+      if (completedPrediction.status === 'succeeded' && completedPrediction.output) {
+        const imageUrl = Array.isArray(completedPrediction.output) ? String(completedPrediction.output[0]) : String(completedPrediction.output)
+        
+        console.log('✅ Generation succeeded, image URL:', imageUrl)
+        
+        return {
+          id: String(completedPrediction.id || `success_${Date.now()}`),
+          status: 'completed',
+          images: [{
+            url: imageUrl as string,
+            width,
+            height
+          }]
+        }
+      } else if (completedPrediction.status === 'failed') {
+        console.error('❌ Generation failed:', completedPrediction.error)
+        return {
+          id: String(completedPrediction.id || `failed_${Date.now()}`),
+          status: 'failed',
+          error: String(completedPrediction.error) || 'Replicate trained model generation failed'
+        }
+      } else if (completedPrediction.status === 'processing' || completedPrediction.status === 'starting') {
+        console.log('⏳ Generation still processing')
+        return {
+          id: String(completedPrediction.id || `processing_${Date.now()}`),
+          status: 'processing'
+        }
+      } else {
+        // Handle unexpected status or missing status
+        console.error('❌ Unexpected prediction status or structure:', {
+          status: completedPrediction.status,
+          hasId: !!completedPrediction.id,
+          hasOutput: !!completedPrediction.output,
+          hasError: !!completedPrediction.error
+        })
+        
+        return {
+          id: String(completedPrediction.id || `unknown_${Date.now()}`),
+          status: 'failed',
+          error: `Unexpected response status: ${completedPrediction.status || 'undefined'}`
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Replicate trained model generation error:', error)
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined
+      })
+      
+      return {
+        id: `replicate_trained_err_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Replicate trained model generation failed'
+      }
+    }
+  }
+
+  /**
+   * Generate image with LoRA using Replicate
+   */
+  async generateWithLoRA(params: {
+    prompt: string
+    loraPath: string  // HuggingFace repository path
+    loraScale?: number
+    triggerWord?: string
+    width?: number
+    height?: number
+    steps?: number
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '3:4' | '4:3'
+    seed?: number
+  }): Promise<ReplicateGenerationResponse> {
+    try {
+      console.log('🎨 Starting Replicate LoRA generation:', {
+        prompt: params.prompt,
+        loraPath: params.loraPath,
+        triggerWord: params.triggerWord
+      })
+
+      // Build the enhanced prompt with trigger word
+      let enhancedPrompt = params.prompt
+      if (params.triggerWord && !params.prompt.toLowerCase().includes(params.triggerWord.toLowerCase())) {
+        enhancedPrompt = `${params.triggerWord}, ${params.prompt}`
+      }
+
+      // Calculate dimensions based on aspect ratio
+      const dimensions = this.getDimensions(params.aspectRatio)
+      const width = params.width || dimensions.width
+      const height = params.height || dimensions.height
+
+      // Format LoRA path for Replicate (expects HuggingFace format)
+      const formattedLoraPath = params.loraPath.startsWith('https://huggingface.co/') 
+        ? params.loraPath 
+        : `https://huggingface.co/${params.loraPath}`
+
+      console.log('🔧 Replicate generation parameters:', {
+        prompt: enhancedPrompt,
+        lora_url: formattedLoraPath,
+        lora_scale: params.loraScale || 1.0,
+        width,
+        height,
+        num_inference_steps: params.steps || 28,
+        seed: params.seed
+      })
+
+      // Run the prediction using black-forest-labs/flux-dev-lora
+      const prediction = await this.client.run(
+        "black-forest-labs/flux-dev-lora",
+        {
+          input: {
+            prompt: enhancedPrompt,
+            lora_url: formattedLoraPath,
+            lora_scale: params.loraScale || 1.0,
+            width,
+            height,
+            num_inference_steps: params.steps || 28,
+            seed: params.seed,
+            go_fast: true, // Use optimized inference
+            guidance_scale: 3.5,
+            num_outputs: 1,
+            output_format: "webp",
+            output_quality: 90
+          }
+        }
+      ) as any
+
+      console.log('🎨 Replicate generation completed:', {
+        id: prediction.id,
+        status: prediction.status,
+        hasOutput: !!prediction.output
+      })
+
+      // Handle the response
+      if (prediction.status === 'succeeded' && prediction.output) {
+        const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+        
+        return {
+          id: String(prediction.id),
+          status: 'completed',
+          images: [{
+            url: imageUrl,
+            width,
+            height
+          }]
+        }
+      } else if (prediction.status === 'failed') {
+        return {
+          id: String(prediction.id),
+          status: 'failed',
+          error: prediction.error || 'Replicate generation failed'
+        }
+      } else {
+        return {
+          id: String(prediction.id),
+          status: 'processing'
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Replicate LoRA generation error:', error)
+      return {
+        id: `replicate_err_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Replicate generation failed'
+      }
+    }
+  }
+
+  /**
+   * Get dimensions based on aspect ratio
+   */
+  private getDimensions(aspectRatio?: string): { width: number; height: number } {
+    switch (aspectRatio) {
+      case '16:9':
+        return { width: 1344, height: 768 }
+      case '9:16':
+        return { width: 768, height: 1344 }
+      case '3:4':
+        return { width: 896, height: 1152 }
+      case '4:3':
+        return { width: 1152, height: 896 }
+      case '1:1':
+      default:
+        return { width: 1024, height: 1024 }
     }
   }
 

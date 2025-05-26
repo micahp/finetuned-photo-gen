@@ -1,4 +1,4 @@
-import { TogetherAIService } from './together-ai'
+import { ReplicateService } from './replicate-service'
 
 export interface ModelValidationResult {
   isValid: boolean
@@ -8,10 +8,10 @@ export interface ModelValidationResult {
 }
 
 export class ModelValidationService {
-  private togetherService: TogetherAIService
+  private replicateService: ReplicateService
 
   constructor() {
-    this.togetherService = new TogetherAIService()
+    this.replicateService = new ReplicateService()
   }
 
   /**
@@ -22,7 +22,7 @@ export class ModelValidationService {
       console.log(`🔍 Validating LoRA model: ${huggingfaceRepo}`)
       
       // Attempt a minimal generation to test if the model loads
-      const result = await this.togetherService.generateWithLoRA({
+      const result = await this.replicateService.generateWithLoRA({
         prompt: "test",
         loraPath: huggingfaceRepo,
         width: 512,

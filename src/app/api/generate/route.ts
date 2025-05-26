@@ -3,6 +3,7 @@ import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { TogetherAIService } from '@/lib/together-ai'
+import { ReplicateService } from '@/lib/replicate-service'
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           status: 'ready',
           loraReadyForInference: true,
-          huggingfaceRepo: { not: null }
+          replicateModelId: { not: null }
         }
       })
 
@@ -74,12 +75,19 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      if (!selectedUserModel.huggingfaceRepo) {
+      if (!selectedUserModel.replicateModelId) {
         return NextResponse.json(
-          { error: 'Custom model does not have a HuggingFace repository configured' },
+          { error: 'Custom model does not have a Replicate model configured' },
           { status: 400 }
         )
       }
+
+      console.log('✅ Custom model selected for generation:', {
+        modelId: selectedUserModel.id,
+        name: selectedUserModel.name,
+        status: selectedUserModel.status,
+        loraReady: selectedUserModel.loraReadyForInference
+      })
     }
 
     // Build full prompt with style
@@ -92,19 +100,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate image - use LoRA if custom model is selected
+    // Generate image - use Replicate for custom models, Together AI for base models
     let result
     if (selectedUserModel) {
-      // Use LoRA generation with HuggingFace repository
-      result = await together.generateWithLoRA({
+      console.log('🎯 Generating with custom model via Replicate:', {
+        modelId: selectedUserModel.id,
+        modelName: selectedUserModel.name,
+        replicateModelId: selectedUserModel.replicateModelId,
+        triggerWord: selectedUserModel.triggerWord,
         prompt: fullPrompt,
-        loraPath: selectedUserModel.huggingfaceRepo,
+        steps: steps || 28
+      })
+
+      // Use Replicate for generation with trained model directly
+      const replicate = new ReplicateService()
+      result = await replicate.generateWithTrainedModel({
+        prompt: fullPrompt,
+        replicateModelId: selectedUserModel.replicateModelId,
         triggerWord: selectedUserModel.triggerWord,
         aspectRatio,
         steps: steps || 28, // Use more steps for LoRA by default
         seed
       })
     } else {
+      console.log('🎯 Generating with base model:', {
+        model: modelId || 'black-forest-labs/FLUX.1-schnell-Free',
+        prompt: fullPrompt,
+        steps
+      })
+
       // Use base model generation
       result = await together.generateImage({
         prompt: fullPrompt,
@@ -115,44 +139,29 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Enhanced logging for debugging generation results
+    console.log('🔍 Generation result details:', {
+      status: result.status,
+      hasImages: !!result.images,
+      imageCount: result.images?.length || 0,
+      error: result.error,
+      resultKeys: Object.keys(result),
+      firstImageUrl: result.images?.[0]?.url
+    })
+
     if (result.status === 'failed') {
-      // Check if this is a corruption error for a custom model
-      if (selectedUserModel && result.error) {
-        const errorMessage = result.error.toLowerCase()
-        
-        // Check for various corruption indicators
-        const isCorruptionError = 
-          errorMessage.includes('headertoolarge') || 
-          errorMessage.includes('header too large') ||
-          errorMessage.includes('corrupted') ||
-          errorMessage.includes('invalid safetensors') ||
-          errorMessage.includes('error while deserializing header') ||
-          errorMessage.includes('lora model file appears to be corrupted') ||
-          errorMessage.includes('safetensors file was generated incorrectly') ||
-          errorMessage.includes('incompatible') ||
-          errorMessage.includes('malformed')
-        
-        if (isCorruptionError) {
-          // Mark the model as corrupted in the database
-          try {
-            await prisma.userModel.update({
-              where: { id: selectedUserModel.id },
-              data: {
-                validationStatus: 'invalid',
-                validationErrorType: 'corrupted_safetensors',
-                validationError: result.error,
-                lastValidationCheck: new Date()
-              }
-            })
-          } catch (dbError) {
-            console.error('Failed to update model corruption status:', dbError)
-          }
-        }
-      }
-      
+      console.error('❌ Generation failed:', result.error)
       return NextResponse.json(
         { error: result.error || 'Generation failed' },
         { status: 500 }
+      )
+    }
+
+    if (result.status === 'processing') {
+      console.log('⏳ Generation still processing')
+      return NextResponse.json(
+        { error: 'Generation is still processing. Please try again in a moment.' },
+        { status: 202 }
       )
     }
 
@@ -172,7 +181,8 @@ export async function POST(request: NextRequest) {
           prompt: fullPrompt,
           imageUrl: result.images[0].url,
           generationParams: {
-            model: selectedUserModel ? 'black-forest-labs/FLUX.1-dev-lora' : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
+            model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
+            provider: selectedUserModel ? 'replicate' : 'together-ai',
             aspectRatio,
             steps: selectedUserModel ? (steps || 28) : steps,
             seed,
@@ -180,7 +190,7 @@ export async function POST(request: NextRequest) {
             userModel: selectedUserModel ? {
               id: selectedUserModel.id,
               name: selectedUserModel.name,
-              huggingfaceRepo: selectedUserModel.huggingfaceRepo,
+              replicateModelId: selectedUserModel.replicateModelId,
               triggerWord: selectedUserModel.triggerWord
             } : undefined
           },
@@ -206,15 +216,42 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // If we reach here, something unexpected happened
+    console.error('❌ Unexpected generation result:', {
+      status: result.status,
+      hasImages: !!result.images,
+      imageCount: result.images?.length || 0,
+      error: result.error,
+      fullResult: result
+    })
+
     return NextResponse.json(
-      { error: 'Generation incomplete' },
+      { 
+        error: 'Generation incomplete', 
+        details: `Status: ${result.status}, Images: ${result.images?.length || 0}`,
+        debug: {
+          status: result.status,
+          hasImages: !!result.images,
+          imageCount: result.images?.length || 0,
+          error: result.error
+        }
+      },
       { status: 500 }
     )
 
   } catch (error) {
-    console.error('Generation API error:', error)
+    console.error('❌ Generation API error:', error)
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined
+    })
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }

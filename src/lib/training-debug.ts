@@ -7,6 +7,8 @@ export enum TrainingStage {
   HUGGINGFACE_DOWNLOAD = 'huggingface_download',
   HUGGINGFACE_UPLOAD = 'huggingface_upload',
   HUGGINGFACE_METADATA = 'huggingface_metadata',
+  TOGETHER_UPLOAD = 'together_upload',
+  TOGETHER_DEPLOY = 'together_deploy',
   COMPLETION = 'completion'
 }
 

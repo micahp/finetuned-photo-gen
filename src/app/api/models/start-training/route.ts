@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
           externalTrainingId: trainingResult.trainingId,
           externalTrainingService: 'replicate',
           trainingZipFilename: trainingResult.zipFilename, // Store zip filename for cleanup
+          replicateModelId: trainingResult.destinationModelId, // Store destination model ID
         }
       })
 

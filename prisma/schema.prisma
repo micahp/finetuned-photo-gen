@@ -50,6 +50,7 @@ model UserModel {
   externalTrainingId     String?   @map("external_training_id") // Replicate training ID
   externalTrainingService String?  @map("external_training_service") // 'replicate', 'runpod', etc.
   trainingZipFilename    String?   @map("training_zip_filename") // ZIP filename in R2 for cleanup tracking
+  replicateModelId       String?   @map("replicate_model_id") // Replicate destination model ID (e.g., "micahp/flux-lora-xyz")
   huggingfaceRepo        String?   @map("huggingface_repo") // HuggingFace repository path
   huggingfaceStatus      String?   @map("huggingface_status") // 'uploading', 'ready', 'failed'
   loraReadyForInference  Boolean   @default(false) @map("lora_ready_for_inference")
@@ -57,7 +58,6 @@ model UserModel {
   // Model validation fields
   validationStatus       String?   @default("unknown") @map("validation_status") // 'valid', 'invalid', 'unknown', 'checking'
   validationError        String?   @map("validation_error") // Error message if validation failed
-  validationErrorType    String?   @map("validation_error_type") // 'corrupted_safetensors', 'model_not_found', etc.
   lastValidationCheck    DateTime? @map("last_validation_check") // When was the model last validated
   
   createdAt              DateTime  @default(now()) @map("created_at")
