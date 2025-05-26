@@ -261,7 +261,6 @@ export async function GET(
     let validationInfo = {
       validationStatus: null,
       validationError: null,
-      validationErrorType: null,
       lastValidationCheck: null
     }
     
@@ -272,7 +271,6 @@ export async function GET(
           huggingfaceRepo: true,
           validationStatus: true,
           validationError: true,
-          validationErrorType: true,
           lastValidationCheck: true
         }
       })
@@ -282,7 +280,6 @@ export async function GET(
         validationInfo = {
           validationStatus: userModel.validationStatus,
           validationError: userModel.validationError,
-          validationErrorType: userModel.validationErrorType,
           lastValidationCheck: userModel.lastValidationCheck?.toISOString() || null
         }
       }
@@ -293,7 +290,6 @@ export async function GET(
         select: {
           validationStatus: true,
           validationError: true,
-          validationErrorType: true,
           lastValidationCheck: true
         }
       })
@@ -302,7 +298,6 @@ export async function GET(
         validationInfo = {
           validationStatus: userModel.validationStatus,
           validationError: userModel.validationError,
-          validationErrorType: userModel.validationErrorType,
           lastValidationCheck: userModel.lastValidationCheck?.toISOString() || null
         }
       }
@@ -337,7 +332,6 @@ export async function GET(
       },
       validationStatus: validationInfo.validationStatus,
       validationError: validationInfo.validationError,
-      validationErrorType: validationInfo.validationErrorType,
       lastValidationCheck: validationInfo.lastValidationCheck
     }
 

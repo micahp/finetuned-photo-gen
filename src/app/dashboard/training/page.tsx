@@ -48,10 +48,10 @@ interface TrainingJob {
     loraRank: number
     baseModel: string
   }
-  validationStatus?: string | null
-  validationError?: string | null
-  validationErrorType?: string | null
-  lastValidationCheck?: string | null
+  // validationStatus?: string | null
+  // validationError?: string | null
+  // validationErrorType?: string | null
+  // lastValidationCheck?: string | null
 }
 
 interface FilterState {
@@ -59,6 +59,48 @@ interface FilterState {
   status: string
   dateRange: string
   sortBy: string
+}
+
+const LEGACY_CORRUPTION_MESSAGES = [
+  "Model corruption detected",
+  "corrupted_safetensors",
+  "HeaderTooLarge"
+];
+
+function getSanitizedJobTexts(job: TrainingJob): { sanitizedStage: string; sanitizedError?: string } {
+  let sanitizedStage = job.debugData?.logProgress?.stageDescription || job.stage || '';
+  let sanitizedError = job.error;
+
+  const isLegacyCorruptionError = job.error && LEGACY_CORRUPTION_MESSAGES.some(msg => job.error!.includes(msg));
+
+  // Sanitize Stage
+  if (sanitizedStage === "Training completed - Model corrupted during generation") {
+    if (job.status === 'completed' && job.huggingFaceRepo) {
+      sanitizedStage = "Training completed";
+    } else {
+      // If failed or completed without HF repo, it's a genuine failure.
+      // We can use the status label or a generic failed message.
+      // For now, let's use a generic "Training failed". The status icon/color will also indicate this.
+      sanitizedStage = "Training failed";
+    }
+  }
+
+  // Sanitize Error
+  if (isLegacyCorruptionError) {
+    if (job.status === 'completed' && job.huggingFaceRepo) {
+      // Suppress legacy corruption error if job is otherwise complete and uploaded
+      sanitizedError = undefined;
+    }
+    // If status is 'failed' or 'completed' but no HF repo, the error (even if legacy corruption)
+    // might be the only indicator of what went wrong. In this case, we should probably still show it,
+    // or perhaps a more generic message. For now, let's let it show.
+    // If we want to be more aggressive:
+    // else {
+    //   sanitizedError = "Training failed. Please check logs for details.";
+    // }
+  }
+
+  return { sanitizedStage, sanitizedError };
 }
 
 const statusConfig = {
@@ -418,6 +460,8 @@ export default function TrainingPage() {
             const statusIcon = getStatusIcon(job.status)
             const StatusIcon = statusIcon.icon
 
+            const { sanitizedStage, sanitizedError } = getSanitizedJobTexts(job)
+
             return (
               <Card key={job.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
@@ -435,11 +479,6 @@ export default function TrainingPage() {
                           <Badge variant="outline" className={cn("", statusIcon.textColor)}>
                             {statusIcon.label}
                           </Badge>
-                          {job.validationStatus === 'invalid' && job.validationErrorType === 'corrupted_safetensors' && (
-                            <Badge variant="destructive" className="text-xs">
-                              Corrupted
-                            </Badge>
-                          )}
                           {job.huggingFaceRepo && (
                             <Badge variant="secondary">
                               <a 
@@ -455,8 +494,7 @@ export default function TrainingPage() {
                         </div>
                         
                         <p className="text-sm text-gray-600 mt-1">
-                          {/* Use parsed log progress for better stage descriptions */}
-                          {job.debugData?.logProgress?.stageDescription || job.stage}
+                          {sanitizedStage}
                           {job.debugData?.logProgress?.currentStep && job.debugData?.logProgress?.totalSteps && (
                             <span className="text-xs text-gray-500 ml-2">
                               ({job.debugData.logProgress.currentStep}/{job.debugData.logProgress.totalSteps} steps)
@@ -499,11 +537,11 @@ export default function TrainingPage() {
                         )}
 
                         {/* Error Display */}
-                        {job.error && (
+                        {sanitizedError && (
                           <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
                             <div className="flex items-center">
                               <AlertTriangle className="h-4 w-4 text-red-600 mr-2" />
-                              <span className="text-sm text-red-700">{job.error}</span>
+                              <span className="text-sm text-red-700">{sanitizedError}</span>
                             </div>
                           </div>
                         )}

@@ -80,6 +80,13 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
+
+      console.log('✅ Custom model selected for generation:', {
+        modelId: selectedUserModel.id,
+        name: selectedUserModel.name,
+        status: selectedUserModel.status,
+        loraReady: selectedUserModel.loraReadyForInference
+      })
     }
 
     // Build full prompt with style
@@ -95,6 +102,15 @@ export async function POST(request: NextRequest) {
     // Generate image - use LoRA if custom model is selected
     let result
     if (selectedUserModel) {
+      console.log('🎯 Generating with custom model:', {
+        modelId: selectedUserModel.id,
+        modelName: selectedUserModel.name,
+        huggingfaceRepo: selectedUserModel.huggingfaceRepo,
+        triggerWord: selectedUserModel.triggerWord,
+        prompt: fullPrompt,
+        steps: steps || 28
+      })
+
       // Use LoRA generation with HuggingFace repository
       result = await together.generateWithLoRA({
         prompt: fullPrompt,
@@ -102,9 +118,16 @@ export async function POST(request: NextRequest) {
         triggerWord: selectedUserModel.triggerWord,
         aspectRatio,
         steps: steps || 28, // Use more steps for LoRA by default
-        seed
+        seed,
+        useTogetherModel: false // This is a HuggingFace model
       })
     } else {
+      console.log('🎯 Generating with base model:', {
+        model: modelId || 'black-forest-labs/FLUX.1-schnell-Free',
+        prompt: fullPrompt,
+        steps
+      })
+
       // Use base model generation
       result = await together.generateImage({
         prompt: fullPrompt,
@@ -116,40 +139,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (result.status === 'failed') {
-      // Check if this is a corruption error for a custom model
-      if (selectedUserModel && result.error) {
-        const errorMessage = result.error.toLowerCase()
-        
-        // Check for various corruption indicators
-        const isCorruptionError = 
-          errorMessage.includes('headertoolarge') || 
-          errorMessage.includes('header too large') ||
-          errorMessage.includes('corrupted') ||
-          errorMessage.includes('invalid safetensors') ||
-          errorMessage.includes('error while deserializing header') ||
-          errorMessage.includes('lora model file appears to be corrupted') ||
-          errorMessage.includes('safetensors file was generated incorrectly') ||
-          errorMessage.includes('incompatible') ||
-          errorMessage.includes('malformed')
-        
-        if (isCorruptionError) {
-          // Mark the model as corrupted in the database
-          try {
-            await prisma.userModel.update({
-              where: { id: selectedUserModel.id },
-              data: {
-                validationStatus: 'invalid',
-                validationErrorType: 'corrupted_safetensors',
-                validationError: result.error,
-                lastValidationCheck: new Date()
-              }
-            })
-          } catch (dbError) {
-            console.error('Failed to update model corruption status:', dbError)
-          }
-        }
-      }
-      
       return NextResponse.json(
         { error: result.error || 'Generation failed' },
         { status: 500 }

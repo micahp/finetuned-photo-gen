@@ -74,6 +74,50 @@ interface BatchGenerateResponse {
   totalCount: number
 }
 
+// Together.ai custom model upload interfaces
+interface TogetherModelUploadParams {
+  modelName: string
+  modelSource: string  // HuggingFace repo or S3 URL
+  description?: string
+  hfToken?: string  // Required for HuggingFace uploads
+}
+
+interface TogetherModelUploadResponse {
+  jobId: string
+  modelId: string
+  modelName: string
+  status: 'processing' | 'completed' | 'failed'
+  error?: string
+}
+
+interface TogetherModelDeployParams {
+  modelId: string
+  endpointName?: string
+  instanceType?: string
+  minInstances?: number
+  maxInstances?: number
+}
+
+interface TogetherModelDeployResponse {
+  endpointId: string
+  endpointName: string
+  status: 'deploying' | 'ready' | 'failed'
+  modelId: string
+  error?: string
+}
+
+interface TogetherJobStatus {
+  jobId: string
+  type: 'model_upload' | 'model_deploy'
+  status: 'Queued' | 'Running' | 'Complete' | 'Failed'
+  statusUpdates: Array<{
+    status: string
+    message: string
+    timestamp: string
+  }>
+  error?: string
+}
+
 export class TogetherAIService {
   private apiKey: string
   private baseUrl = 'https://api.together.xyz/v1'
@@ -139,9 +183,11 @@ export class TogetherAIService {
         const errorData = await response.json().catch(() => ({}))
         let errorMessage = errorData.error?.message || `API request failed: ${response.status}`
         
-        // Provide more helpful error messages for common issues
+        // We no longer override specific errors like HeaderTooLarge with custom "corruption" messages.
+        // Let the original error from the service pass through.
         if (errorMessage.includes('HeaderTooLarge') || errorMessage.includes('Error while deserializing header')) {
-          errorMessage = `The LoRA model file appears to be corrupted or incompatible. This usually happens when the safetensors file was generated incorrectly during training. Please re-train the model or check the file integrity.`
+          // Potentially log that a known "bad header" error occurred for internal tracking
+          console.warn(`Together AI returned an error indicative of model header issues: ${errorMessage}`);
         }
         
         return {
@@ -174,10 +220,142 @@ export class TogetherAIService {
     }
   }
 
-  // Convenience method for generating with LoRA models
+  // Upload custom model to Together.ai platform
+  async uploadCustomModel(params: TogetherModelUploadParams): Promise<TogetherModelUploadResponse> {
+    try {
+      const requestBody: any = {
+        model_name: params.modelName,
+        model_source: params.modelSource,
+        description: params.description || `Custom model: ${params.modelName}`
+      }
+
+      // Add HuggingFace token if provided
+      if (params.hfToken) {
+        requestBody.hf_token = params.hfToken
+      }
+
+      const response = await fetch(`${this.baseUrl}/models`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error?.message || `Model upload failed: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      return {
+        jobId: data.data.job_id,
+        modelId: data.data.model_id,
+        modelName: data.data.model_name,
+        status: 'processing'
+      }
+
+    } catch (error) {
+      console.error('Together AI model upload error:', error)
+      return {
+        jobId: '',
+        modelId: '',
+        modelName: params.modelName,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Upload failed'
+      }
+    }
+  }
+
+  // Check job status (upload or deployment)
+  async getJobStatus(jobId: string): Promise<TogetherJobStatus> {
+    try {
+      const response = await fetch(`${this.baseUrl}/jobs/${jobId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Job status check failed: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      return {
+        jobId: data.job_id,
+        type: data.type,
+        status: data.status,
+        statusUpdates: data.status_updates || [],
+        error: data.status === 'Failed' ? 'Job failed' : undefined
+      }
+
+    } catch (error) {
+      console.error('Together AI job status check error:', error)
+      return {
+        jobId,
+        type: 'model_upload',
+        status: 'Failed',
+        statusUpdates: [],
+        error: error instanceof Error ? error.message : 'Status check failed'
+      }
+    }
+  }
+
+  // Deploy uploaded model as dedicated endpoint
+  async deployModel(params: TogetherModelDeployParams): Promise<TogetherModelDeployResponse> {
+    try {
+      const requestBody = {
+        model_id: params.modelId,
+        endpoint_name: params.endpointName || `endpoint-${params.modelId}`,
+        instance_type: params.instanceType || 'gpu-small',
+        min_instances: params.minInstances || 1,
+        max_instances: params.maxInstances || 1
+      }
+
+      const response = await fetch(`${this.baseUrl}/endpoints`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error?.message || `Model deployment failed: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      return {
+        endpointId: data.endpoint_id,
+        endpointName: data.endpoint_name,
+        status: 'deploying',
+        modelId: params.modelId
+      }
+
+    } catch (error) {
+      console.error('Together AI model deployment error:', error)
+      return {
+        endpointId: '',
+        endpointName: '',
+        status: 'failed',
+        modelId: params.modelId,
+        error: error instanceof Error ? error.message : 'Deployment failed'
+      }
+    }
+  }
+
+  // Enhanced generateWithLoRA that supports both HuggingFace and Together.ai custom models
   async generateWithLoRA(params: {
     prompt: string
-    loraPath: string  // HuggingFace repository path
+    loraPath: string  // HuggingFace repository path OR Together.ai model ID
     loraScale?: number
     triggerWord?: string
     width?: number
@@ -185,32 +363,88 @@ export class TogetherAIService {
     steps?: number
     aspectRatio?: '1:1' | '16:9' | '9:16' | '3:4' | '4:3'
     seed?: number
+    useTogetherModel?: boolean  // Flag to indicate if this is a Together.ai custom model
   }): Promise<GenerateImageResponse> {
-    // Enhance prompt with trigger word if provided
-    const enhancedPrompt = params.triggerWord 
-      ? `${params.triggerWord} ${params.prompt}`
-      : params.prompt
+    try {
+      console.log('🎯 LoRA Generation Request:', {
+        originalPrompt: params.prompt,
+        loraPath: params.loraPath,
+        triggerWord: params.triggerWord,
+        useTogetherModel: params.useTogetherModel
+      })
 
-    // Format the LoRA path as a full HuggingFace URL if it's just a repository path
-    let formattedLoraPath = params.loraPath
-    if (!params.loraPath.startsWith('http') && !params.loraPath.includes('huggingface.co')) {
-      // Together.AI accepts HuggingFace repository URLs directly
-      // Try the repository URL first as it's simpler and more reliable
-      formattedLoraPath = `https://huggingface.co/${params.loraPath}`
+      // Enhance prompt with trigger word if provided
+      const enhancedPrompt = params.triggerWord 
+        ? `${params.triggerWord}, ${params.prompt}`.replace(/^,\s*/, '').replace(/,\s*,/g, ',')
+        : params.prompt
+
+      console.log('✨ Enhanced prompt:', enhancedPrompt)
+
+      // Handle different model sources
+      let formattedLoraPath = params.loraPath;
+      
+      if (params.useTogetherModel) {
+        // For Together.ai custom models, use the model ID directly
+        formattedLoraPath = params.loraPath;
+        console.log('🔧 Using Together.ai custom model:', formattedLoraPath);
+      } else {
+        // For HuggingFace models, Together.ai API expects "huggingface.co/owner/repo"
+        if (params.loraPath.startsWith('https://huggingface.co/')) {
+          // Already a full URL, extract the relevant part "huggingface.co/owner/repo"
+          const parts = params.loraPath.split('/');
+          const hfIndex = parts.indexOf('huggingface.co');
+          if (hfIndex !== -1 && parts.length > hfIndex + 2) {
+            formattedLoraPath = `${parts[hfIndex]}/${parts[hfIndex + 1]}/${parts[hfIndex + 2]}`;
+          } else {
+            // Fallback or error if format is unexpected, but for now, try to use as is if it contains huggingface.co
+            formattedLoraPath = params.loraPath.includes('huggingface.co') ? params.loraPath : `huggingface.co/${params.loraPath}`;
+          }
+        } else if (params.loraPath.includes('/')) {
+          // Assumed to be in "owner/repo" format
+          formattedLoraPath = `huggingface.co/${params.loraPath}`;
+        } else {
+          // Should not happen if loraPath is always owner/repo or a URL
+          // As a fallback, assume it might be just a repo name missing owner, which is unlikely for HF
+          // For safety, prefixing, but this case needs review based on actual inputs
+          console.warn(`Unusual loraPath format for HuggingFace: ${params.loraPath}. Prefixing with huggingface.co/`);
+          formattedLoraPath = `huggingface.co/${params.loraPath}`;
+        }
+        // Remove trailing slash if present, as API might be sensitive
+        if (formattedLoraPath.endsWith('/')) {
+          formattedLoraPath = formattedLoraPath.slice(0, -1);
+        }
+        console.log('🤗 Using HuggingFace LoRA path for API:', formattedLoraPath);
+      }
+
+      const result = await this.generateImage({
+        prompt: enhancedPrompt,
+        width: params.width,
+        height: params.height,
+        steps: params.steps || 28, // Default to higher steps for LoRA
+        aspectRatio: params.aspectRatio,
+        seed: params.seed,
+        imageLoras: [{
+          path: formattedLoraPath,
+          scale: params.loraScale || 1.0
+        }]
+      })
+
+      console.log('🎨 LoRA Generation Result:', {
+        status: result.status,
+        hasImages: !!result.images?.length,
+        error: result.error
+      })
+
+      return result
+
+    } catch (error) {
+      console.error('❌ LoRA Generation Error:', error)
+      return {
+        id: `lora_err_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'LoRA generation failed'
+      }
     }
-
-    return this.generateImage({
-      prompt: enhancedPrompt,
-      width: params.width,
-      height: params.height,
-      steps: params.steps || 28, // Default to higher steps for LoRA
-      aspectRatio: params.aspectRatio,
-      seed: params.seed,
-      imageLoras: [{
-        path: formattedLoraPath,
-        scale: params.loraScale || 1.0
-      }]
-    })
   }
 
   // Train LoRA model using uploaded images

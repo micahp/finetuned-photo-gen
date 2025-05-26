@@ -35,10 +35,6 @@ interface Model {
   loraReadyForInference: boolean
   externalTrainingId?: string
   externalTrainingService?: string
-  validationStatus?: string
-  validationError?: string
-  validationErrorType?: string
-  lastValidationCheck?: string
   _count: {
     trainingImages: number
     generatedImages: number
@@ -201,34 +197,6 @@ export default function ModelsPage() {
         return <AlertCircle className="h-3 w-3" />
       default:
         return <Clock className="h-3 w-3" />
-    }
-  }
-
-  const getValidationStatusColor = (validationStatus?: string) => {
-    switch (validationStatus) {
-      case 'valid':
-        return 'bg-green-100 text-green-800 border-green-200'
-      case 'invalid':
-        return 'bg-red-100 text-red-800 border-red-200'
-      case 'checking':
-        return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'unknown':
-        return 'bg-gray-100 text-gray-800 border-gray-200'
-      default:
-        return 'bg-gray-100 text-gray-600 border-gray-200'
-    }
-  }
-
-  const getValidationStatusIcon = (validationStatus?: string) => {
-    switch (validationStatus) {
-      case 'valid':
-        return <span className="text-green-600">✓</span>
-      case 'invalid':
-        return <AlertCircle className="h-3 w-3 text-red-600" />
-      case 'checking':
-        return <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
-      default:
-        return <span className="text-gray-400">?</span>
     }
   }
 
@@ -446,19 +414,6 @@ export default function ModelsPage() {
                       </div>
                     )}
 
-                    {/* Model Corruption Status */}
-                    {model.status === 'ready' && model.validationStatus === 'invalid' && model.validationErrorType === 'corrupted_safetensors' && (
-                      <div className="mt-3 p-2 bg-red-50 rounded border border-red-200">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-red-600" />
-                          <span className="text-sm font-medium text-red-800">Model Corrupted</span>
-                        </div>
-                        <p className="text-xs text-red-600 mt-1">
-                          This model cannot be used for generation. The safetensors file is corrupted and needs to be regenerated.
-                        </p>
-                      </div>
-                    )}
-                    
                     {/* Action Buttons */}
                     <div className="flex gap-2 mt-4">
                       <Link href={`/dashboard/models/${model.id}`} className="flex-1">
@@ -466,7 +421,7 @@ export default function ModelsPage() {
                           View Details
                         </Button>
                       </Link>
-                      {model.status === 'ready' && model.loraReadyForInference && model.validationStatus !== 'invalid' && (
+                      {model.status === 'ready' && model.loraReadyForInference && (
                         <Link href={`/dashboard/generate?model=${model.id}`} className="flex-1">
                           <Button size="sm" className="w-full">
                             Generate

@@ -344,6 +344,7 @@ export class TrainingService {
         status: 'completed',
         progress: 100,
         stage: 'Training completed successfully and model uploaded to HuggingFace',
+        huggingFaceRepo: await this.checkForExistingHuggingFaceModel(trainingId, modelName),
         debugData: this.debugger.getDebugSummary()
       }
     }
@@ -466,9 +467,7 @@ export class TrainingService {
           }
         }
 
-        // Remove from ongoing uploads on failure
-        TrainingService.ongoingUploads.delete(trainingId)
-
+        // TrainingService.ongoingUploads.delete(trainingId); // Will be handled by finally
         const error = this.debugger.logError(
           TrainingStage.HUGGINGFACE_UPLOAD,
           new Error(errorMessage),
@@ -488,7 +487,7 @@ export class TrainingService {
 
       // Mark upload as completed and remove from ongoing
       TrainingService.completedUploads.add(trainingId)
-      TrainingService.ongoingUploads.delete(trainingId)
+      // TrainingService.ongoingUploads.delete(trainingId); // Will be handled by finally
 
       this.debugger.endStage(TrainingStage.HUGGINGFACE_UPLOAD, 'HuggingFace upload completed', {
         repoId: uploadResponse.repoId,
@@ -509,25 +508,32 @@ export class TrainingService {
       }
 
     } catch (error) {
-      // Remove from ongoing uploads on error
-      TrainingService.ongoingUploads.delete(trainingId)
-
+      // TrainingService.ongoingUploads.delete(trainingId); // Handled by finally
       const trainingError = this.debugger.logError(
         TrainingStage.HUGGINGFACE_UPLOAD,
         error,
-        'Failed to complete training workflow'
+        'Critical error during HuggingFace upload process',
+        { trainingId, modelName }
       )
-
-      console.error('Error handling training completion:', error)
-      
-      // Training succeeded but upload failed - be specific about this
+      console.error(`💥 Critical error in handleTrainingCompletion for ${trainingId}:`, error)
       return {
         id: trainingId,
-        status: 'uploading', // Changed from 'failed' to 'uploading' to trigger retry UI
-        progress: 90,
-        stage: 'Training completed successfully, but HuggingFace upload failed',
-        error: `Model training completed successfully, but failed to upload to HuggingFace: ${error instanceof Error ? error.message : 'Upload failed'}`,
-        debugData: this.debugger.getDebugSummary()
+        status: 'uploading', // Keep as 'uploading' to allow retry via UI
+        progress: 90, // Indicate progress, but not complete
+        stage: 'Training completed, but HuggingFace upload encountered a critical error.',
+        error: `Upload error: ${trainingError?.message || (error instanceof Error ? error.message : 'Unknown critical upload error')}`,
+        debugData: this.debugger.getDebugSummary(),
+      }
+    } finally {
+      // Ensure the trainingId is removed from ongoingUploads if the process
+      // didn't successfully complete and add it to completedUploads.
+      if (TrainingService.ongoingUploads.has(trainingId) && !TrainingService.completedUploads.has(trainingId)) {
+        console.log(`🧹 FINALLY CLEANUP (unsuccessful/error): Removing ${trainingId} from ongoingUploads.`);
+        TrainingService.ongoingUploads.delete(trainingId);
+      } else if (TrainingService.completedUploads.has(trainingId) && TrainingService.ongoingUploads.has(trainingId)) {
+        // This case handles if it was completed but somehow not yet removed from ongoing (e.g. error after completion add but before delete)
+        console.log(`🧹 FINALLY CLEANUP (successful completion): Removing ${trainingId} from ongoingUploads as it's in completedUploads.`);
+        TrainingService.ongoingUploads.delete(trainingId);
       }
     }
   }

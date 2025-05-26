@@ -57,7 +57,6 @@ model UserModel {
   // Model validation fields
   validationStatus       String?   @default("unknown") @map("validation_status") // 'valid', 'invalid', 'unknown', 'checking'
   validationError        String?   @map("validation_error") // Error message if validation failed
-  validationErrorType    String?   @map("validation_error_type") // 'corrupted_safetensors', 'model_not_found', etc.
   lastValidationCheck    DateTime? @map("last_validation_check") // When was the model last validated
   
   createdAt              DateTime  @default(now()) @map("created_at")

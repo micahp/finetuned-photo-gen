@@ -57,7 +57,6 @@ interface TrainingJob {
   }
   validationStatus?: string | null
   validationError?: string | null
-  validationErrorType?: string | null
   lastValidationCheck?: string | null
 }
 
@@ -470,11 +469,6 @@ export default function TrainingDetailsPage() {
                 <h1 className="text-3xl font-bold text-gray-900">{trainingJob.modelName}</h1>
                 <p className="text-gray-600">{trainingJob.stage}</p>
               </div>
-              {trainingJob.validationStatus === 'invalid' && trainingJob.validationErrorType === 'corrupted_safetensors' && (
-                <Badge variant="destructive" className="ml-3">
-                  Corrupted
-                </Badge>
-              )}
             </div>
           </div>
 
@@ -497,48 +491,6 @@ export default function TrainingDetailsPage() {
           </div>
         </div>
       </div>
-
-      {/* Corruption Warning */}
-      {trainingJob.validationStatus === 'invalid' && trainingJob.validationErrorType === 'corrupted_safetensors' && (
-        <Card className="mb-8 border-orange-200 bg-orange-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-orange-800">
-              <AlertTriangle className="h-5 w-5" />
-              Model Corrupted During Generation
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <p className="text-orange-700">
-                Training completed successfully and the model was uploaded to HuggingFace, but corruption was detected when attempting to use the model for image generation. 
-                This model has been automatically disabled and cannot be used until the issue is resolved.
-              </p>
-              
-              {trainingJob.validationError && (
-                <div className="p-3 bg-orange-100 rounded border border-orange-200">
-                  <p className="text-sm font-medium text-orange-800 mb-2">Error Details:</p>
-                  <p className="text-sm font-mono text-orange-700 break-all">
-                    {trainingJob.validationError}
-                  </p>
-                </div>
-              )}
-              
-              <div className="text-sm text-orange-600">
-                <p className="font-medium mb-1">Possible causes:</p>
-                <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li>Safetensors file was corrupted during the training process</li>
-                  <li>Upload to HuggingFace was interrupted or incomplete</li>
-                  <li>Model architecture incompatibility with Together.AI</li>
-                </ul>
-              </div>
-              
-              <div className="text-sm text-orange-600">
-                <p className="font-medium">Recommended action: Re-train the model with the same settings.</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Status Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -734,7 +686,7 @@ export default function TrainingDetailsPage() {
             </Card>
 
             {/* Error Information (if failed) */}
-            {trainingJob.error && !(trainingJob.validationStatus === 'invalid' && trainingJob.validationErrorType === 'corrupted_safetensors') && (
+            {trainingJob.error && (
               <Card className="border-red-200 bg-gradient-to-br from-red-50 to-red-100/50">
                 <CardHeader className="pb-4">
                   <div className="flex items-center space-x-3">
