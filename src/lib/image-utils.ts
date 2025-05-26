@@ -3,11 +3,39 @@
  */
 
 /**
+<<<<<<< HEAD
  * Convert external image URLs to use our proxy to prevent ORB errors
  * UPDATE: This function now returns the original URL directly as the proxy is being removed.
  */
 export function getProxiedImageUrl(imageUrl: string): string {
   return imageUrl;
+=======
+ * Check if a URL is external (not from our domain)
+ */
+export function isExternalUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url)
+    // Check if it's a different domain than our app
+    return !urlObj.hostname.includes('localhost') && 
+           !urlObj.pathname.startsWith('/api/') &&
+           !urlObj.pathname.startsWith('/uploads/')
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Convert external image URLs to use our proxy to prevent ORB errors
+ */
+export function getProxiedImageUrl(imageUrl: string): string {
+  // If it's already a local URL, return as-is
+  if (!isExternalUrl(imageUrl)) {
+    return imageUrl
+  }
+
+  // Use our image proxy for external URLs
+  return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
+>>>>>>> main
 }
 
 /**
