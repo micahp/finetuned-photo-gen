@@ -58,11 +58,17 @@ export class ReplicateService {
       throw new Error('Replicate API token is required. Please set REPLICATE_API_TOKEN environment variable.')
     }
     
-    // console.log(`✅ Replicate API token loaded (${token.substring(0, 8)}...)`)
+    console.log(`✅ Replicate API token loaded (${token.substring(0, 8)}...)`)
     
-    this.client = new Replicate({
-      auth: token,
-    })
+    try {
+      this.client = new Replicate({
+        auth: token,
+      })
+      console.log('✅ Replicate client initialized successfully')
+    } catch (error) {
+      console.error('❌ Failed to initialize Replicate client:', error)
+      throw error
+    }
   }
 
   /**
@@ -256,6 +262,17 @@ export class ReplicateService {
       const width = params.width || dimensions.width
       const height = params.height || dimensions.height
 
+      // Validate model ID format
+      if (!params.replicateModelId || !params.replicateModelId.includes('/') || !params.replicateModelId.includes(':')) {
+        throw new Error(`Invalid Replicate model ID format: ${params.replicateModelId}. Expected format: owner/model:version`)
+      }
+
+      // Extract version from replicateModelId
+      const version = params.replicateModelId.split(':').pop()
+      if (!version) {
+        throw new Error(`Could not extract version from replicateModelId: ${params.replicateModelId}`)
+      }
+
       console.log('🔧 Replicate trained model parameters:', {
         prompt: enhancedPrompt,
         model: params.replicateModelId,
@@ -265,58 +282,111 @@ export class ReplicateService {
         seed: params.seed
       })
 
-      // Run the prediction using the trained model directly
-      const prediction = await this.client.run(
-        params.replicateModelId as `${string}/${string}`,
-        {
-          input: {
-            prompt: enhancedPrompt,
-            width,
-            height,
-            num_inference_steps: params.steps || 28,
-            seed: params.seed,
-            guidance_scale: 3.5,
-            num_outputs: 1,
-            output_format: "webp",
-            output_quality: 90
-          }
+      // Use predictions.create() to get full prediction object with status
+      console.log('📡 Creating Replicate prediction...')
+      const prediction = await this.client.predictions.create({
+        version: version, // Use extracted version ID here
+        input: {
+          prompt: enhancedPrompt,
+          width,
+          height,
+          num_inference_steps: params.steps || 28,
+          seed: params.seed,
+          guidance_scale: 3.5,
+          num_outputs: 1,
+          output_format: "webp",
+          output_quality: 90
         }
-      ) as any
+      })
+      console.log('📡 Replicate prediction created:', prediction.id)
 
-      console.log('🎨 Replicate trained model generation completed:', {
-        id: prediction.id,
-        status: prediction.status,
-        hasOutput: !!prediction.output
+      // Wait for the prediction to complete
+      console.log('⏳ Waiting for prediction to complete...')
+      const completedPrediction = await this.client.wait(prediction)
+      console.log('✅ Prediction completed with status:', completedPrediction.status)
+
+      // Enhanced logging to debug the response structure
+      console.log('🔍 FULL Replicate response structure:', {
+        prediction: completedPrediction,
+        predictionType: typeof completedPrediction,
+        predictionKeys: completedPrediction ? Object.keys(completedPrediction) : 'null',
+        id: completedPrediction?.id,
+        status: completedPrediction?.status,
+        output: completedPrediction?.output,
+        error: completedPrediction?.error,
+        urls: completedPrediction?.urls
       })
 
-      // Handle the response
-      if (prediction.status === 'succeeded' && prediction.output) {
-        const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+      console.log('🎨 Replicate trained model generation completed:', {
+        id: completedPrediction?.id,
+        status: completedPrediction?.status,
+        hasOutput: !!completedPrediction?.output,
+        outputType: typeof completedPrediction?.output,
+        outputLength: Array.isArray(completedPrediction?.output) ? completedPrediction.output.length : 'not array'
+      })
+
+      // Check if prediction is null or undefined
+      if (!completedPrediction) {
+        console.error('❌ Prediction is null or undefined')
+        return {
+          id: `replicate_null_${Date.now()}`,
+          status: 'failed',
+          error: 'Replicate returned null response'
+        }
+      }
+
+      // Handle the response with more robust checking
+      if (completedPrediction.status === 'succeeded' && completedPrediction.output) {
+        const imageUrl = Array.isArray(completedPrediction.output) ? String(completedPrediction.output[0]) : String(completedPrediction.output)
+        
+        console.log('✅ Generation succeeded, image URL:', imageUrl)
         
         return {
-          id: String(prediction.id),
+          id: String(completedPrediction.id || `success_${Date.now()}`),
           status: 'completed',
           images: [{
-            url: imageUrl,
+            url: imageUrl as string,
             width,
             height
           }]
         }
-      } else if (prediction.status === 'failed') {
+      } else if (completedPrediction.status === 'failed') {
+        console.error('❌ Generation failed:', completedPrediction.error)
         return {
-          id: String(prediction.id),
+          id: String(completedPrediction.id || `failed_${Date.now()}`),
           status: 'failed',
-          error: prediction.error || 'Replicate trained model generation failed'
+          error: String(completedPrediction.error) || 'Replicate trained model generation failed'
+        }
+      } else if (completedPrediction.status === 'processing' || completedPrediction.status === 'starting') {
+        console.log('⏳ Generation still processing')
+        return {
+          id: String(completedPrediction.id || `processing_${Date.now()}`),
+          status: 'processing'
         }
       } else {
+        // Handle unexpected status or missing status
+        console.error('❌ Unexpected prediction status or structure:', {
+          status: completedPrediction.status,
+          hasId: !!completedPrediction.id,
+          hasOutput: !!completedPrediction.output,
+          hasError: !!completedPrediction.error
+        })
+        
         return {
-          id: String(prediction.id),
-          status: 'processing'
+          id: String(completedPrediction.id || `unknown_${Date.now()}`),
+          status: 'failed',
+          error: `Unexpected response status: ${completedPrediction.status || 'undefined'}`
         }
       }
 
     } catch (error) {
       console.error('❌ Replicate trained model generation error:', error)
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined
+      })
+      
       return {
         id: `replicate_trained_err_${Date.now()}`,
         status: 'failed',

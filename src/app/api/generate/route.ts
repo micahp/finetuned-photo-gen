@@ -139,10 +139,29 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Enhanced logging for debugging generation results
+    console.log('🔍 Generation result details:', {
+      status: result.status,
+      hasImages: !!result.images,
+      imageCount: result.images?.length || 0,
+      error: result.error,
+      resultKeys: Object.keys(result),
+      firstImageUrl: result.images?.[0]?.url
+    })
+
     if (result.status === 'failed') {
+      console.error('❌ Generation failed:', result.error)
       return NextResponse.json(
         { error: result.error || 'Generation failed' },
         { status: 500 }
+      )
+    }
+
+    if (result.status === 'processing') {
+      console.log('⏳ Generation still processing')
+      return NextResponse.json(
+        { error: 'Generation is still processing. Please try again in a moment.' },
+        { status: 202 }
       )
     }
 
@@ -197,15 +216,42 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // If we reach here, something unexpected happened
+    console.error('❌ Unexpected generation result:', {
+      status: result.status,
+      hasImages: !!result.images,
+      imageCount: result.images?.length || 0,
+      error: result.error,
+      fullResult: result
+    })
+
     return NextResponse.json(
-      { error: 'Generation incomplete' },
+      { 
+        error: 'Generation incomplete', 
+        details: `Status: ${result.status}, Images: ${result.images?.length || 0}`,
+        debug: {
+          status: result.status,
+          hasImages: !!result.images,
+          imageCount: result.images?.length || 0,
+          error: result.error
+        }
+      },
       { status: 500 }
     )
 
   } catch (error) {
-    console.error('Generation API error:', error)
+    console.error('❌ Generation API error:', error)
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined
+    })
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }
