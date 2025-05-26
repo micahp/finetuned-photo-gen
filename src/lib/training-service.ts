@@ -60,7 +60,7 @@ export class TrainingService {
   /**
    * Start the complete LoRA training workflow with debugging
    */
-  async startTraining(params: StartTrainingParams, customTrainingId?: string): Promise<{ trainingId: string; zipFilename: string; status: TrainingStatus }> {
+  async startTraining(params: StartTrainingParams, customTrainingId?: string): Promise<{ trainingId: string; zipFilename: string; status: TrainingStatus; destinationModelId?: string }> {
     const trainingId = customTrainingId || `training_${Date.now()}_${Math.random().toString(36).substring(7)}`
     this.debugger = new TrainingDebugger(trainingId)
     
@@ -119,6 +119,7 @@ export class TrainingService {
       return {
         trainingId: replicateResponse.id, // Use 'id' property from response
         zipFilename: zipResult.zipFilename || '', // Include empty filename for failed cases
+        destinationModelId: replicateResponse.destinationModelId, // Include destination model ID
         status: {
           id: replicateResponse.id,
           status: mappedStatus,
@@ -144,6 +145,7 @@ export class TrainingService {
       return {
         trainingId: trainingId,
         zipFilename: '', // Empty filename for failed cases
+        destinationModelId: undefined, // No destination model for failed training
         status: errorStatus
       }
     }

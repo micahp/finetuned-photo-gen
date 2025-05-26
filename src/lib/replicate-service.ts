@@ -30,6 +30,18 @@ interface ReplicateTrainingResponse {
   output?: any
   logs?: string
   input?: any
+  destinationModelId?: string // The destination model ID created for training
+}
+
+interface ReplicateGenerationResponse {
+  id: string
+  status: 'completed' | 'failed' | 'processing'
+  images?: Array<{
+    url: string
+    width: number
+    height: number
+  }>
+  error?: string
 }
 
 export class ReplicateService {
@@ -154,6 +166,7 @@ export class ReplicateService {
         id: String(training.id),
         status: training.status as 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled',
         urls: training.urls,
+        destinationModelId: modelResult.modelId, // Include the destination model ID
       }
 
     } catch (error) {
@@ -209,6 +222,235 @@ export class ReplicateService {
         status: 'failed',
         error: error instanceof Error ? error.message : 'Failed to get status'
       }
+    }
+  }
+
+  /**
+   * Generate image with trained Replicate model directly
+   */
+  async generateWithTrainedModel(params: {
+    prompt: string
+    replicateModelId: string  // e.g., "micahp/flux-lora-xyz"
+    triggerWord?: string
+    width?: number
+    height?: number
+    steps?: number
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '3:4' | '4:3'
+    seed?: number
+  }): Promise<ReplicateGenerationResponse> {
+    try {
+      console.log('🎨 Starting Replicate trained model generation:', {
+        prompt: params.prompt,
+        replicateModelId: params.replicateModelId,
+        triggerWord: params.triggerWord
+      })
+
+      // Build the enhanced prompt with trigger word
+      let enhancedPrompt = params.prompt
+      if (params.triggerWord && !params.prompt.toLowerCase().includes(params.triggerWord.toLowerCase())) {
+        enhancedPrompt = `${params.triggerWord}, ${params.prompt}`
+      }
+
+      // Calculate dimensions based on aspect ratio
+      const dimensions = this.getDimensions(params.aspectRatio)
+      const width = params.width || dimensions.width
+      const height = params.height || dimensions.height
+
+      console.log('🔧 Replicate trained model parameters:', {
+        prompt: enhancedPrompt,
+        model: params.replicateModelId,
+        width,
+        height,
+        num_inference_steps: params.steps || 28,
+        seed: params.seed
+      })
+
+      // Run the prediction using the trained model directly
+      const prediction = await this.client.run(
+        params.replicateModelId as `${string}/${string}`,
+        {
+          input: {
+            prompt: enhancedPrompt,
+            width,
+            height,
+            num_inference_steps: params.steps || 28,
+            seed: params.seed,
+            guidance_scale: 3.5,
+            num_outputs: 1,
+            output_format: "webp",
+            output_quality: 90
+          }
+        }
+      ) as any
+
+      console.log('🎨 Replicate trained model generation completed:', {
+        id: prediction.id,
+        status: prediction.status,
+        hasOutput: !!prediction.output
+      })
+
+      // Handle the response
+      if (prediction.status === 'succeeded' && prediction.output) {
+        const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+        
+        return {
+          id: String(prediction.id),
+          status: 'completed',
+          images: [{
+            url: imageUrl,
+            width,
+            height
+          }]
+        }
+      } else if (prediction.status === 'failed') {
+        return {
+          id: String(prediction.id),
+          status: 'failed',
+          error: prediction.error || 'Replicate trained model generation failed'
+        }
+      } else {
+        return {
+          id: String(prediction.id),
+          status: 'processing'
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Replicate trained model generation error:', error)
+      return {
+        id: `replicate_trained_err_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Replicate trained model generation failed'
+      }
+    }
+  }
+
+  /**
+   * Generate image with LoRA using Replicate
+   */
+  async generateWithLoRA(params: {
+    prompt: string
+    loraPath: string  // HuggingFace repository path
+    loraScale?: number
+    triggerWord?: string
+    width?: number
+    height?: number
+    steps?: number
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '3:4' | '4:3'
+    seed?: number
+  }): Promise<ReplicateGenerationResponse> {
+    try {
+      console.log('🎨 Starting Replicate LoRA generation:', {
+        prompt: params.prompt,
+        loraPath: params.loraPath,
+        triggerWord: params.triggerWord
+      })
+
+      // Build the enhanced prompt with trigger word
+      let enhancedPrompt = params.prompt
+      if (params.triggerWord && !params.prompt.toLowerCase().includes(params.triggerWord.toLowerCase())) {
+        enhancedPrompt = `${params.triggerWord}, ${params.prompt}`
+      }
+
+      // Calculate dimensions based on aspect ratio
+      const dimensions = this.getDimensions(params.aspectRatio)
+      const width = params.width || dimensions.width
+      const height = params.height || dimensions.height
+
+      // Format LoRA path for Replicate (expects HuggingFace format)
+      const formattedLoraPath = params.loraPath.startsWith('https://huggingface.co/') 
+        ? params.loraPath 
+        : `https://huggingface.co/${params.loraPath}`
+
+      console.log('🔧 Replicate generation parameters:', {
+        prompt: enhancedPrompt,
+        lora_url: formattedLoraPath,
+        lora_scale: params.loraScale || 1.0,
+        width,
+        height,
+        num_inference_steps: params.steps || 28,
+        seed: params.seed
+      })
+
+      // Run the prediction using black-forest-labs/flux-dev-lora
+      const prediction = await this.client.run(
+        "black-forest-labs/flux-dev-lora",
+        {
+          input: {
+            prompt: enhancedPrompt,
+            lora_url: formattedLoraPath,
+            lora_scale: params.loraScale || 1.0,
+            width,
+            height,
+            num_inference_steps: params.steps || 28,
+            seed: params.seed,
+            go_fast: true, // Use optimized inference
+            guidance_scale: 3.5,
+            num_outputs: 1,
+            output_format: "webp",
+            output_quality: 90
+          }
+        }
+      ) as any
+
+      console.log('🎨 Replicate generation completed:', {
+        id: prediction.id,
+        status: prediction.status,
+        hasOutput: !!prediction.output
+      })
+
+      // Handle the response
+      if (prediction.status === 'succeeded' && prediction.output) {
+        const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+        
+        return {
+          id: String(prediction.id),
+          status: 'completed',
+          images: [{
+            url: imageUrl,
+            width,
+            height
+          }]
+        }
+      } else if (prediction.status === 'failed') {
+        return {
+          id: String(prediction.id),
+          status: 'failed',
+          error: prediction.error || 'Replicate generation failed'
+        }
+      } else {
+        return {
+          id: String(prediction.id),
+          status: 'processing'
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Replicate LoRA generation error:', error)
+      return {
+        id: `replicate_err_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Replicate generation failed'
+      }
+    }
+  }
+
+  /**
+   * Get dimensions based on aspect ratio
+   */
+  private getDimensions(aspectRatio?: string): { width: number; height: number } {
+    switch (aspectRatio) {
+      case '16:9':
+        return { width: 1344, height: 768 }
+      case '9:16':
+        return { width: 768, height: 1344 }
+      case '3:4':
+        return { width: 896, height: 1152 }
+      case '4:3':
+        return { width: 1152, height: 896 }
+      case '1:1':
+      default:
+        return { width: 1024, height: 1024 }
     }
   }
 

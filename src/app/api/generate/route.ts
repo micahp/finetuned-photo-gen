@@ -3,6 +3,7 @@ import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { TogetherAIService } from '@/lib/together-ai'
+import { ReplicateService } from '@/lib/replicate-service'
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           status: 'ready',
           loraReadyForInference: true,
-          huggingfaceRepo: { not: null }
+          replicateModelId: { not: null }
         }
       })
 
@@ -74,9 +75,9 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      if (!selectedUserModel.huggingfaceRepo) {
+      if (!selectedUserModel.replicateModelId) {
         return NextResponse.json(
-          { error: 'Custom model does not have a HuggingFace repository configured' },
+          { error: 'Custom model does not have a Replicate model configured' },
           { status: 400 }
         )
       }
@@ -99,27 +100,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate image - use LoRA if custom model is selected
+    // Generate image - use Replicate for custom models, Together AI for base models
     let result
     if (selectedUserModel) {
-      console.log('🎯 Generating with custom model:', {
+      console.log('🎯 Generating with custom model via Replicate:', {
         modelId: selectedUserModel.id,
         modelName: selectedUserModel.name,
-        huggingfaceRepo: selectedUserModel.huggingfaceRepo,
+        replicateModelId: selectedUserModel.replicateModelId,
         triggerWord: selectedUserModel.triggerWord,
         prompt: fullPrompt,
         steps: steps || 28
       })
 
-      // Use LoRA generation with HuggingFace repository
-      result = await together.generateWithLoRA({
+      // Use Replicate for generation with trained model directly
+      const replicate = new ReplicateService()
+      result = await replicate.generateWithTrainedModel({
         prompt: fullPrompt,
-        loraPath: selectedUserModel.huggingfaceRepo,
+        replicateModelId: selectedUserModel.replicateModelId,
         triggerWord: selectedUserModel.triggerWord,
         aspectRatio,
         steps: steps || 28, // Use more steps for LoRA by default
-        seed,
-        useTogetherModel: false // This is a HuggingFace model
+        seed
       })
     } else {
       console.log('🎯 Generating with base model:', {
@@ -161,7 +162,8 @@ export async function POST(request: NextRequest) {
           prompt: fullPrompt,
           imageUrl: result.images[0].url,
           generationParams: {
-            model: selectedUserModel ? 'black-forest-labs/FLUX.1-dev-lora' : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
+            model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
+            provider: selectedUserModel ? 'replicate' : 'together-ai',
             aspectRatio,
             steps: selectedUserModel ? (steps || 28) : steps,
             seed,
@@ -169,7 +171,7 @@ export async function POST(request: NextRequest) {
             userModel: selectedUserModel ? {
               id: selectedUserModel.id,
               name: selectedUserModel.name,
-              huggingfaceRepo: selectedUserModel.huggingfaceRepo,
+              replicateModelId: selectedUserModel.replicateModelId,
               triggerWord: selectedUserModel.triggerWord
             } : undefined
           },

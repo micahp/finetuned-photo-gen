@@ -130,7 +130,7 @@ export default function NewModelPage() {
 
       const uploadResult = await uploadResponse.json()
 
-      // Step 3: Start Together AI training
+      // Step 3: Start Replicate training
       setCreationProgress('Starting AI training...')
       const trainingResponse = await fetch('/api/models/start-training', {
         method: 'POST',
@@ -391,7 +391,7 @@ export default function NewModelPage() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <h3 className="font-medium text-yellow-900 mb-2">Training Process</h3>
                 <p className="text-sm text-yellow-800">
-                  Your model will be trained using Together AI's LoRA fine-tuning. 
+                  Your model will be trained using Replicate's FLUX LoRA fine-tuning. 
                   Training typically takes 15-30 minutes to complete.
                   You'll be able to generate images once training is finished.
                 </p>
