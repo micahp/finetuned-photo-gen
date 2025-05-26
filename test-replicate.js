@@ -5,7 +5,7 @@ async function testReplicate() {
     console.log('Testing Replicate API connection...');
     
     // Set the token explicitly for testing
-    process.env.REPLICATE_API_TOKEN = "***REMOVED***";
+    process.env.REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN || "your-replicate-token-here";
     
     const replicateService = new ReplicateService();
     
