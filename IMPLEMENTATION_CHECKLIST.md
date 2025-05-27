@@ -170,9 +170,9 @@
 
 ### **Model Creation UI Updates**
 - [ ] Update `/app/dashboard/models/new/page.tsx` with TrainingService integration
-- [ ] Add real-time training progress display with debug data
-- [ ] Implement stage progression visualization (ZIP → Replicate → HuggingFace → Complete)
-- [ ] Add training parameter controls (steps, learning rate, LoRA rank)
+- [x] Add real-time training progress display with debug data
+- [ ] Implement stage progression visualization (ZIP → Replicate → Complete)
+- [ ] Add training parameter controls (steps, learning rate, LoRA rank), see what Replicate and Nebius allow
 - [ ] Create training status component with error handling and retry options
 
 ### **Training Management Dashboard** ✅ **COMPLETED**
@@ -252,7 +252,7 @@ TODO: flest out the rest
 ### **Housekeeping**
 - [ ] Clean up zip file(s) from failed image training. Right now there's no visibility to these zip files in our training tab
 - [ ] Clean up replicate model(s) from failed image training. Right now there's no way to remove models from failed trainings
-- [ ] Make sure free and lower tier paying users only have 1 model uploaded at a time, prompt and delete model when they try to create a new one
+- [ ] Clean up huggingface references in UI
 - [ ] Check existing pages for missing pages and components
 - [ ] Implement any missing pages and components
 - [ ] **Model Privacy Feature**: Implement subscription-based model privacy (free users = public models, premium users = private models)
@@ -266,7 +266,7 @@ TODO: flest out the rest
 - [ ] Vercel deployment configuration
 - [ ] Environment variables setup
 - [ ] Production database setup
-- [ ] S3 bucket configuration
+- [x] R2 bucket configuration
 - [ ] CDN setup for image delivery
 
 ### **Monitoring & Analytics**

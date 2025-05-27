@@ -152,6 +152,7 @@ const createPrismaMock = () => ({
 // Assign to globalThis for better type safety with TypeScript if you have global type augmentations
 // For JavaScript or basic TypeScript, global.prismaMock is also common.
 globalThis.prismaMock = createPrismaMock();
+global.prismaMock = globalThis.prismaMock;
 
 // Global mock for Prisma $transaction method (already existed, ensure it uses the new prismaMock if appropriate)
 // The previous global.mockPrismaTransaction might be redundant if prismaMock.$transaction is used directly.
