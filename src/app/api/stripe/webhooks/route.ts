@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '../../../../lib/stripe'; // Adjusted path
+import { PrismaClient } from '@prisma/client'; // Added import
+import Stripe from 'stripe'; // Added import for Stripe type
+
+const prisma = new PrismaClient(); // Added prisma client instantiation
 
 // This is a basic placeholder. In a real scenario, you would:
 // 1. Verify the Stripe webhook signature using `stripe.webhooks.constructEvent`
@@ -50,9 +54,60 @@ export async function POST(req: NextRequest) {
     // TODO: Handle the event
     switch (event.type) {
       case 'checkout.session.completed':
-        // const session = event.data.object;
-        // Handle successful checkout
-        // console.log('Checkout session completed:', session);
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId = session.metadata?.userId;
+        const stripeCustomerId = session.customer as string | null; // customer can be string or null
+
+        if (!userId) {
+          console.error('🔴 Error: userId not found in session metadata. Cannot process checkout.session.completed.', { sessionId: session.id });
+          // Still return 200 to Stripe to acknowledge receipt of the event
+          return NextResponse.json({ received: true, error: 'User ID missing in metadata' }, { status: 200 });
+        }
+
+        console.log(`🔔 Processing checkout.session.completed for user ${userId}, session ${session.id}`);
+
+        try {
+          if (session.mode === 'subscription' && stripeCustomerId) {
+            await prisma.user.update({
+              where: { id: userId },
+              data: {
+                stripeCustomerId: stripeCustomerId,
+                subscriptionStatus: 'active', // Assuming 'active' status
+                // You might want to store subscriptionId, currentPeriodEnd, etc.
+                // stripeSubscriptionId: session.subscription as string, // session.subscription is ID of the subscription
+              },
+            });
+            console.log(`✅ User ${userId} subscription activated. Stripe Customer ID: ${stripeCustomerId}`);
+          } else if (session.mode === 'payment') {
+            const creditsPurchasedString = session.metadata?.credits_purchased;
+            if (creditsPurchasedString) {
+              const creditsPurchased = parseInt(creditsPurchasedString, 10);
+              if (isNaN(creditsPurchased)) {
+                console.error('🔴 Error: Invalid credits_purchased value in session metadata.', { sessionId: session.id, metadataValue: creditsPurchasedString });
+                return NextResponse.json({ received: true, error: 'Invalid credits_purchased in metadata' }, { status: 200 });
+              }
+              await prisma.user.update({
+                where: { id: userId },
+                data: {
+                  credits: {
+                    increment: creditsPurchased,
+                  },
+                  // Optionally update stripeCustomerId if it's their first payment and they don't have one
+                  ...(stripeCustomerId && { stripeCustomerId: stripeCustomerId }),
+                },
+              });
+              console.log(`✅ User ${userId} credited with ${creditsPurchased} credits.`);
+            } else {
+              console.warn(`⚠️ checkout.session.completed in payment mode for user ${userId} but no 'credits_purchased' in metadata. Session ID: ${session.id}`);
+            }
+          } else {
+            console.warn(`⚠️ Unhandled session mode: ${session.mode} for checkout.session.completed. Session ID: ${session.id}`);
+          }
+        } catch (dbError: any) {
+          console.error(`🔴 Database error processing checkout.session.completed for user ${userId}:`, dbError.message, { sessionId: session.id });
+          // Still return 200 to Stripe. Log the error for internal review.
+          return NextResponse.json({ received: true, error: 'Database update failed' }, { status: 200 });
+        }
         break;
       case 'invoice.payment_succeeded':
         // const invoice = event.data.object;
