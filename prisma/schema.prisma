@@ -31,6 +31,7 @@ model User {
   generatedImages     GeneratedImage[]
   subscriptions       Subscription[]
   jobQueue            JobQueue[]
+  creditTransactions  CreditTransaction[]
   
   @@map("users")
 }
@@ -139,4 +140,22 @@ model Subscription {
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("subscriptions")
+}
+
+model CreditTransaction {
+  id                    String    @id @default(cuid())
+  userId                String    @map("user_id")
+  amount                Int       // Positive for earned/purchased, negative for spent
+  type                  String    // 'earned', 'spent', 'purchased', 'subscription_renewal', 'refund'
+  description           String
+  relatedEntityType     String?   @map("related_entity_type") // 'image_generation', 'model_training', 'subscription', etc.
+  relatedEntityId       String?   @map("related_entity_id") // ID of the related entity
+  balanceAfter          Int       @map("balance_after") // User's credit balance after this transaction
+  metadata              Json?     // Additional transaction metadata
+  createdAt             DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("credit_transactions")
 }

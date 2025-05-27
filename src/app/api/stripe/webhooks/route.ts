@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '../../../../lib/stripe'; // Adjusted path
 import { prisma } from '@/lib/db'; // Use shared Prisma instance
 import Stripe from 'stripe'; // Added import for Stripe type
+import { CreditService } from '@/lib/credit-service'
 
 // This is a basic placeholder. In a real scenario, you would:
 // 1. Verify the Stripe webhook signature using `stripe.webhooks.constructEvent`
@@ -104,13 +105,13 @@ export async function POST(req: NextRequest) {
 
             // console.log('[TEST_DEBUG] Reaching transaction block');
             await prisma.$transaction(async (tx) => {
+              // Update user subscription details
               await tx.user.update({
                 where: { id: userId },
                 data: {
                   stripeCustomerId: stripeCustomerId,
                   subscriptionStatus: stripeSubscription.status, // Use status from retrieved subscription
                   subscriptionPlan: planName,
-                  credits: { increment: creditsToAllocate },
                 },
               });
 
@@ -142,6 +143,22 @@ export async function POST(req: NextRequest) {
               });
             });
 
+            // Add credits using CreditService for proper transaction logging
+            await CreditService.addCredits(
+              userId,
+              creditsToAllocate,
+              'subscription_renewal',
+              `Subscription renewal: ${planName}`,
+              'subscription',
+              stripeSubscription.id,
+              {
+                planName,
+                stripeSubscriptionId: stripeSubscription.id,
+                periodStart: new Date((stripeSubscription as any).current_period_start * 1000),
+                periodEnd: new Date((stripeSubscription as any).current_period_end * 1000)
+              }
+            );
+
             console.log(`✅ User ${userId} subscription ${stripeSubscription.id} processed. Plan: ${planName}, Credits: ${creditsToAllocate}.`);
 
           } else if (session.mode === 'payment') {
@@ -152,13 +169,29 @@ export async function POST(req: NextRequest) {
             }
 
             if (creditsPurchasedStr && creditsPurchased !== undefined && !isNaN(creditsPurchased) && creditsPurchased > 0) {
-              await prisma.user.update({
-                where: { id: userId },
-                data: {
-                  credits: { increment: creditsPurchased },
-                  ...(stripeCustomerId && { stripeCustomerId }),
-                },
-              });
+              // Update customer ID if provided
+              if (stripeCustomerId) {
+                await prisma.user.update({
+                  where: { id: userId },
+                  data: { stripeCustomerId },
+                });
+              }
+
+              // Add credits using CreditService for proper transaction logging
+              await CreditService.addCredits(
+                userId,
+                creditsPurchased,
+                'purchased',
+                `Credit purchase: ${creditsPurchased} credits`,
+                'subscription',
+                session.id,
+                {
+                  sessionId: session.id,
+                  stripeCustomerId,
+                  paymentMode: 'payment'
+                }
+              );
+              
               console.log(`✅ User ${userId} credited with ${creditsPurchased} credits.`);
             } else if (!creditsPurchasedStr) { // If credits_purchased is missing entirely
               console.warn(`⚠️ checkout.session.completed in payment mode for user ${userId} but no 'credits_purchased' in metadata. Session ID: ${session.id}`);

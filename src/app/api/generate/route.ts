@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { TogetherAIService } from '@/lib/together-ai'
 import { ReplicateService } from '@/lib/replicate-service'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
+import { CreditService } from '@/lib/credit-service'
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
@@ -168,11 +169,30 @@ export async function POST(request: NextRequest) {
 
     // Only deduct credits and save if generation succeeded
     if (result.status === 'completed' && result.images?.[0]) {
-      // Deduct credit
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { credits: { decrement: 1 } }
-      })
+      // Deduct credit using CreditService for proper transaction logging
+      const creditResult = await CreditService.spendCredits(
+        session.user.id,
+        1,
+        `Image generation: ${fullPrompt.substring(0, 100)}${fullPrompt.length > 100 ? '...' : ''}`,
+        'image_generation',
+        undefined, // Will be set to generated image ID after creation
+        {
+          prompt: fullPrompt,
+          model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
+          provider: selectedUserModel ? 'replicate' : 'together-ai',
+          aspectRatio,
+          steps: selectedUserModel ? (steps || 28) : steps,
+          seed,
+          style
+        }
+      )
+
+      if (!creditResult.success) {
+        return NextResponse.json(
+          { error: creditResult.error || 'Failed to process credit transaction' },
+          { status: 400 }
+        )
+      }
 
       // *** MODIFICATION START: Upload to Cloudflare and get permanent URL ***
       const temporaryImageUrl = result.images[0].url
@@ -245,7 +265,7 @@ export async function POST(request: NextRequest) {
             triggerWord: selectedUserModel.triggerWord
           } : undefined
         },
-        creditsRemaining: user.credits - 1
+        creditsRemaining: creditResult.newBalance
       })
     }
 

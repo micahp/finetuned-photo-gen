@@ -11,6 +11,8 @@ const customJestConfig = {
   testEnvironment: 'jest-environment-jsdom',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^next-auth$': '<rootDir>/node_modules/next-auth/index.js',
+    '^next-auth/(.*)$': '<rootDir>/node_modules/next-auth/$1',
   },
   testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
   collectCoverageFrom: [
@@ -22,7 +24,7 @@ const customJestConfig = {
     '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(.*\\.mjs$|react-hook-form|@hookform/resolvers|next-auth|@auth/core))',
+    'node_modules/(?!(.*\\.mjs$|react-hook-form|@hookform/resolvers|next-auth|@auth/core|@auth/.*|oauth4webapi))',
   ],
   // Handle ESM modules properly
   extensionsToTreatAsEsm: ['.ts', '.tsx'],

@@ -21,7 +21,40 @@ jest.mock('@/lib/db', () => ({
     generatedImage: {
       create: mockPrismaCreateGenerate,
     },
+    userModel: {
+      findFirst: jest.fn(),
+    },
+    $transaction: global.mockPrismaTransaction,
   },
+}))
+
+// Mock CreditService
+jest.mock('@/lib/credit-service', () => ({
+  CreditService: {
+    spendCredits: global.mockCreditServiceSpendCredits,
+    addCredits: global.mockCreditServiceAddCredits,
+    recordTransaction: global.mockCreditServiceRecordTransaction,
+    getUsageAnalytics: global.mockCreditServiceGetUsageAnalytics,
+    checkUsageLimits: global.mockCreditServiceCheckUsageLimits,
+    canAfford: global.mockCreditServiceCanAfford,
+    getLowCreditNotification: global.mockCreditServiceGetLowCreditNotification,
+  },
+}))
+
+// Mock CloudflareImagesService
+const mockUploadFromUrl = jest.fn()
+jest.mock('@/lib/cloudflare-images-service', () => ({
+  CloudflareImagesService: jest.fn().mockImplementation(() => ({
+    uploadFromUrl: mockUploadFromUrl,
+  })),
+}))
+
+// Mock ReplicateService
+const mockGenerateWithTrainedModel = jest.fn()
+jest.mock('@/lib/replicate-service', () => ({
+  ReplicateService: jest.fn().mockImplementation(() => ({
+    generateWithTrainedModel: mockGenerateWithTrainedModel,
+  })),
 }))
 
 // Mock TogetherAI service

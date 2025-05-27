@@ -105,6 +105,60 @@ global.fetch = jest.fn(() =>
   })
 )
 
+// Global mock for Prisma $transaction method
+global.mockPrismaTransaction = jest.fn()
+
+// Global mock for CreditService
+global.mockCreditServiceSpendCredits = jest.fn()
+global.mockCreditServiceAddCredits = jest.fn()
+global.mockCreditServiceRecordTransaction = jest.fn()
+global.mockCreditServiceGetUsageAnalytics = jest.fn()
+global.mockCreditServiceCheckUsageLimits = jest.fn()
+global.mockCreditServiceCanAfford = jest.fn()
+global.mockCreditServiceGetLowCreditNotification = jest.fn()
+
+// Set up default successful credit service responses
+beforeEach(() => {
+  // Reset all mocks before each test
+  if (global.mockCreditServiceSpendCredits) {
+    global.mockCreditServiceSpendCredits.mockResolvedValue({
+      success: true,
+      newBalance: 9,
+    })
+  }
+  
+  if (global.mockCreditServiceAddCredits) {
+    global.mockCreditServiceAddCredits.mockResolvedValue({
+      success: true,
+      newBalance: 11,
+    })
+  }
+  
+  if (global.mockCreditServiceRecordTransaction) {
+    global.mockCreditServiceRecordTransaction.mockResolvedValue(undefined)
+  }
+  
+  if (global.mockPrismaTransaction) {
+    global.mockPrismaTransaction.mockImplementation(async (callback) => {
+      // Create a mock transaction context
+      const mockTx = {
+        user: {
+          findUnique: jest.fn().mockResolvedValue({ credits: 10 }),
+          update: jest.fn().mockResolvedValue({ credits: 9 }),
+        },
+        creditTransaction: {
+          create: jest.fn().mockResolvedValue({
+            id: 'tx-123',
+            amount: -1,
+            balanceAfter: 9,
+          }),
+        },
+      }
+      return callback(mockTx)
+    })
+  }
+})
+
 /*
 // Mock console methods to prevent test output noise --- Temporarily Commented Out for Debugging
 const originalConsole = global.console
