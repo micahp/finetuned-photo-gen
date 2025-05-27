@@ -70,40 +70,68 @@ export class CreditService {
   /**
    * Record a credit transaction with automatic balance calculation
    */
-  static async recordTransaction(data: CreditTransactionData): Promise<void> {
-    await prisma.$transaction(async (tx) => {
-      // Get current user balance
-      const user = await tx.user.findUnique({
-        where: { id: data.userId },
-        select: { credits: true }
-      })
+  static async recordTransaction(data: CreditTransactionData): Promise<{
+    success: boolean;
+    newBalance?: number;
+    transactionId?: string;
+    error?: string;
+  }> {
+    try {
+      let transactionResult: { id: string; balanceAfter: number } | null = null;
+      let finalBalance: number | undefined = undefined;
 
-      if (!user) {
-        throw new Error('User not found')
-      }
+      await prisma.$transaction(async (tx) => {
+        // Get current user balance
+        const user = await tx.user.findUnique({
+          where: { id: data.userId },
+          select: { credits: true }
+        });
 
-      const newBalance = user.credits + data.amount
-
-      // Update user credits
-      await tx.user.update({
-        where: { id: data.userId },
-        data: { credits: newBalance }
-      })
-
-      // Record transaction
-      await tx.creditTransaction.create({
-        data: {
-          userId: data.userId,
-          amount: data.amount,
-          type: data.type,
-          description: data.description,
-          relatedEntityType: data.relatedEntityType,
-          relatedEntityId: data.relatedEntityId,
-          balanceAfter: newBalance,
-          metadata: data.metadata
+        if (!user) {
+          throw new Error('User not found');
         }
-      })
-    })
+
+        finalBalance = user.credits + data.amount;
+
+        // Update user credits
+        await tx.user.update({
+          where: { id: data.userId },
+          data: { credits: finalBalance }
+        });
+
+        // Record transaction
+        const createdTx = await tx.creditTransaction.create({
+          data: {
+            userId: data.userId,
+            amount: data.amount,
+            type: data.type,
+            description: data.description,
+            relatedEntityType: data.relatedEntityType,
+            relatedEntityId: data.relatedEntityId,
+            balanceAfter: finalBalance,
+            metadata: data.metadata
+          }
+        });
+        transactionResult = { id: createdTx.id, balanceAfter: finalBalance }; 
+      });
+
+      if (transactionResult) {
+        return {
+          success: true,
+          newBalance: transactionResult.balanceAfter,
+          transactionId: transactionResult.id,
+        };
+      } else {
+        // This case should ideally not be reached if $transaction throws on failure
+        return { success: false, error: 'Transaction did not complete as expected.', newBalance: finalBalance };
+      }
+    } catch (error: any) {
+      console.error('Error in recordTransaction:', error);
+      return {
+        success: false,
+        error: `Failed to record transaction: ${error.message || 'Unknown error'}`,
+      };
+    }
   }
 
   /**
@@ -117,27 +145,29 @@ export class CreditService {
     relatedEntityId?: string,
     metadata?: Record<string, any>
   ): Promise<{ success: boolean; newBalance: number; error?: string }> {
+    let userCreditsBeforeSpend = 0;
     try {
       // Check if user has enough credits
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { credits: true }
-      })
+      });
 
       if (!user) {
-        return { success: false, newBalance: 0, error: 'User not found' }
+        return { success: false, newBalance: 0, error: 'User not found' };
       }
+      userCreditsBeforeSpend = user.credits;
 
       if (user.credits < amount) {
         return { 
           success: false, 
           newBalance: user.credits, 
           error: `Insufficient credits. Required: ${amount}, Available: ${user.credits}` 
-        }
+        };
       }
 
       // Record the transaction
-      await this.recordTransaction({
+      const transactionResult = await this.recordTransaction({
         userId,
         amount: -amount, // Negative for spending
         type: 'spent',
@@ -145,12 +175,27 @@ export class CreditService {
         relatedEntityType,
         relatedEntityId,
         metadata
-      })
+      });
 
-      return { success: true, newBalance: user.credits - amount }
+      if (!transactionResult.success) {
+        // If recordTransaction handled an error and returned success: false
+        return {
+          success: false,
+          newBalance: userCreditsBeforeSpend, // Balance remains what it was before attempting to spend
+          error: transactionResult.error || 'Failed to process credit transaction (recordTransaction failed)',
+        };
+      }
+
+      // If recordTransaction was successful
+      return { success: true, newBalance: transactionResult.newBalance! }; // newBalance from successful recordTransaction
     } catch (error) {
-      console.error('Error spending credits:', error)
-      return { success: false, newBalance: 0, error: 'Failed to process credit transaction' }
+      // This catch block handles errors like prisma.user.findUnique failing, or if recordTransaction throws an unexpected error
+      console.error('Error spending credits:', error);
+      return { 
+        success: false, 
+        newBalance: userCreditsBeforeSpend, // Or 0 if user was not even found
+        error: 'Failed to process credit transaction (unexpected error)' 
+      };
     }
   }
 
@@ -167,7 +212,7 @@ export class CreditService {
     metadata?: Record<string, any>
   ): Promise<{ success: boolean; newBalance: number; error?: string }> {
     try {
-      await this.recordTransaction({
+      const transactionResult = await this.recordTransaction({
         userId,
         amount,
         type,
@@ -175,18 +220,49 @@ export class CreditService {
         relatedEntityType,
         relatedEntityId,
         metadata
-      })
+      });
 
-      // Get updated balance
+      if (!transactionResult.success) {
+        // If recordTransaction handled an error and returned success: false
+        // We don't have the pre-transaction balance readily available here without an extra DB call.
+        // recordTransaction itself doesn't return old balance on failure.
+        // Returning 0 for newBalance or fetching it again are options.
+        // For now, let's be consistent with the generic catch block if recordTransaction fails this way.
+        return {
+          success: false,
+          // newBalance: 0, // Or fetch current balance if absolutely needed.
+          // Let's try to return the balance that recordTransaction *would* have resulted in if it didn't complete, which is effectively undefined or requires another fetch.
+          // The most straightforward is to mirror the main catch block or provide a specific error.
+          newBalance: (await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } }))?.credits || 0,
+          error: transactionResult.error || 'Failed to add credits (recordTransaction failed)',
+        };
+      }
+
+      // If recordTransaction was successful, its newBalance is the most accurate.
+      // The subsequent findUnique is to confirm, but recordTransaction.newBalance should be trusted.
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { credits: true }
-      })
+      });
 
-      return { success: true, newBalance: user?.credits || 0 }
+      // It's possible recordTransaction succeeded but the user fetch here fails or user deleted.
+      // The newBalance from recordTransaction is the state after the transaction.
+      return { success: true, newBalance: transactionResult.newBalance! }; // Trust newBalance from successful recordTransaction
+
     } catch (error) {
-      console.error('Error adding credits:', error)
-      return { success: false, newBalance: 0, error: 'Failed to add credits' }
+      console.error('Error adding credits:', error);
+      // Attempt to get current balance even in case of an unexpected error, if user exists
+      let currentBalance = 0;
+      try {
+        const userOnError = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true }});
+        if (userOnError) currentBalance = userOnError.credits;
+      } catch (e) { /* ignore error during error handling */ }
+
+      return { 
+        success: false, 
+        newBalance: currentBalance, 
+        error: 'Failed to add credits (unexpected error)' 
+      };
     }
   }
 

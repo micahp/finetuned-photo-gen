@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
         modelId: model.modelId,
         huggingfaceRepo: model.huggingfaceRepo,
         validationStatus: model.validationStatus,
-        validationErrorType: model.validationErrorType,
+        validationError: model.validationError,
         trainingStartedAt: model.trainingStartedAt,
         trainingCompletedAt: model.trainingCompletedAt,
         createdAt: model.createdAt,

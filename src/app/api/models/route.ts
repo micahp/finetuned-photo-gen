@@ -160,7 +160,6 @@ export async function GET(request: NextRequest) {
         loraReadyForInference: model.loraReadyForInference,
         validationStatus: model.validationStatus,
         validationError: model.validationError,
-        validationErrorType: model.validationErrorType,
         lastValidationCheck: model.lastValidationCheck,
         _count: model._count,
       })),

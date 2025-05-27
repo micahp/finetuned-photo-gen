@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     // Generate image - use Replicate for custom models, Together AI for base models
     let result
-    if (selectedUserModel) {
+    if (selectedUserModel && selectedUserModel.replicateModelId) {
       console.log('🎯 Generating with custom model via Replicate:', {
         modelId: selectedUserModel.id,
         modelName: selectedUserModel.name,
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       result = await replicate.generateWithTrainedModel({
         prompt: fullPrompt,
         replicateModelId: selectedUserModel.replicateModelId,
-        triggerWord: selectedUserModel.triggerWord,
+        triggerWord: selectedUserModel.triggerWord || undefined,
         aspectRatio,
         steps: steps || 28, // Use more steps for LoRA by default
         seed

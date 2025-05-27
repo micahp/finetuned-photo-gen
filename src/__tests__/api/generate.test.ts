@@ -42,10 +42,12 @@ jest.mock('@/lib/credit-service', () => ({
 }))
 
 // Mock CloudflareImagesService
-const mockUploadFromUrl = jest.fn()
+const mockUploadImageFromUrl = jest.fn()
+const mockGetPublicUrl = jest.fn()
 jest.mock('@/lib/cloudflare-images-service', () => ({
   CloudflareImagesService: jest.fn().mockImplementation(() => ({
-    uploadFromUrl: mockUploadFromUrl,
+    uploadImageFromUrl: mockUploadImageFromUrl,
+    getPublicUrl: mockGetPublicUrl,
   })),
 }))
 
@@ -86,6 +88,13 @@ describe('/api/generate', () => {
       { id: 'artistic', prompt: 'artistic style, creative' },
       { id: 'none', prompt: '' },
     ])
+    
+    // Default Cloudflare Images mock
+    mockUploadImageFromUrl.mockResolvedValue({
+      success: true,
+      imageId: 'cf-img-123',
+    })
+    mockGetPublicUrl.mockReturnValue('https://imagedelivery.net/cf-img-123/public')
   })
 
   describe('POST - Authentication Tests', () => {
@@ -460,7 +469,7 @@ describe('/api/generate', () => {
       expect(response.status).toBe(500)
       expect(data.error).toBe('Model not available')
       // Credits should not be deducted on failure
-      expect(mockPrismaUpdateGenerate).not.toHaveBeenCalled()
+      expect(global.mockCreditServiceSpendCredits).not.toHaveBeenCalled()
       expect(mockPrismaCreateGenerate).not.toHaveBeenCalled()
     })
 
@@ -542,36 +551,47 @@ describe('/api/generate', () => {
       expect(data.success).toBe(true)
       expect(data.image).toEqual({
         id: 'img-123',
-        url: 'https://example.com/generated.jpg',
+        url: 'https://imagedelivery.net/cf-img-123/public', // Cloudflare URL after upload
         prompt: 'A beautiful sunset, photorealistic, high quality',
         aspectRatio: '16:9',
         createdAt: '2024-01-15T10:00:00.000Z'
       })
       expect(data.creditsRemaining).toBe(9)
 
-      // Verify credit deduction
-      expect(mockPrismaUpdateGenerate).toHaveBeenCalledWith({
-        where: { id: 'user-123' },
-        data: { credits: { decrement: 1 } }
-      })
-
-      // Verify image saved to database
-      expect(mockPrismaCreateGenerate).toHaveBeenCalledWith({
-        data: {
-          userId: 'user-123',
-          userModelId: null,
+      // Verify credit deduction via CreditService
+      expect(global.mockCreditServiceSpendCredits).toHaveBeenCalledWith(
+        'user-123',
+        1,
+        expect.stringContaining('Image generation:'),
+        'image_generation',
+        undefined,
+        expect.objectContaining({
           prompt: 'A beautiful sunset, photorealistic, high quality',
-          imageUrl: 'https://example.com/generated.jpg',
-          generationParams: {
-            model: 'black-forest-labs/FLUX.1-schnell-Free',
-            aspectRatio: '16:9',
-            steps: undefined,
-            seed: undefined,
-            style: 'realistic'
-          },
-          creditsUsed: 1
-        }
-      })
+          model: 'black-forest-labs/FLUX.1-schnell-Free',
+          provider: 'together-ai'
+        })
+      )
+
+              // Verify image saved to database
+        expect(mockPrismaCreateGenerate).toHaveBeenCalledWith({
+          data: {
+            userId: 'user-123',
+            userModelId: null,
+            prompt: 'A beautiful sunset, photorealistic, high quality',
+            imageUrl: 'https://imagedelivery.net/cf-img-123/public', // Cloudflare URL
+            cloudflareImageId: 'cf-img-123',
+            generationParams: {
+              model: 'black-forest-labs/FLUX.1-schnell-Free',
+              provider: 'together-ai',
+              aspectRatio: '16:9',
+              steps: undefined,
+              seed: undefined,
+              style: 'realistic',
+              userModel: undefined
+            },
+            creditsUsed: 1
+          }
+        })
     })
 
     it('should pass all parameters to TogetherAI correctly', async () => {
@@ -616,7 +636,6 @@ describe('/api/generate', () => {
 
     it('should not deduct credits if image save fails', async () => {
       // Arrange
-      mockPrismaUpdateGenerate.mockResolvedValue({ credits: 0 })
       mockPrismaCreateGenerate.mockRejectedValue(new Error('Database save failed'))
 
       const request = new Request('http://localhost:3000/api/generate', {
@@ -632,14 +651,18 @@ describe('/api/generate', () => {
       // Assert
       expect(response.status).toBe(500)
       expect(data.error).toBe('Internal server error')
-      // Both operations should still have been attempted
-      expect(mockPrismaUpdateGenerate).toHaveBeenCalled()
+      // Credit service should have been called but image save failed
+      expect(global.mockCreditServiceSpendCredits).toHaveBeenCalled()
       expect(mockPrismaCreateGenerate).toHaveBeenCalled()
     })
 
     it('should handle credit deduction failure gracefully', async () => {
       // Arrange
-      mockPrismaUpdateGenerate.mockRejectedValue(new Error('Credit deduction failed'))
+      global.mockCreditServiceSpendCredits.mockResolvedValue({
+        success: false,
+        newBalance: 1,
+        error: 'Credit deduction failed'
+      })
 
       const request = new Request('http://localhost:3000/api/generate', {
         method: 'POST',
@@ -652,8 +675,8 @@ describe('/api/generate', () => {
       const data = await response.json()
 
       // Assert
-      expect(response.status).toBe(500)
-      expect(data.error).toBe('Internal server error')
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('Credit deduction failed')
     })
   })
 
@@ -756,6 +779,11 @@ describe('/api/generate', () => {
     it('should handle exactly 1 credit remaining', async () => {
       // Arrange - User has exactly 1 credit
       mockPrismaFindUniqueGenerate.mockResolvedValue({ credits: 1 })
+      // Mock CreditService to return 0 credits after spending 1
+      global.mockCreditServiceSpendCredits.mockResolvedValue({
+        success: true,
+        newBalance: 0,
+      })
       
       const request = new Request('http://localhost:3000/api/generate', {
         method: 'POST',

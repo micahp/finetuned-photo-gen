@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
           progress: 0,
           stage: 'Initializing',
           estimatedTimeRemaining: undefined as number | undefined,
-          debugData: null,
+          debugData: null as any,
           error: job.errorMessage || null
         }
 
@@ -85,17 +85,39 @@ export async function GET(request: NextRequest) {
             // For list view, we need to call Replicate to get accurate status
             // This is necessary because job queue status can be outdated
             const replicateService = new ReplicateService()
-            let replicateStatus
+            let replicateStatus: { // Explicitly type replicateStatus for clarity
+              status: 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled';
+              error?: string;
+              logs?: string;
+              // Add other fields from ReplicateTrainingResponse if necessary, or make it partial
+            }
             
             try {
               replicateStatus = await replicateService.getTrainingStatus(payload.externalTrainingId)
             } catch (replicateError) {
               console.warn(`Failed to get Replicate status for ${payload.externalTrainingId}:`, replicateError)
-              // Fall back to inferring from job queue status
+              
+              // Map job.status to ReplicateTrainingResponseStatus
+              let mappedStatus: 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled';
+              switch (job.status) {
+                case 'succeeded':
+                case 'completed': // Assuming 'completed' from jobQueue maps to 'succeeded'
+                  mappedStatus = 'succeeded';
+                  break;
+                case 'failed':
+                  mappedStatus = 'failed';
+                  break;
+                case 'running':
+                case 'pending': // Assuming 'pending' from jobQueue maps to 'processing' or 'starting'
+                  mappedStatus = 'processing'; 
+                  break;
+                default:
+                  mappedStatus = 'starting'; // Default fallback
+                  break;
+              }
+              
               replicateStatus = {
-                status: job.status === 'succeeded' ? 'succeeded' : 
-                        job.status === 'failed' ? 'failed' : 
-                        job.status === 'running' ? 'processing' : 'starting',
+                status: mappedStatus,
                 error: job.errorMessage || undefined,
                 logs: undefined
               }
@@ -162,9 +184,9 @@ export async function GET(request: NextRequest) {
 
         // Get validation info from user model if available
         let validationInfo = {
-          validationStatus: null,
-          validationError: null,
-          lastValidationCheck: null
+          validationStatus: null as string | null,
+          validationError: null as string | null,
+          lastValidationCheck: null as string | null
         }
 
         // Try to get user model for validation info

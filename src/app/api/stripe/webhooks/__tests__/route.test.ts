@@ -29,11 +29,19 @@ describe('/api/stripe/webhooks', () => {
   const mockStripeConstructEvent = jest.fn();
   const mockStripeSubscriptionsRetrieve = jest.fn(); // New mock for subscriptions.retrieve
   const mockStripeProductsRetrieve = jest.fn();    // New mock for products.retrieve
+  const mockCreditServiceAddCredits = jest.fn(); // Mock for CreditService.addCredits
   const MOCK_WEBHOOK_SECRET = 'whsec_test_secret';
   const originalStripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   beforeEach(() => {
     jest.resetModules(); // Crucial for jest.doMock to work correctly on subsequent test runs
+
+    // Mock CreditService *before* it might be imported by the route handler
+    jest.doMock('@/lib/credit-service', () => ({
+      CreditService: {
+        addCredits: mockCreditServiceAddCredits,
+      },
+    }));
 
     // Mock the shared prisma instance from @/lib/db
     jest.doMock('@/lib/db', () => ({
@@ -88,6 +96,7 @@ describe('/api/stripe/webhooks', () => {
     mockStripeConstructEvent.mockReset();
     mockStripeSubscriptionsRetrieve.mockReset(); // Reset new mock
     mockStripeProductsRetrieve.mockReset();    // Reset new mock
+    mockCreditServiceAddCredits.mockReset(); // Reset CreditService mock
     process.env.STRIPE_WEBHOOK_SECRET = MOCK_WEBHOOK_SECRET;
   });
 
@@ -210,15 +219,28 @@ describe('/api/stripe/webhooks', () => {
 
       expect(response.status).toBe(200);
       expect(responseBody).toEqual({ received: true, eventId: mockSessionEvent.id });
+
+      // Verify CreditService.addCredits was called
+      expect(mockCreditServiceAddCredits).toHaveBeenCalledWith(
+        userId,
+        planCredits,
+        'subscription_renewal', // or a more specific type if you have one for new subscriptions
+        `Subscription to ${planName}`,
+        'subscription',
+        mockSessionEvent.data.object.subscription
+      );
+
+      // Verify user update for non-credit fields
       expect(mockUserUpdate).toHaveBeenCalledWith({
         where: { id: userId },
         data: {
           stripeCustomerId: stripeCustomerId,
           subscriptionStatus: 'active',
           subscriptionPlan: planName,
-          credits: { increment: planCredits },
+          // DO NOT check for credits increment here anymore
         },
       });
+
       expect(mockSubscriptionUpsert).toHaveBeenCalledWith({
         where: { stripeSubscriptionId: 'sub_basic_test' },
         create: {
@@ -265,10 +287,21 @@ describe('/api/stripe/webhooks', () => {
 
       expect(response.status).toBe(200);
       expect(responseBody).toEqual({ received: true, eventId: mockSessionEvent.id });
+
+      // Verify CreditService.addCredits was called
+      expect(mockCreditServiceAddCredits).toHaveBeenCalledWith(
+        userId,
+        creditsToPurchase,
+        'purchased',
+        'One-time credit purchase',
+        'payment',
+        mockSessionEvent.data.object.id // Use session ID as relatedEntityId for one-time payments
+      );
+
+      // Verify user update for non-credit fields (e.g., stripeCustomerId)
       expect(mockUserUpdate).toHaveBeenCalledWith({
         where: { id: userId },
         data: {
-          credits: { increment: creditsToPurchase },
           stripeCustomerId: stripeCustomerId,
         },
       });
@@ -302,6 +335,8 @@ describe('/api/stripe/webhooks', () => {
         '🔴 Error: userId not found in session metadata.',
         { sessionId: mockSessionEvent.data.object.id }
       );
+      expect(mockCreditServiceAddCredits).not.toHaveBeenCalled();
+      expect(mockUserUpdate).not.toHaveBeenCalled();
       consoleErrorSpy.mockRestore();
     });
 
