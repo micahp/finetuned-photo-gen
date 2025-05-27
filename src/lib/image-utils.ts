@@ -3,13 +3,6 @@
  */
 
 /**
-<<<<<<< HEAD
- * Convert external image URLs to use our proxy to prevent ORB errors
- * UPDATE: This function now returns the original URL directly as the proxy is being removed.
- */
-export function getProxiedImageUrl(imageUrl: string): string {
-  return imageUrl;
-=======
  * Check if a URL is external (not from our domain)
  */
 export function isExternalUrl(url: string): boolean {
@@ -35,7 +28,6 @@ export function getProxiedImageUrl(imageUrl: string): string {
 
   // Use our image proxy for external URLs
   return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
->>>>>>> main
 }
 
 /**
