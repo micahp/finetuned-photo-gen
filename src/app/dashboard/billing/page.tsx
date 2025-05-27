@@ -250,9 +250,6 @@ export default function BillingPage() {
             
             <div className="text-sm text-gray-600">
               <p>
-                • All subscriptions include a 7-day free trial
-              </p>
-              <p>
                 • Cancel anytime with no hidden fees
               </p>
               <p>
