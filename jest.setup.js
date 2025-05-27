@@ -105,7 +105,8 @@ global.fetch = jest.fn(() =>
   })
 )
 
-// Mock console methods to prevent test output noise
+/*
+// Mock console methods to prevent test output noise --- Temporarily Commented Out for Debugging
 const originalConsole = global.console
 global.console = {
   ...originalConsole,
@@ -113,4 +114,5 @@ global.console = {
   warn: jest.fn(),
   error: jest.fn(),
   debug: jest.fn(),
-} 
+}
+*/ 

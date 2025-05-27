@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '../../../../lib/stripe'; // Adjusted path
-import { PrismaClient } from '@prisma/client'; // Added import
+import { prisma } from '@/lib/db'; // Use shared Prisma instance
 import Stripe from 'stripe'; // Added import for Stripe type
-
-const prisma = new PrismaClient(); // Added prisma client instantiation
 
 // This is a basic placeholder. In a real scenario, you would:
 // 1. Verify the Stripe webhook signature using `stripe.webhooks.constructEvent`
@@ -11,6 +9,8 @@ const prisma = new PrismaClient(); // Added prisma client instantiation
 // 3. Return a 200 OK to Stripe quickly, and handle business logic asynchronously if needed.
 
 export async function POST(req: NextRequest) {
+  // console.log('[TEST_DEBUG] POST HANDLER ENTERED'); 
+
   // For now, we are not parsing the body or verifying the signature.
   // We are just acknowledging the request.
   // In a real implementation, ALWAYS verify the signature first.
@@ -48,60 +48,126 @@ export async function POST(req: NextRequest) {
       signature,
       webhookSecret
     );
-
-    // console.log(`✅ Stripe event: ${event.id}, type: ${event.type}`);
+    // console.log(`[TEST_DEBUG] Stripe event constructed: ${event.id}, type: ${event.type}`);
 
     // TODO: Handle the event
     switch (event.type) {
       case 'checkout.session.completed':
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.metadata?.userId;
-        const stripeCustomerId = session.customer as string | null; // customer can be string or null
-
+        let stripeCustomerId: string | null = null;
+        if (typeof session.customer === 'string') {
+          stripeCustomerId = session.customer;
+        } else if (session.customer && typeof session.customer === 'object' && session.customer.id) {
+          stripeCustomerId = session.customer.id;
+        }
+        
         if (!userId) {
-          console.error('🔴 Error: userId not found in session metadata. Cannot process checkout.session.completed.', { sessionId: session.id });
-          // Still return 200 to Stripe to acknowledge receipt of the event
+          console.error('🔴 Error: userId not found in session metadata.', { sessionId: session.id });
           return NextResponse.json({ received: true, error: 'User ID missing in metadata' }, { status: 200 });
         }
 
-        console.log(`🔔 Processing checkout.session.completed for user ${userId}, session ${session.id}`);
+        // console.log(`🔔 Processing checkout.session.completed for user ${userId}, session ${session.id}`); // Original log, can be restored if desired
 
         try {
-          if (session.mode === 'subscription' && stripeCustomerId) {
-            await prisma.user.update({
-              where: { id: userId },
-              data: {
-                stripeCustomerId: stripeCustomerId,
-                subscriptionStatus: 'active', // Assuming 'active' status
-                // You might want to store subscriptionId, currentPeriodEnd, etc.
-                // stripeSubscriptionId: session.subscription as string, // session.subscription is ID of the subscription
-              },
+          if (session.mode === 'subscription' && session.subscription && stripeCustomerId) {
+            const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
+            // console.log(`[TEST_DEBUG] About to retrieve Stripe subscription: ${subscriptionId}`);
+            
+            const stripeSubscription = await stripe.subscriptions.retrieve(
+              subscriptionId,
+              { expand: ['items.data.price.product'] }
+            );
+            // console.log('[TEST_DEBUG] stripeSubscription:', JSON.stringify(stripeSubscription, null, 2));
+
+            if (!stripeSubscription || !stripeSubscription.items || !stripeSubscription.items.data || !stripeSubscription.items.data.length) {
+              console.error(`🔴 Error: Stripe subscription ${subscriptionId} not found or has no items data.`);
+              // console.log('[TEST_DEBUG] Condition !stripeSubscription || !stripeSubscription.items.data.length met');
+              return NextResponse.json({ received: true, error: 'Subscription details not found or items missing' }, { status: 200 });
+            }
+
+            const planItem = stripeSubscription.items.data[0];
+            const price = planItem.price;
+            const product = price.product as Stripe.Product;
+            // console.log('[TEST_DEBUG] product:', JSON.stringify(product, null, 2));
+
+            const planName = product.name;
+            const creditsFromPlanString = product.metadata?.credits || '0';
+            const creditsToAllocate = parseInt(creditsFromPlanString, 10);
+            // console.log('[TEST_DEBUG] planName:', planName, 'creditsFromPlanString:', creditsFromPlanString, 'creditsToAllocate:', creditsToAllocate);
+
+            if (isNaN(creditsToAllocate)) {
+              console.error('🔴 Error: Invalid credits value in product metadata.', { productId: product.id, metadataValue: creditsFromPlanString });
+              // console.log('[TEST_DEBUG] Condition isNaN(creditsToAllocate) met');
+              return NextResponse.json({ received: true, error: 'Invalid credits in product metadata' }, { status: 200 });
+            }
+
+            // console.log('[TEST_DEBUG] Reaching transaction block');
+            await prisma.$transaction(async (tx) => {
+              await tx.user.update({
+                where: { id: userId },
+                data: {
+                  stripeCustomerId: stripeCustomerId,
+                  subscriptionStatus: stripeSubscription.status, // Use status from retrieved subscription
+                  subscriptionPlan: planName,
+                  credits: { increment: creditsToAllocate },
+                },
+              });
+
+              // Assuming stripeSubscription is correctly typed as Stripe.Subscription by this point
+              const subId = stripeSubscription.id;
+              const subStatus = stripeSubscription.status;
+              // Cast to any for problematic properties to bypass persistent linter issue
+              const subPeriodStart = (stripeSubscription as any).current_period_start;
+              const subPeriodEnd = (stripeSubscription as any).current_period_end;
+
+              await tx.subscription.upsert({
+                where: { stripeSubscriptionId: subId },
+                create: {
+                  userId: userId,
+                  stripeSubscriptionId: subId,
+                  planName: planName,
+                  status: subStatus,
+                  currentPeriodStart: new Date(subPeriodStart * 1000),
+                  currentPeriodEnd: new Date(subPeriodEnd * 1000),
+                  monthlyCredits: creditsToAllocate,
+                },
+                update: {
+                  status: subStatus,
+                  planName: planName,
+                  currentPeriodStart: new Date(subPeriodStart * 1000),
+                  currentPeriodEnd: new Date(subPeriodEnd * 1000),
+                  monthlyCredits: creditsToAllocate,
+                },
+              });
             });
-            console.log(`✅ User ${userId} subscription activated. Stripe Customer ID: ${stripeCustomerId}`);
+
+            console.log(`✅ User ${userId} subscription ${stripeSubscription.id} processed. Plan: ${planName}, Credits: ${creditsToAllocate}.`);
+
           } else if (session.mode === 'payment') {
-            const creditsPurchasedString = session.metadata?.credits_purchased;
-            if (creditsPurchasedString) {
-              const creditsPurchased = parseInt(creditsPurchasedString, 10);
-              if (isNaN(creditsPurchased)) {
-                console.error('🔴 Error: Invalid credits_purchased value in session metadata.', { sessionId: session.id, metadataValue: creditsPurchasedString });
-                return NextResponse.json({ received: true, error: 'Invalid credits_purchased in metadata' }, { status: 200 });
-              }
+            const creditsPurchasedStr = session.metadata?.credits_purchased;
+            let creditsPurchased: number | undefined;
+            if (creditsPurchasedStr) {
+                creditsPurchased = parseInt(creditsPurchasedStr, 10);
+            }
+
+            if (creditsPurchasedStr && creditsPurchased !== undefined && !isNaN(creditsPurchased) && creditsPurchased > 0) {
               await prisma.user.update({
                 where: { id: userId },
                 data: {
-                  credits: {
-                    increment: creditsPurchased,
-                  },
-                  // Optionally update stripeCustomerId if it's their first payment and they don't have one
-                  ...(stripeCustomerId && { stripeCustomerId: stripeCustomerId }),
+                  credits: { increment: creditsPurchased },
+                  ...(stripeCustomerId && { stripeCustomerId }),
                 },
               });
               console.log(`✅ User ${userId} credited with ${creditsPurchased} credits.`);
-            } else {
+            } else if (!creditsPurchasedStr) { // If credits_purchased is missing entirely
               console.warn(`⚠️ checkout.session.completed in payment mode for user ${userId} but no 'credits_purchased' in metadata. Session ID: ${session.id}`);
+            } else { // Invalid (e.g., NaN after parse) or non-positive credits_purchased
+              console.error('🔴 Error: Invalid credits_purchased value.', { sessionId: session.id, val: creditsPurchasedStr });
+              return NextResponse.json({ received: true, error: 'Invalid credits_purchased in metadata' }, { status: 200 });
             }
           } else {
-            console.warn(`⚠️ Unhandled session mode: ${session.mode} for checkout.session.completed. Session ID: ${session.id}`);
+            console.warn(`⚠️ Unhandled session mode: ${session.mode} or missing data. Session: ${session.id}`);
           }
         } catch (dbError: any) {
           console.error(`🔴 Database error processing checkout.session.completed for user ${userId}:`, dbError.message, { sessionId: session.id });

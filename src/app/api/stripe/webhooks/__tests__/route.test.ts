@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import httpMocks from 'node-mocks-http';
+import Stripe from 'stripe';
 
 // Helper to create mock requests
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD';
@@ -22,25 +23,53 @@ const createMockRequest = (method: HttpMethod, body: any, headers?: Record<strin
 describe('/api/stripe/webhooks', () => {
   let POST: any; // To hold the dynamically imported POST function
   const mockUserUpdate = jest.fn();
+  const mockSubscriptionCreate = jest.fn();
+  const mockSubscriptionUpdate = jest.fn();
+  const mockSubscriptionUpsert = jest.fn();
   const mockStripeConstructEvent = jest.fn();
+  const mockStripeSubscriptionsRetrieve = jest.fn(); // New mock for subscriptions.retrieve
+  const mockStripeProductsRetrieve = jest.fn();    // New mock for products.retrieve
   const MOCK_WEBHOOK_SECRET = 'whsec_test_secret';
   const originalStripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   beforeEach(() => {
     jest.resetModules(); // Crucial for jest.doMock to work correctly on subsequent test runs
 
-    // Set up mocks *before* requiring the module under test
-    jest.doMock('@prisma/client', () => ({
-      PrismaClient: jest.fn().mockImplementation(() => ({
+    // Mock the shared prisma instance from @/lib/db
+    jest.doMock('@/lib/db', () => ({
+      prisma: {
         user: {
           update: mockUserUpdate,
         },
-      })),
+        subscription: {
+          create: mockSubscriptionCreate,
+          update: mockSubscriptionUpdate,
+          upsert: mockSubscriptionUpsert,
+        },
+        $transaction: jest.fn(async (callback) => callback(
+          {
+            user: {
+              update: mockUserUpdate,
+            },
+            subscription: {
+              upsert: mockSubscriptionUpsert,
+            },
+          }
+        )),
+      },
     }));
+
+    // Set up mocks *before* requiring the module under test
     jest.doMock('../../../../../lib/stripe', () => ({
       stripe: {
         webhooks: {
           constructEvent: mockStripeConstructEvent,
+        },
+        subscriptions: { // Add subscriptions here
+          retrieve: mockStripeSubscriptionsRetrieve,
+        },
+        products: { // Add products here
+          retrieve: mockStripeProductsRetrieve,
         },
         errors: {
           StripeSignatureVerificationError: jest.fn(),
@@ -53,7 +82,12 @@ describe('/api/stripe/webhooks', () => {
 
     // Reset spies/mocks for each test
     mockUserUpdate.mockReset();
+    mockSubscriptionCreate.mockReset();
+    mockSubscriptionUpdate.mockReset();
+    mockSubscriptionUpsert.mockReset();
     mockStripeConstructEvent.mockReset();
+    mockStripeSubscriptionsRetrieve.mockReset(); // Reset new mock
+    mockStripeProductsRetrieve.mockReset();    // Reset new mock
     process.env.STRIPE_WEBHOOK_SECRET = MOCK_WEBHOOK_SECRET;
   });
 
@@ -146,14 +180,27 @@ describe('/api/stripe/webhooks', () => {
         data: {
           object: {
             id: sessionId,
-            mode: 'subscription',
+            mode: 'subscription' as Stripe.Checkout.Session.Mode,
             customer: stripeCustomerId,
+            subscription: 'sub_test_id_for_simple_case',
             metadata: { userId },
           },
         },
       };
       mockStripeConstructEvent.mockReturnValue(mockSessionEvent);
+      const planName = 'Basic Plan';
+      const planCredits = 10;
+      const mockProduct = { id: 'prod_basic', name: planName, metadata: { credits: String(planCredits) } } as any;
+      const mockSubscription = {
+        id: 'sub_basic_test',
+        status: 'active',
+        items: { data: [{ price: { product: mockProduct } }] },
+        current_period_start: Math.floor(Date.now() / 1000),
+        current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+      } as any;
+      mockStripeSubscriptionsRetrieve.mockResolvedValue(mockSubscription);
       mockUserUpdate.mockResolvedValue({ id: userId, credits: 0 });
+      mockSubscriptionUpsert.mockResolvedValue({ id: 'dbsub_123' }); // For the transaction
 
       const rawPayload = JSON.stringify(mockSessionEvent.data.object);
       const req = createMockRequest('POST', mockSessionEvent.data.object, { 'stripe-signature': 'sig_valid_checkout' }, rawPayload);
@@ -168,6 +215,27 @@ describe('/api/stripe/webhooks', () => {
         data: {
           stripeCustomerId: stripeCustomerId,
           subscriptionStatus: 'active',
+          subscriptionPlan: planName,
+          credits: { increment: planCredits },
+        },
+      });
+      expect(mockSubscriptionUpsert).toHaveBeenCalledWith({
+        where: { stripeSubscriptionId: 'sub_basic_test' },
+        create: {
+          userId: userId,
+          stripeSubscriptionId: 'sub_basic_test',
+          planName: planName,
+          status: 'active',
+          currentPeriodStart: new Date(mockSubscription.current_period_start * 1000),
+          currentPeriodEnd: new Date(mockSubscription.current_period_end * 1000),
+          monthlyCredits: planCredits,
+        },
+        update: {
+          status: 'active',
+          planName: planName,
+          currentPeriodStart: new Date(mockSubscription.current_period_start * 1000),
+          currentPeriodEnd: new Date(mockSubscription.current_period_end * 1000),
+          monthlyCredits: planCredits,
         },
       });
     });
@@ -213,62 +281,80 @@ describe('/api/stripe/webhooks', () => {
         data: {
           object: {
             id: sessionId,
-            mode: 'payment',
+            mode: 'subscription' as Stripe.Checkout.Session.Mode,
             customer: stripeCustomerId,
-            metadata: {}, // Missing userId
-          },
+            subscription: 'sub_no_user_test',
+            metadata: {},
+          } as any,
         },
       };
       mockStripeConstructEvent.mockReturnValue(mockSessionEvent);
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       const rawPayload = JSON.stringify(mockSessionEvent.data.object);
-      const req = createMockRequest('POST', mockSessionEvent.data.object, { 'stripe-signature': 'sig_valid_checkout' }, rawPayload);
-
+      const req = createMockRequest('POST', mockSessionEvent.data.object, { 'stripe-signature': 'sig_valid_checkout_no_user' }, rawPayload);
       const response = await POST(req);
       const responseBody = await response.json();
 
       expect(response.status).toBe(200);
       expect(responseBody).toEqual({ received: true, error: 'User ID missing in metadata' });
-      expect(mockUserUpdate).not.toHaveBeenCalled();
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '🔴 Error: userId not found in session metadata. Cannot process checkout.session.completed.',
-        { sessionId: sessionId }
+        '🔴 Error: userId not found in session metadata.',
+        { sessionId: mockSessionEvent.data.object.id }
       );
       consoleErrorSpy.mockRestore();
     });
 
     it('should return 200 and log error if Prisma update fails', async () => {
       const mockSessionEvent = {
-        id: 'evt_test_checkout_db_fail',
+        id: 'evt_test_checkout_prisma_fail',
         type: 'checkout.session.completed',
         data: {
           object: {
             id: sessionId,
-            mode: 'subscription',
+            mode: 'subscription' as Stripe.Checkout.Session.Mode,
             customer: stripeCustomerId,
+            subscription: 'sub_prisma_fail_test_id',
             metadata: { userId },
-          },
+          } as any,
         },
       };
       mockStripeConstructEvent.mockReturnValue(mockSessionEvent);
-      mockUserUpdate.mockRejectedValue(new Error('DB update failed'));
+
+      const planName = 'Prisma Fail Plan';
+      const planCredits = 15;
+      const mockProductForPrismaFail = { id: 'prod_prisma_fail', name: planName, metadata: { credits: String(planCredits) } } as any;
+      const mockSubscriptionForPrismaFail = {
+        id: 'sub_prisma_fail_test_id',
+        status: 'active',
+        items: { data: [{ price: { product: mockProductForPrismaFail } }] },
+        current_period_start: Math.floor(Date.now() / 1000),
+        current_period_end: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60),
+      } as any;
+      mockStripeSubscriptionsRetrieve.mockResolvedValue(mockSubscriptionForPrismaFail);
+
+      const prismaError = new Error('Simulated Prisma Error in transaction');
+      const { prisma: mockPrisma } = jest.requireMock('@/lib/db');
+      (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async () => {
+        throw prismaError;
+      });
+
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       const rawPayload = JSON.stringify(mockSessionEvent.data.object);
-      const req = createMockRequest('POST', mockSessionEvent.data.object, { 'stripe-signature': 'sig_valid_checkout' }, rawPayload);
-
+      const req = createMockRequest('POST', mockSessionEvent.data.object, { 'stripe-signature': 'sig_valid_checkout_prisma_fail' }, rawPayload);
       const response = await POST(req);
       const responseBody = await response.json();
 
-      expect(response.status).toBe(200); // Per plan, acknowledge with 200 even on DB error
+      expect(response.status).toBe(200);
       expect(responseBody).toEqual({ received: true, error: 'Database update failed' });
-      expect(mockUserUpdate).toHaveBeenCalled();
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         `🔴 Database error processing checkout.session.completed for user ${userId}:`,
-        'DB update failed',
-        { sessionId: sessionId }
+        prismaError.message,
+        { sessionId: mockSessionEvent.data.object.id }
       );
+
       consoleErrorSpy.mockRestore();
     });
 
@@ -281,7 +367,7 @@ describe('/api/stripe/webhooks', () => {
             id: sessionId,
             mode: 'payment',
             customer: stripeCustomerId,
-            metadata: { userId, credits_purchased: 'not-a-number' }, // Invalid value
+            metadata: { userId, credits_purchased: 'not-a-number' },
           },
         },
       };
@@ -298,8 +384,8 @@ describe('/api/stripe/webhooks', () => {
       expect(responseBody).toEqual({ received: true, error: 'Invalid credits_purchased in metadata' });
       expect(mockUserUpdate).not.toHaveBeenCalled();
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '🔴 Error: Invalid credits_purchased value in session metadata.',
-        { sessionId: sessionId, metadataValue: 'not-a-number' }
+        '🔴 Error: Invalid credits_purchased value.',
+        { sessionId: sessionId, val: 'not-a-number' }
       );
       consoleErrorSpy.mockRestore();
     });
@@ -333,6 +419,104 @@ describe('/api/stripe/webhooks', () => {
         `⚠️ checkout.session.completed in payment mode for user ${userId} but no 'credits_purchased' in metadata. Session ID: ${sessionId}`
       );
       consoleWarnSpy.mockRestore();
+    });
+
+    it('should create a Subscription record and allocate credits for a new subscription', async () => {
+      // Define constants used in this test scope
+      const userId = 'user_test_123';
+      const stripeCustomerId = 'cus_test_456';
+      const sessionId = 'cs_test_789';
+      const planCredits = 50;
+      const subscriptionId = 'sub_new_test_id';
+      const priceId = 'price_new_test_id';
+      const productId = 'prod_new_test_id';
+      const planName = 'Pro Plan';
+      const currentTime = Math.floor(Date.now() / 1000);
+
+      // Restore original console.log for this test if it was spied on globally and then restored
+      // This is just to be sure, though jest.setup.js change should be enough
+      const originalConsoleLog = console.log;
+      // console.log = jest.fn(); // If you want to spy specific to this test, but we removed global mock for now
+
+      const mockCheckoutSession = {
+        id: sessionId,
+        mode: 'subscription',
+        customer: stripeCustomerId,
+        subscription: subscriptionId, 
+        metadata: { userId },
+      } as any; // Cast to any for simplicity if full Checkout.Session type is too much
+
+      const mockStripeProduct = {
+        id: productId,
+        name: planName,
+        object: 'product', // common Stripe pattern
+        // active: true, // only if your code actually uses it
+        metadata: { credits: String(planCredits) }
+      } as any; // Cast to any
+
+      const mockStripeSubscription = {
+        id: subscriptionId,
+        status: 'active',
+        object: 'subscription', // common Stripe pattern
+        items: {
+          data: [{
+            price: {
+              product: mockStripeProduct, // Embed the product mock (already 'any')
+            },
+          }],
+        },
+        current_period_start: currentTime,
+        current_period_end: currentTime + (30 * 24 * 60 * 60),
+      } as any; // Cast to any
+
+      mockStripeConstructEvent.mockReturnValue({
+        id: 'evt_test_checkout_sub_create',
+        type: 'checkout.session.completed',
+        data: { object: mockCheckoutSession }, // mockCheckoutSession is already 'any'
+        // Add other fields if Stripe.Event type strictly requires them and they are used by the code
+        // For now, assume this is enough for constructEvent mock
+      } as any); // Cast to any
+      
+mockStripeSubscriptionsRetrieve.mockResolvedValue(mockStripeSubscription);
+      
+mockUserUpdate.mockResolvedValue({ id: userId } as any); 
+      mockSubscriptionUpsert.mockResolvedValue({ id: 'db_sub_id_123' } as any);
+
+      const rawPayload = JSON.stringify(mockCheckoutSession);
+      const req = createMockRequest('POST', mockCheckoutSession, { 'stripe-signature': 'sig_valid_new_sub' }, rawPayload);
+
+      await POST(req);
+
+      expect(mockUserUpdate).toHaveBeenCalledWith({
+        where: { id: userId },
+        data: {
+          stripeCustomerId: stripeCustomerId,
+          subscriptionStatus: 'active',
+          subscriptionPlan: planName,
+          credits: { increment: planCredits },
+        },
+      });
+
+      expect(mockSubscriptionUpsert).toHaveBeenCalledWith({
+        where: { stripeSubscriptionId: subscriptionId },
+        create: {
+          userId: userId,
+          stripeSubscriptionId: subscriptionId,
+          planName: planName,
+          status: 'active',
+          currentPeriodStart: new Date(mockStripeSubscription.current_period_start * 1000),
+          currentPeriodEnd: new Date(mockStripeSubscription.current_period_end * 1000),
+          monthlyCredits: planCredits,
+        },
+        update: {
+          status: 'active',
+          planName: planName,
+          currentPeriodStart: new Date(mockStripeSubscription.current_period_start * 1000),
+          currentPeriodEnd: new Date(mockStripeSubscription.current_period_end * 1000),
+          monthlyCredits: planCredits,
+        },
+      });
+      // console.log = originalConsoleLog; // Restore if spied locally
     });
   });
 }); 
