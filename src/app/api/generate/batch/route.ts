@@ -18,6 +18,9 @@ const batchGenerateSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Track generation start time for duration calculation
+    const generationStartTime = Date.now()
+    
     // Check authentication
     const session = await auth()
     if (!session?.user?.id) {
@@ -84,6 +87,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Calculate generation duration
+    const generationDuration = Date.now() - generationStartTime
+
     // Save successful generations and deduct credits
     const savedImages = []
     let creditsUsed = 0
@@ -91,10 +97,16 @@ export async function POST(request: NextRequest) {
     for (const result of batchResult.results) {
       if (result.image) {
         try {
-          // *** MODIFICATION START: Upload to Cloudflare and get permanent URL ***
-          const temporaryImageUrl = result.image.url
+          // Extract image metadata from generation result
+          const imageData = result.image
+          const temporaryImageUrl = imageData.url
+          const imageWidth = imageData.width
+          const imageHeight = imageData.height
+
+          // *** ENHANCED METADATA COLLECTION START ***
           let finalImageUrl = temporaryImageUrl // Fallback to temporary URL
           let cloudflareImageId: string | undefined = undefined
+          let fileSize: number | undefined = undefined
 
           try {
             const cfImagesService = new CloudflareImagesService()
@@ -105,20 +117,36 @@ export async function POST(request: NextRequest) {
                 originalProvider: 'together-ai',
                 userId: session.user.id,
                 batchId: batchResult.batchId,
+                width: imageWidth,
+                height: imageHeight,
+                generationDuration
               }
             )
 
             if (uploadResult.success && uploadResult.imageId) {
               cloudflareImageId = uploadResult.imageId
               finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId)
-              console.log('✅ Batch image uploaded to Cloudflare:', { cloudflareImageId, finalImageUrl })
+              
+              // Try to get file size from Cloudflare response
+              if (uploadResult.originalResponse?.result?.metadata?.size) {
+                const sizeValue = uploadResult.originalResponse.result.metadata.size
+                fileSize = typeof sizeValue === 'string' ? parseInt(sizeValue) : typeof sizeValue === 'number' ? sizeValue : undefined
+              }
+              
+              console.log('✅ Batch image uploaded to Cloudflare:', { 
+                cloudflareImageId, 
+                finalImageUrl,
+                fileSize,
+                width: imageWidth,
+                height: imageHeight
+              })
             } else {
               console.warn('⚠️ Cloudflare upload failed for batch image, using temporary URL. Error:', uploadResult.error)
             }
           } catch (cfError) {
             console.error('❌ Exception during Cloudflare upload for batch image:', cfError)
           }
-          // *** MODIFICATION END ***
+          // *** ENHANCED METADATA COLLECTION END ***
 
           const generatedImage = await prisma.generatedImage.create({
             data: {
@@ -127,6 +155,14 @@ export async function POST(request: NextRequest) {
               prompt: result.prompt,
               imageUrl: finalImageUrl, // ✅ Use Cloudflare URL when available
               cloudflareImageId: cloudflareImageId, // ✅ Store Cloudflare Image ID
+              
+              // Enhanced metadata fields
+              width: imageWidth,
+              height: imageHeight,
+              fileSize: fileSize,
+              generationDuration: generationDuration,
+              originalTempUrl: temporaryImageUrl, // Store original URL for debugging
+              
               generationParams: {
                 model: modelId || 'black-forest-labs/FLUX.1-schnell-Free',
                 aspectRatio,
@@ -143,6 +179,9 @@ export async function POST(request: NextRequest) {
             url: finalImageUrl, // ✅ Return Cloudflare URL when available
             prompt: result.prompt,
             aspectRatio,
+            width: imageWidth,
+            height: imageHeight,
+            generationDuration,
             createdAt: generatedImage.createdAt
           })
 
@@ -165,6 +204,7 @@ export async function POST(request: NextRequest) {
     const response = {
       success: true,
       batchId: batchResult.batchId,
+      generationDuration,
       results: batchResult.results.map(result => ({
         prompt: result.prompt,
         success: !!result.image,

@@ -46,6 +46,14 @@ export async function GET(request: NextRequest) {
         prompt: true,
         imageUrl: true,
         cloudflareImageId: true,
+        
+        // Enhanced metadata fields
+        width: true,
+        height: true,
+        fileSize: true,
+        generationDuration: true,
+        originalTempUrl: true,
+        
         generationParams: true,
         creditsUsed: true,
         createdAt: true,
@@ -70,6 +78,14 @@ export async function GET(request: NextRequest) {
         id: image.id,
         prompt: image.prompt,
         imageUrl: resolveImageUrl(image.imageUrl, image.cloudflareImageId),
+        
+        // Enhanced metadata with fallbacks for existing images
+        width: image.width || null,
+        height: image.height || null,
+        fileSize: image.fileSize || null,
+        generationDuration: image.generationDuration || null,
+        originalTempUrl: image.originalTempUrl || null,
+        
         generationParams: image.generationParams,
         creditsUsed: image.creditsUsed,
         createdAt: image.createdAt.toISOString()

@@ -19,25 +19,15 @@ const generateImageSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Track generation start time for duration calculation
+    const generationStartTime = Date.now()
+    
     // Check authentication
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
-      )
-    }
-
-    // Check if user has enough credits
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { credits: true }
-    })
-
-    if (!user || user.credits < 1) {
-      return NextResponse.json(
-        { error: 'Insufficient credits' },
-        { status: 400 }
       )
     }
 
@@ -54,45 +44,23 @@ export async function POST(request: NextRequest) {
 
     const { prompt, modelId, style, aspectRatio, steps, seed, userModelId } = validation.data
 
-    // Initialize Together AI service
-    const together = new TogetherAIService()
+    // Check if user has enough credits
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { credits: true }
+    })
 
-    // Check if using a custom user model
-    let selectedUserModel = null
-    if (userModelId) {
-      selectedUserModel = await prisma.userModel.findFirst({
-        where: {
-          id: userModelId,
-          userId: session.user.id,
-          status: 'ready',
-          loraReadyForInference: true,
-          replicateModelId: { not: null }
-        }
-      })
-
-      if (!selectedUserModel) {
-        return NextResponse.json(
-          { error: 'Custom model not found, not ready, or not available for inference' },
-          { status: 400 }
-        )
-      }
-
-      if (!selectedUserModel.replicateModelId) {
-        return NextResponse.json(
-          { error: 'Custom model does not have a Replicate model configured' },
-          { status: 400 }
-        )
-      }
-
-      console.log('✅ Custom model selected for generation:', {
-        modelId: selectedUserModel.id,
-        name: selectedUserModel.name,
-        status: selectedUserModel.status,
-        loraReady: selectedUserModel.loraReadyForInference
-      })
+    if (!user || user.credits < 1) {
+      return NextResponse.json(
+        { error: 'Insufficient credits' },
+        { status: 400 }
+      )
     }
 
-    // Build full prompt with style
+    // Initialize services
+    const together = new TogetherAIService()
+
+    // Process style enhancement
     let fullPrompt = prompt
     if (style && style !== 'none') {
       const stylePresets = together.getStylePresets()
@@ -102,7 +70,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate image - use Replicate for custom models, Together AI for base models
+    // Get user model if specified
+    let selectedUserModel = null
+    if (userModelId) {
+      selectedUserModel = await prisma.userModel.findFirst({
+        where: {
+          id: userModelId,
+          userId: session.user.id,
+          status: 'ready'
+        }
+      })
+
+      if (!selectedUserModel) {
+        return NextResponse.json(
+          { error: 'Selected model not found or not ready' },
+          { status: 404 }
+        )
+      }
+
+      // Add trigger word to prompt if using custom model
+      if (selectedUserModel.triggerWord && !fullPrompt.toLowerCase().includes(selectedUserModel.triggerWord.toLowerCase())) {
+        fullPrompt = `${selectedUserModel.triggerWord}, ${fullPrompt}`
+      }
+    }
+
+    // Generate image
     let result
     if (selectedUserModel && selectedUserModel.replicateModelId) {
       console.log('🎯 Generating with custom model via Replicate:', {
@@ -141,6 +133,9 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Calculate generation duration
+    const generationDuration = Date.now() - generationStartTime
+
     // Enhanced logging for debugging generation results
     console.log('🔍 Generation result details:', {
       status: result.status,
@@ -148,7 +143,8 @@ export async function POST(request: NextRequest) {
       imageCount: result.images?.length || 0,
       error: result.error,
       resultKeys: Object.keys(result),
-      firstImageUrl: result.images?.[0]?.url
+      firstImageUrl: result.images?.[0]?.url,
+      generationDuration
     })
 
     if (result.status === 'failed') {
@@ -194,10 +190,16 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // *** MODIFICATION START: Upload to Cloudflare and get permanent URL ***
-      const temporaryImageUrl = result.images[0].url
+      // Extract image metadata from generation result
+      const imageData = result.images[0]
+      const temporaryImageUrl = imageData.url
+      const imageWidth = imageData.width
+      const imageHeight = imageData.height
+
+      // *** ENHANCED METADATA COLLECTION START ***
       let finalImageUrl = temporaryImageUrl // Fallback to temporary URL
       let cloudflareImageId: string | undefined = undefined
+      let fileSize: number | undefined = undefined
 
       try {
         const cfImagesService = new CloudflareImagesService()
@@ -208,13 +210,29 @@ export async function POST(request: NextRequest) {
             originalProvider: selectedUserModel ? 'replicate' : 'together-ai',
             userId: session.user.id,
             userModelId: selectedUserModel?.id,
+            width: imageWidth,
+            height: imageHeight,
+            generationDuration
           }
         )
 
         if (uploadResult.success && uploadResult.imageId) {
           cloudflareImageId = uploadResult.imageId
           finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId) // Uses default 'public' variant
-          console.log('✅ Image uploaded to Cloudflare:', { cloudflareImageId, finalImageUrl })
+          
+          // Try to get file size from Cloudflare response
+          if (uploadResult.originalResponse?.result?.metadata?.size) {
+            const sizeValue = uploadResult.originalResponse.result.metadata.size
+            fileSize = typeof sizeValue === 'string' ? parseInt(sizeValue) : typeof sizeValue === 'number' ? sizeValue : undefined
+          }
+          
+          console.log('✅ Image uploaded to Cloudflare:', { 
+            cloudflareImageId, 
+            finalImageUrl, 
+            fileSize,
+            width: imageWidth,
+            height: imageHeight
+          })
         } else {
           console.warn('⚠️ Cloudflare upload failed, using temporary URL. Error:', uploadResult.error)
           // Optionally, you could decide to not save to DB or return an error if CF upload is critical
@@ -223,9 +241,9 @@ export async function POST(request: NextRequest) {
         console.error('❌ Exception during Cloudflare upload:', cfError)
         // Fallback to temporary URL, error already logged
       }
-      // *** MODIFICATION END ***
+      // *** ENHANCED METADATA COLLECTION END ***
 
-      // Save generated image to database
+      // Save generated image to database with enhanced metadata
       const generatedImage = await prisma.generatedImage.create({
         data: {
           userId: session.user.id,
@@ -233,6 +251,14 @@ export async function POST(request: NextRequest) {
           prompt: fullPrompt,
           imageUrl: finalImageUrl, // Use the final (Cloudflare or temporary) URL
           cloudflareImageId: cloudflareImageId, // Store Cloudflare Image ID
+          
+          // Enhanced metadata fields
+          width: imageWidth,
+          height: imageHeight,
+          fileSize: fileSize,
+          generationDuration: generationDuration,
+          originalTempUrl: temporaryImageUrl, // Store original URL for debugging
+          
           generationParams: {
             model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
             provider: selectedUserModel ? 'replicate' : 'together-ai',
@@ -258,6 +284,9 @@ export async function POST(request: NextRequest) {
           url: finalImageUrl, // Use the final (Cloudflare or temporary) URL
           prompt: fullPrompt,
           aspectRatio,
+          width: imageWidth,
+          height: imageHeight,
+          generationDuration,
           createdAt: generatedImage.createdAt,
           userModel: selectedUserModel ? {
             id: selectedUserModel.id,

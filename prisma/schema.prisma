@@ -95,6 +95,14 @@ model GeneratedImage {
   imageUrl          String    @map("image_url")
   cloudflareImageId String?   @map("cloudflare_image_id")
   s3Key             String?   @map("s3_key")
+  
+  // Enhanced metadata fields
+  width             Int?      // Image width in pixels
+  height            Int?      // Image height in pixels
+  fileSize          Int?      @map("file_size") // File size in bytes
+  generationDuration Int?     @map("generation_duration") // Generation time in milliseconds
+  originalTempUrl   String?   @map("original_temp_url") // Original temporary URL for debugging
+  
   generationParams  Json?     @map("generation_params") // store model settings, seed, etc.
   creditsUsed       Int       @default(1) @map("credits_used")
   createdAt         DateTime  @default(now()) @map("created_at")

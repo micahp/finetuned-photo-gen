@@ -279,7 +279,7 @@ TODO: flest out the rest
 - [ ] Environment variables setup
 - [ ] Production database setup
 - [x] R2 bucket configuration
-- [ ] CDN setup for image delivery
+- [x] CDN setup for image delivery
 
 ### **Monitoring & Analytics**
 - [ ] Sentry integration for error tracking
