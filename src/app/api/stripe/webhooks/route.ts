@@ -208,10 +208,292 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ received: true, error: 'Database update failed' }, { status: 200 });
         }
         break;
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+        const subscription = event.data.object as Stripe.Subscription;
+        const subStripeCustomerId = subscription.customer as string;
+        const subId = subscription.id;
+
+        // console.log(`[DEBUG] Processing ${event.type} for subscription ${subId}, customer ${subStripeCustomerId}`);
+
+        if (!subStripeCustomerId) {
+          console.error(`🔴 Error: Missing Stripe customer ID in ${event.type} event.`, { subscriptionId: subId });
+          return NextResponse.json({ received: true, eventId: event.id, warning: 'Missing customer ID in subscription event.' }, { status: 200 });
+        }
+
+        try {
+          const user = await prisma.user.findFirst({
+            where: { stripeCustomerId: subStripeCustomerId },
+          });
+
+          if (!user) {
+            console.error(`🔴 Error: User not found for stripeCustomerId ${subStripeCustomerId} in ${event.type}.`, { subscriptionId: subId });
+            return NextResponse.json({ received: true, eventId: event.id, warning: `User not found for customer ${subStripeCustomerId}.` }, { status: 200 });
+          }
+          const userId = user.id;
+
+          if (!subscription.items || !subscription.items.data || !subscription.items.data.length) {
+            console.error(`🔴 Error: Subscription ${subId} has no items. Cannot determine plan/credits.`, { userId });
+            return NextResponse.json({ received: true, eventId: event.id, warning: 'Subscription items missing.'}, { status: 200 });
+          }
+
+          const priceItem = subscription.items.data[0].price;
+          if (!priceItem || typeof priceItem.product !== 'string') {
+            console.error(`🔴 Error: Product ID missing or not a string in subscription item for ${subId}.`, { userId, priceId: priceItem?.id });
+            return NextResponse.json({ received: true, eventId: event.id, warning: 'Product ID missing in subscription item.'}, { status: 200 });
+          }
+          const productId = priceItem.product;
+          const stripeProduct = await stripe.products.retrieve(productId);
+
+          const planName = stripeProduct.name;
+          const creditsFromPlanString = stripeProduct.metadata?.credits || '0';
+          const creditsToAllocate = parseInt(creditsFromPlanString, 10);
+
+          if (isNaN(creditsToAllocate)) {
+            console.error(`🔴 Error: Invalid credits value in product metadata for ${productId}.`, { userId, metadataValue: creditsFromPlanString });
+            return NextResponse.json({ received: true, eventId: event.id, error: 'Invalid credits in product metadata' }, { status: 200 });
+          }
+
+          await prisma.$transaction(async (tx) => {
+            await tx.user.update({
+              where: { id: userId },
+              data: {
+                stripeCustomerId: subStripeCustomerId,
+                subscriptionStatus: subscription.status,
+                subscriptionPlan: planName,
+              },
+            });
+
+            await tx.subscription.upsert({
+              where: { stripeSubscriptionId: subId },
+              create: {
+                userId: userId,
+                stripeSubscriptionId: subId,
+                planName: planName,
+                status: subscription.status,
+                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+                monthlyCredits: creditsToAllocate, 
+              },
+              update: {
+                planName: planName,
+                status: subscription.status,
+                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+                monthlyCredits: creditsToAllocate,
+              },
+            });
+          });
+
+          // Determine credit allocation logic based on event type and subscription status
+          let shouldAddCredits = false;
+          let creditReason = '';
+          let creditTransactionType: string = 'subscription_updated'; // Using string type temporarily
+
+          if (event.type === 'customer.subscription.created' && subscription.status === 'active') {
+            shouldAddCredits = true;
+            creditReason = `Credits for new ${planName} subscription`;
+            creditTransactionType = 'subscription_created';
+          } else if (event.type === 'customer.subscription.updated') {
+            const previousStatus = (event.data.previous_attributes as any)?.status;
+            if (subscription.status === 'active' && previousStatus !== 'active') {
+                shouldAddCredits = true;
+                creditReason = `Credits for activated ${planName} subscription`;
+                creditTransactionType = 'subscription_activated';
+            } else if (subscription.status === 'active') {
+                 if (creditsToAllocate > 0) {
+                    shouldAddCredits = true; 
+                    creditReason = `Credits for updated ${planName} subscription`;
+                    // creditTransactionType is already 'subscription_updated'
+                 }
+            }
+          }
+          if (subscription.status !== 'active' && subscription.status !== 'past_due') { 
+            shouldAddCredits = false;
+          }
+
+          if (shouldAddCredits && creditsToAllocate > 0) {
+            await CreditService.addCredits(
+              userId,
+              creditsToAllocate,
+              creditTransactionType as any, // Cast to any to bypass enum issue for now
+              creditReason,
+              'subscription',
+              subId,
+              { planName, stripeSubscriptionId: subId, status: subscription.status }
+            );
+            console.log(`✅ Credits added for user ${userId} via ${event.type}. Plan: ${planName}, Credits: ${creditsToAllocate}.`);
+          } else {
+            console.log(`ℹ️ No credits added for user ${userId} via ${event.type}. Status: ${subscription.status}, Credits: ${creditsToAllocate}.`);
+          }
+          console.log(`✅ ${event.type} for ${subId} processed for user ${userId}.`);
+
+        } catch (err: any) {
+          console.error(`🔴 Error processing ${event.type} for subscription ${subId}:`, err.message, err.stack);
+          return NextResponse.json({ received: true, eventId: event.id, error: `Failed to process ${event.type}. View logs.` , details: err.message }, { status: 200 }); // 200 to Stripe
+        }
+        break;
+      case 'customer.subscription.deleted':
+        const deletedSubscription = event.data.object as Stripe.Subscription;
+        const deletedSubStripeCustomerId = deletedSubscription.customer as string;
+        const deletedSubId = deletedSubscription.id;
+        // console.log(`[DEBUG] Processing customer.subscription.deleted for ${deletedSubId}`);
+        if (!deletedSubStripeCustomerId) {
+            console.error('🔴 Error: Missing customer ID in customer.subscription.deleted', { subscriptionId: deletedSubId });
+            return NextResponse.json({ received: true, eventId: event.id, warning: 'Missing customer ID.' }, { status: 200 });
+        }
+        try {
+            const user = await prisma.user.findFirst({ where: { stripeCustomerId: deletedSubStripeCustomerId } });
+            if (!user) {
+                console.error('🔴 Error: User not found for customer.subscription.deleted', { stripeCustomerId: deletedSubStripeCustomerId });
+                return NextResponse.json({ received: true, eventId: event.id, warning: 'User not found.' }, { status: 200 });
+            }
+            await prisma.$transaction(async (tx) => {
+                await tx.user.update({
+                    where: { id: user.id },
+                    data: { subscriptionStatus: deletedSubscription.status }, // e.g., 'canceled'
+                });
+                await tx.subscription.updateMany({
+                    where: { stripeSubscriptionId: deletedSubId, userId: user.id },
+                    data: { status: deletedSubscription.status }, // e.g., 'canceled'
+                });
+            });
+            console.log(`✅ Subscription ${deletedSubId} status updated to ${deletedSubscription.status} for user ${user.id}.`);
+        } catch (err: any) {
+            console.error(`🔴 Error processing customer.subscription.deleted for ${deletedSubId}:`, err.message);
+            return NextResponse.json({ received: true, eventId: event.id, error: 'Failed to process subscription deletion.', details: err.message }, { status: 200 });
+        }
+        break;
       case 'invoice.payment_succeeded':
-        // const invoice = event.data.object;
-        // Handle successful payment for a subscription renewal, etc.
-        // console.log('Invoice payment succeeded:', invoice);
+        const invoice = event.data.object as Stripe.Invoice;
+        // console.log(`[DEBUG] Processing invoice.payment_succeeded for invoice ${invoice.id}, customer ${invoice.customer}`);
+
+        if (!invoice.customer || typeof invoice.customer !== 'string') {
+          console.error('🔴 Error: Missing or invalid customer ID in invoice.payment_succeeded event.', { invoiceId: invoice.id });
+          return NextResponse.json({ received: true, eventId: event.id, warning: 'Missing customer ID in invoice.' }, { status: 200 });
+        }
+        const invStripeCustomerId = invoice.customer;
+
+        // Ignore $0 invoices (e.g., for trial periods or no actual charge)
+        if (invoice.amount_paid === 0) {
+          console.log(`ℹ️ Invoice ${invoice.id} for $0, no credits processed. Billing reason: ${invoice.billing_reason}`);
+          // Potentially update subscription period if needed, even for $0 invoice that confirms a period
+          if ((invoice as any).subscription && typeof (invoice as any).subscription === 'string' && invoice.lines && invoice.lines.data.length > 0) {
+            const userForZeroInvoice = await prisma.user.findFirst({ where: { stripeCustomerId: invStripeCustomerId }});
+            if (userForZeroInvoice) {
+                const firstLineItem = invoice.lines.data[0];
+                // Accessing line item properties - plan might be on price.product or price itself
+                const planDetails = (firstLineItem as any).plan || ((firstLineItem as any).price as any)?.plan || (((firstLineItem as any).price as any)?.product as any)?.plan;
+                if (firstLineItem.period && planDetails) { 
+                    try {
+                        await prisma.subscription.updateMany({
+                            where: { stripeSubscriptionId: (invoice as any).subscription, userId: userForZeroInvoice.id },
+                            data: {
+                                currentPeriodStart: new Date(firstLineItem.period.start * 1000),
+                                currentPeriodEnd: new Date(firstLineItem.period.end * 1000),
+                                status: 'active', // Or derive from invoice/subscription object if more accurate
+                            },
+                        });
+                        console.log(`ℹ️ Subscription period updated for ${(invoice as any).subscription} due to $0 invoice ${invoice.id}.`);
+                    } catch (periodUpdateError: any) {
+                        console.error('🔴 Error updating subscription period for $0 invoice:', periodUpdateError.message);
+                    }
+                }
+            }
+          }
+          return NextResponse.json({ received: true, eventId: event.id, message: '$0 invoice, no credits processed.' }, { status: 200 });
+        }
+
+        // Process only if there is a subscription ID, to tie credits to a subscription plan
+        if (!(invoice as any).subscription || typeof (invoice as any).subscription !== 'string') {
+          console.warn(`⚠️ Invoice ${invoice.id} payment succeeded but no subscription ID found. Credits not processed unless it's a recognized one-time purchase pattern (not yet implemented here).`);
+          return NextResponse.json({ received: true, eventId: event.id, warning: 'No subscription ID on invoice, credits not processed.' }, { status: 200 });
+        }
+        const invSubscriptionId = (invoice as any).subscription as string;
+
+        try {
+          const user = await prisma.user.findFirst({ 
+            where: { stripeCustomerId: invStripeCustomerId },
+            include: { subscriptions: true } // Include subscriptions to access monthlyCredits
+        });
+          if (!user) {
+            console.error(`🔴 Error: User not found for stripeCustomerId ${invStripeCustomerId} (from invoice ${invoice.id}).`);
+            return NextResponse.json({ received: true, eventId: event.id, warning: `User not found for customer ${invStripeCustomerId}.` }, { status: 200 });
+          }
+          const userId = user.id;
+
+          // Retrieve the subscription to get plan details, as invoice line items might not have all info
+          const stripeSubscription = await stripe.subscriptions.retrieve(invSubscriptionId, {
+            expand: ['items.data.price.product'],
+          });
+
+          if (!stripeSubscription || !stripeSubscription.items || !stripeSubscription.items.data.length) {
+            console.error(`🔴 Error: Subscription ${invSubscriptionId} (from invoice ${invoice.id}) not found or has no items.`);
+            return NextResponse.json({ received: true, eventId: event.id, warning: 'Subscription details not found for invoice.' }, { status: 200 });
+          }
+
+          const priceItem = stripeSubscription.items.data[0].price;
+          const product = priceItem.product as Stripe.Product;
+          const planName = product.name;
+          const creditsFromPlanString = product.metadata?.credits || '0';
+          const creditsToAllocate = parseInt(creditsFromPlanString, 10);
+
+          if (isNaN(creditsToAllocate) || creditsToAllocate <= 0) {
+            console.error(`🔴 Error: Invalid or zero credits in product metadata for ${product.id} (from invoice ${invoice.id}). Credits: ${creditsToAllocate}`);
+            // Still update subscription period below, but don't add credits
+          } else {
+             // Add credits using CreditService
+            await CreditService.addCredits(
+                userId,
+                creditsToAllocate,
+                'invoice_payment_subscription_renewal' as any, // Cast for now, ensure enum is updated
+                `Credits for ${planName} renewal (Invoice: ${invoice.id.substring(0, 10)}...)`,
+                'invoice' as any, // relatedEntityType - Cast for now, ensure enum is updated
+                invoice.id, // relatedEntityId
+                { planName, stripeSubscriptionId: invSubscriptionId, invoiceId: invoice.id }
+            );
+            console.log(`✅ Credits added for user ${userId} from invoice ${invoice.id}. Plan: ${planName}, Credits: ${creditsToAllocate}.`);
+          }
+
+          // Update user and subscription records (especially period start/end from invoice line item)
+          const invoiceLineItem = invoice.lines.data.find(line => (line as any).subscription === invSubscriptionId && (line as any).type === 'subscription') || invoice.lines.data[0];
+          
+          await prisma.$transaction(async (tx) => {
+            await tx.user.update({
+              where: { id: userId },
+              data: {
+                stripeCustomerId: invStripeCustomerId,
+                subscriptionStatus: stripeSubscription.status, // from retrieved subscription
+                subscriptionPlan: planName,
+              },
+            });
+
+            await tx.subscription.upsert({
+              where: { stripeSubscriptionId: invSubscriptionId },
+              create: {
+                userId: userId,
+                stripeSubscriptionId: invSubscriptionId,
+                planName: planName,
+                status: stripeSubscription.status,
+                currentPeriodStart: new Date(invoiceLineItem.period!.start * 1000),
+                currentPeriodEnd: new Date(invoiceLineItem.period!.end * 1000),
+                monthlyCredits: creditsToAllocate > 0 ? creditsToAllocate : (user.subscriptions?.[0]?.monthlyCredits || 0), // Keep old if new is 0
+              },
+              update: {
+                planName: planName,
+                status: stripeSubscription.status,
+                currentPeriodStart: new Date(invoiceLineItem.period!.start * 1000),
+                currentPeriodEnd: new Date(invoiceLineItem.period!.end * 1000),
+                monthlyCredits: creditsToAllocate > 0 ? creditsToAllocate : undefined, // Only update if new credits are positive
+              },
+            });
+          });
+          console.log(`✅ Invoice ${invoice.id} processed for user ${userId}. Subscription ${invSubscriptionId} updated.`);
+
+        } catch (err: any) {
+          console.error(`🔴 Error processing invoice.payment_succeeded for invoice ${invoice.id}:`, err.message, err.stack);
+          return NextResponse.json({ received: true, eventId: event.id, error: 'Failed to process invoice. View logs.', details: err.message }, { status: 200 });
+        }
         break;
       // ... handle other event types
       default:
