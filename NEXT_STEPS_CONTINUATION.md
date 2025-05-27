@@ -96,7 +96,7 @@ The next step is connecting this robust backend system to your existing UI for a
 
 # Next Steps: Project Completion
 
-## 🎯 Phase 5.75: LoRA Training UI Integration ✅ **COMPLETED**
+## 🎯 Phase 5.75: LoRA Training UI Integration ✅ **COMPLETED WITH COMPREHENSIVE TESTING**
 - [x] **Model Creation UI Updates (`/app/dashboard/models/new/page.tsx`)**:
     - [x] Integrate `TrainingService` with custom parameter support.
     - [x] Display real-time training progress and debug data.
@@ -106,6 +106,34 @@ The next step is connecting this robust backend system to your existing UI for a
     - [x] Enhanced 4-step wizard with dedicated training settings page.
     - [x] Parameter validation and guidelines based on Replicate research.
     - [x] Automatic redirection to training dashboard for real-time monitoring.
+
+- [x] **Advanced Training Parameter Controls**:
+    - [x] Custom controls for steps (500-3000), learning rate (0.0001-0.01), LoRA rank (8-128)
+    - [x] Real-time cost estimation ($2-4 based on steps)
+    - [x] Research-based parameter guidelines for portraits vs objects/styles
+    - [x] Parameter validation with comprehensive error handling
+    - [x] Research-based defaults: 1000 steps, 0.0004 LR, rank 16
+
+- [x] **TrainingService Enhancement**:
+    - [x] Add getTrainingOptions() method for UI integration
+    - [x] Implement validateTrainingParams() with comprehensive validation
+    - [x] Support custom parameters in training workflow
+    - [x] Fix TypeScript compatibility issues
+
+- [x] **API Integration**:
+    - [x] Add trainingParams object to Zod validation schema
+    - [x] Extract custom parameters with fallback defaults
+    - [x] Enhanced response messages with parameter details
+    - [x] Maintain backward compatibility
+
+- [x] **Comprehensive Test Coverage**:
+    - [x] Create training-parameters.test.ts with 9 passing tests
+    - [x] Test training options, parameter validation, and defaults
+    - [x] Verify research-based parameter recommendations
+    - [x] All tests passing with full functionality coverage
+    - [x] Integration testing for TrainingService methods
+
+**Git Commit**: `ccf015c` - feat: implement comprehensive training parameter controls with testing
 
 ## 💳 Phase 6: Billing & Subscriptions
 
@@ -128,9 +156,12 @@ The next step is connecting this robust backend system to your existing UI for a
   - [x] Stripe Checkout integration
   - [x] Customer portal access for existing subscribers
   - [x] Comprehensive test coverage for billing functionality
-- [ ] Ensure model upload limits are enforced by tier
-- [ ] Consider if we need webhooks for like replicate
-- [ ] **Model Privacy Tiers**: Free users get public models, premium subscribers get private HuggingFace repositories
+- [x] **Model Upload Limits Enforcement**: Added `checkUsageLimits` to model creation API
+  - [x] Enforce tier-based model slot limits before model creation
+  - [x] Provide helpful error messages for different subscription tiers
+  - [x] Comprehensive test coverage with 4 passing tests
+- [ ] Consider if we need webhooks for replicate
+- [ ] **Model Privacy Tiers**: ~~Free users get public models, premium subscribers get private HuggingFace repositories~~ (No longer needed - using Replicate end-to-end)
 
 ### Credit System & Usage Tracking ✅ **COMPLETED**
 - [x] **Comprehensive Credit System**: Complete CreditService with transaction logging

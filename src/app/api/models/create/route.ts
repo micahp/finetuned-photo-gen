@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
+import { checkUsageLimits } from '@/lib/middleware/usage-limits'
 
 const createModelSchema = z.object({
   name: z.string().min(1, 'Model name is required').max(100, 'Model name too long'),
@@ -22,6 +23,16 @@ export async function POST(request: NextRequest) {
         { error: 'Unauthorized' },
         { status: 401 }
       )
+    }
+
+    // Check usage limits before creating model
+    const limitCheck = await checkUsageLimits(request, {
+      requireModelSlots: true,
+      operation: 'model_creation'
+    })
+    
+    if (limitCheck) {
+      return limitCheck // Returns error response if limits exceeded
     }
 
     // Parse and validate request body
