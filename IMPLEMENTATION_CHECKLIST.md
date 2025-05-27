@@ -168,12 +168,15 @@
 
 ## 🆕 **Phase 5.75: LoRA Training UI Integration (Week 5.75)** ✅ **COMPLETED**
 
-### **Model Creation UI Updates**
-- [ ] Update `/app/dashboard/models/new/page.tsx` with TrainingService integration
+### **Model Creation UI Updates** ✅ **COMPLETED**
+- [x] Update `/app/dashboard/models/new/page.tsx` with TrainingService integration
 - [x] Add real-time training progress display with debug data
-- [ ] Implement stage progression visualization (ZIP → Replicate → Complete)
-- [ ] Add training parameter controls (steps, learning rate, LoRA rank), see what Replicate and Nebius allow
-- [ ] Create training status component with error handling and retry options
+- [x] Implement stage progression visualization (ZIP → Replicate → Complete)
+- [x] Add training parameter controls (steps, learning rate, LoRA rank)
+- [x] Create training status component with error handling and retry options
+- [x] Enhanced 4-step wizard with dedicated training settings page
+- [x] Parameter validation and guidelines based on Replicate research
+- [x] Automatic redirection to training dashboard for real-time monitoring
 
 ### **Training Management Dashboard** ✅ **COMPLETED**
 - [x] Create `/app/dashboard/training/page.tsx` - Training history and management
@@ -198,6 +201,15 @@
 - [x] Auto-suggest trigger words when selecting custom models
 - [x] Enhanced prompt suggestions for custom models
 - [x] Direct navigation from model gallery to generation interface
+
+### **Advanced Training Parameter Controls** ✅ **COMPLETED**
+- [x] Configurable training steps (500-3000, default: 1000)
+- [x] Adjustable learning rate (0.0001-0.01, default: 0.0004)
+- [x] Variable LoRA rank (8-128, default: 16)
+- [x] Parameter validation based on Replicate research
+- [x] Cost estimation based on training parameters
+- [x] Guidelines for different use cases (portraits vs objects/styles)
+- [x] Real-time parameter feedback and recommendations
 
 ## 💳 **COMPLETED - Phase 6: Billing & Subscriptions (Week 6)**
 

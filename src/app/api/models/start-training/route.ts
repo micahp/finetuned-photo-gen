@@ -4,6 +4,14 @@ import { prisma } from '@/lib/db'
 import { TrainingService } from '@/lib/training-service'
 import { z } from 'zod'
 
+// Define the TrainingImage interface to match the service
+interface TrainingImage {
+  id: string
+  filename: string
+  url: string
+  size: number
+}
+
 const startTrainingSchema = z.object({
   modelId: z.string(),
   trainingImages: z.array(z.object({
@@ -12,6 +20,12 @@ const startTrainingSchema = z.object({
     url: z.string(),
     size: z.number(),
   })),
+  // Optional training parameters
+  trainingParams: z.object({
+    steps: z.number().min(500).max(3000).optional(),
+    learningRate: z.number().min(0.0001).max(0.01).optional(),
+    loraRank: z.number().min(8).max(128).optional(),
+  }).optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -36,7 +50,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { modelId, trainingImages } = validation.data
+    const { modelId, trainingImages, trainingParams } = validation.data
 
     // Get the model and verify ownership
     const model = await prisma.userModel.findFirst({
@@ -56,12 +70,23 @@ export async function POST(request: NextRequest) {
     // Initialize training service
     const trainingService = new TrainingService()
 
+    // Extract training parameters with defaults
+    const steps = trainingParams?.steps || 1000
+    const learningRate = trainingParams?.learningRate || 0.0004
+    const loraRank = trainingParams?.loraRank || 16
+
+    // Type assertion to ensure compatibility with TrainingImage interface
+    const typedTrainingImages = trainingImages as TrainingImage[]
+
     // Validate training parameters
     const validation_result = trainingService.validateTrainingParams({
       modelName: model.name,
       triggerWord: model.triggerWord || model.name.toLowerCase().replace(/\s+/g, '_'),
-      trainingImages,
+      trainingImages: typedTrainingImages,
       userId: session.user.id,
+      steps,
+      learningRate,
+      loraRank,
     })
 
     if (!validation_result.valid) {
@@ -72,17 +97,17 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      // Start external training workflow
+      // Start external training workflow with custom parameters
       const trainingResult = await trainingService.startTraining({
         modelName: model.name,
         triggerWord: model.triggerWord || model.name.toLowerCase().replace(/\s+/g, '_'),
         description: `Custom FLUX LoRA model for ${model.name}`,
-        trainingImages,
+        trainingImages: typedTrainingImages,
         userId: session.user.id,
         baseModel: 'black-forest-labs/FLUX.1-dev',
-        steps: 1000,
-        learningRate: 1e-4,
-        loraRank: 16,
+        steps,
+        learningRate,
+        loraRank,
       })
 
       if (trainingResult.status.status === 'failed') {
@@ -105,7 +130,7 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      // Create a job queue entry for status monitoring
+      // Create a job queue entry for status monitoring with training parameters
       await prisma.jobQueue.create({
         data: {
           userId: session.user.id,
@@ -116,6 +141,11 @@ export async function POST(request: NextRequest) {
             externalTrainingId: trainingResult.trainingId,
             trainingService: 'replicate',
             trainingImages: trainingImages.map(img => ({ id: img.id, url: img.url })),
+            trainingParams: {
+              steps,
+              learningRate,
+              loraRank,
+            },
           }
         }
       })
@@ -129,8 +159,13 @@ export async function POST(request: NextRequest) {
           modelId: model.id,
           progress: trainingResult.status.progress,
           estimatedTimeRemaining: trainingResult.status.estimatedTimeRemaining,
+          trainingParams: {
+            steps,
+            learningRate,
+            loraRank,
+          },
         },
-        message: 'External LoRA training started successfully with Replicate'
+        message: `External LoRA training started successfully with custom parameters (${steps} steps, ${learningRate} LR, rank ${loraRank})`
       })
 
     } catch (trainingError) {
