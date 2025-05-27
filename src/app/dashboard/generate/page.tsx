@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -15,8 +15,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp } from 'lucide-react'
+import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2 } from 'lucide-react'
 import { TogetherAIService } from '@/lib/together-ai'
+import { SmartImage } from '@/components/ui/smart-image'
 
 const generateSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
@@ -778,7 +779,7 @@ export default function GeneratePage() {
               {generatedImage ? (
                 <div className="space-y-4">
                   <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                    <img
+                    <SmartImage
                       src={generatedImage.url}
                       alt="Generated image"
                       className="w-full h-full object-cover"

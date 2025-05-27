@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { SmartImage } from '@/components/ui/smart-image'
 import { 
   Search, 
   Download, 
@@ -467,7 +468,7 @@ export default function GalleryPage() {
                       </DropdownMenu>
                     </div>
 
-                    <img
+                    <SmartImage
                       src={image.imageUrl}
                       alt={image.prompt}
                       className="w-full aspect-square object-cover rounded-lg cursor-pointer"
@@ -496,7 +497,7 @@ export default function GalleryPage() {
                       />
                     </div>
                     
-                    <img
+                    <SmartImage
                       src={image.imageUrl}
                       alt={image.prompt}
                       className="w-20 h-20 object-cover rounded-lg cursor-pointer flex-shrink-0"
@@ -558,7 +559,7 @@ export default function GalleryPage() {
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
-                  <img
+                  <SmartImage
                     src={selectedImage.imageUrl}
                     alt={selectedImage.prompt}
                     className="w-full rounded-lg shadow-lg"

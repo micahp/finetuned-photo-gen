@@ -3,6 +3,7 @@ import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { TogetherAIService } from '@/lib/together-ai'
+import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
 
 const batchGenerateSchema = z.object({
   prompts: z.array(z.string().min(1, 'Prompt cannot be empty').max(500, 'Prompt too long'))
@@ -90,12 +91,42 @@ export async function POST(request: NextRequest) {
     for (const result of batchResult.results) {
       if (result.image) {
         try {
+          // *** MODIFICATION START: Upload to Cloudflare and get permanent URL ***
+          const temporaryImageUrl = result.image.url
+          let finalImageUrl = temporaryImageUrl // Fallback to temporary URL
+          let cloudflareImageId: string | undefined = undefined
+
+          try {
+            const cfImagesService = new CloudflareImagesService()
+            const uploadResult = await cfImagesService.uploadImageFromUrl(
+              temporaryImageUrl,
+              {
+                originalPrompt: result.prompt,
+                originalProvider: 'together-ai',
+                userId: session.user.id,
+                batchId: batchResult.batchId,
+              }
+            )
+
+            if (uploadResult.success && uploadResult.imageId) {
+              cloudflareImageId = uploadResult.imageId
+              finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId)
+              console.log('✅ Batch image uploaded to Cloudflare:', { cloudflareImageId, finalImageUrl })
+            } else {
+              console.warn('⚠️ Cloudflare upload failed for batch image, using temporary URL. Error:', uploadResult.error)
+            }
+          } catch (cfError) {
+            console.error('❌ Exception during Cloudflare upload for batch image:', cfError)
+          }
+          // *** MODIFICATION END ***
+
           const generatedImage = await prisma.generatedImage.create({
             data: {
               userId: session.user.id,
               userModelId: null, // No custom model for base generation
               prompt: result.prompt,
-              imageUrl: result.image.url,
+              imageUrl: finalImageUrl, // ✅ Use Cloudflare URL when available
+              cloudflareImageId: cloudflareImageId, // ✅ Store Cloudflare Image ID
               generationParams: {
                 model: modelId || 'black-forest-labs/FLUX.1-schnell-Free',
                 aspectRatio,
@@ -109,7 +140,7 @@ export async function POST(request: NextRequest) {
 
           savedImages.push({
             id: generatedImage.id,
-            url: result.image.url,
+            url: finalImageUrl, // ✅ Return Cloudflare URL when available
             prompt: result.prompt,
             aspectRatio,
             createdAt: generatedImage.createdAt
