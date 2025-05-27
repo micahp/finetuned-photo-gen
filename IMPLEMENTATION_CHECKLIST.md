@@ -108,6 +108,7 @@
 - [x] Image details modal with metadata
 - [x] Download and sharing functionality
 - [x] Bulk operations (delete, download)
+- [x] **Cloudflare Images Integration**: Generated images uploaded to Cloudflare for persistent storage.
 
 ### **🆕 FLUX LoRA Training Pipeline** ✅ **COMPLETE**
 - [x] **Complete end-to-end training workflow** - ZIP creation → Replicate training → HuggingFace upload
@@ -217,7 +218,10 @@
 - [ ] Usage limits enforcement
 - [ ] Low-credit notifications and warnings
 
-## **Phase 6.5 Housekeeping**
+## **Phase 6.5 Add Nebius as a training/generation provider
+TODO: flest out the rest
+
+## **Phase 7 Housekeeping**
 ### **Security Recommendations Documented**
 - [ ] Admin API authentication requirement (HIGH PRIORITY)
 - [ ] Rate limiting implementation plan
@@ -229,7 +233,6 @@
 ### **Housekeeping**
 - [ ] Clean up zip file(s) from failed image training. Right now there's no visibility to these zip files in our training tab
 - [ ] Clean up replicate model(s) from failed image training. Right now there's no way to remove models from failed trainings
-- [ ] Clarify what togetherAIService is being used for and make sure it doesn't leak
 - [ ] Make sure free and lower tier paying users only have 1 model uploaded at a time, prompt and delete model when they try to create a new one
 - [ ] Check existing pages for missing pages and components
 - [ ] Implement any missing pages and components
@@ -238,7 +241,7 @@
 ### **Theme**
 - [ ] Add dark theme
 
-## 🚀 **Phase 7: Production Deployment (Week 7)**
+## 🚀 **Phase 8: Production Deployment (Week 7)**
 
 ### **Infrastructure & Deployment**
 - [ ] Vercel deployment configuration
