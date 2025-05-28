@@ -357,7 +357,7 @@ export default function NewModelPage() {
                           {...field}
                         >
                           <option value="black-forest-labs/FLUX.1-dev">FLUX.1 Dev (Recommended)</option>
-                          <option value="stabilityai/stable-diffusion-xl-base-1.0">Stable Diffusion XL</option>
+                          <option value="stability-ai/sdxl">Stable Diffusion XL</option>
                         </select>
                       </FormControl>
                       <p className="text-xs text-gray-500 mt-1">
