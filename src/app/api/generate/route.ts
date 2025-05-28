@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { TogetherAIService } from '@/lib/together-ai'
 import { ReplicateService } from '@/lib/replicate-service'
+import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
+import { CreditService } from '@/lib/credit-service'
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
@@ -102,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     // Generate image - use Replicate for custom models, Together AI for base models
     let result
-    if (selectedUserModel) {
+    if (selectedUserModel && selectedUserModel.replicateModelId) {
       console.log('🎯 Generating with custom model via Replicate:', {
         modelId: selectedUserModel.id,
         modelName: selectedUserModel.name,
@@ -117,7 +119,7 @@ export async function POST(request: NextRequest) {
       result = await replicate.generateWithTrainedModel({
         prompt: fullPrompt,
         replicateModelId: selectedUserModel.replicateModelId,
-        triggerWord: selectedUserModel.triggerWord,
+        triggerWord: selectedUserModel.triggerWord || undefined,
         aspectRatio,
         steps: steps || 28, // Use more steps for LoRA by default
         seed
@@ -167,11 +169,61 @@ export async function POST(request: NextRequest) {
 
     // Only deduct credits and save if generation succeeded
     if (result.status === 'completed' && result.images?.[0]) {
-      // Deduct credit
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { credits: { decrement: 1 } }
-      })
+      // Deduct credit using CreditService for proper transaction logging
+      const creditResult = await CreditService.spendCredits(
+        session.user.id,
+        1,
+        `Image generation: ${fullPrompt.substring(0, 100)}${fullPrompt.length > 100 ? '...' : ''}`,
+        'image_generation',
+        undefined, // Will be set to generated image ID after creation
+        {
+          prompt: fullPrompt,
+          model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
+          provider: selectedUserModel ? 'replicate' : 'together-ai',
+          aspectRatio,
+          steps: selectedUserModel ? (steps || 28) : steps,
+          seed,
+          style
+        }
+      )
+
+      if (!creditResult.success) {
+        return NextResponse.json(
+          { error: creditResult.error || 'Failed to process credit transaction' },
+          { status: 400 }
+        )
+      }
+
+      // *** MODIFICATION START: Upload to Cloudflare and get permanent URL ***
+      const temporaryImageUrl = result.images[0].url
+      let finalImageUrl = temporaryImageUrl // Fallback to temporary URL
+      let cloudflareImageId: string | undefined = undefined
+
+      try {
+        const cfImagesService = new CloudflareImagesService()
+        const uploadResult = await cfImagesService.uploadImageFromUrl(
+          temporaryImageUrl,
+          {
+            originalPrompt: fullPrompt,
+            originalProvider: selectedUserModel ? 'replicate' : 'together-ai',
+            userId: session.user.id,
+            userModelId: selectedUserModel?.id,
+          }
+        )
+
+        if (uploadResult.success && uploadResult.imageId) {
+          cloudflareImageId = uploadResult.imageId
+          finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId) // Uses default 'public' variant
+          console.log('✅ Image uploaded to Cloudflare:', { cloudflareImageId, finalImageUrl })
+        } else {
+          console.warn('⚠️ Cloudflare upload failed, using temporary URL. Error:', uploadResult.error)
+          // Optionally, you could decide to not save to DB or return an error if CF upload is critical
+        }
+      } catch (cfError) {
+        console.error('❌ Exception during Cloudflare upload:', cfError)
+        // Fallback to temporary URL, error already logged
+      }
+      // *** MODIFICATION END ***
 
       // Save generated image to database
       const generatedImage = await prisma.generatedImage.create({
@@ -179,7 +231,8 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           userModelId: selectedUserModel?.id || null,
           prompt: fullPrompt,
-          imageUrl: result.images[0].url,
+          imageUrl: finalImageUrl, // Use the final (Cloudflare or temporary) URL
+          cloudflareImageId: cloudflareImageId, // Store Cloudflare Image ID
           generationParams: {
             model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
             provider: selectedUserModel ? 'replicate' : 'together-ai',
@@ -202,7 +255,7 @@ export async function POST(request: NextRequest) {
         success: true,
         image: {
           id: generatedImage.id,
-          url: result.images[0].url,
+          url: finalImageUrl, // Use the final (Cloudflare or temporary) URL
           prompt: fullPrompt,
           aspectRatio,
           createdAt: generatedImage.createdAt,
@@ -212,7 +265,7 @@ export async function POST(request: NextRequest) {
             triggerWord: selectedUserModel.triggerWord
           } : undefined
         },
-        creditsRemaining: user.credits - 1
+        creditsRemaining: creditResult.newBalance
       })
     }
 

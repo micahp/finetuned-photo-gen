@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, ArrowRight, Check, Upload, Loader2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Upload, Loader2, Settings, Info } from 'lucide-react'
 import { ImageUpload } from '@/components/upload/ImageUpload'
 
 const modelSchema = z.object({
@@ -20,6 +20,10 @@ const modelSchema = z.object({
   description: z.string().max(500, 'Description too long').optional(),
   triggerWord: z.string().optional(),
   baseModel: z.string().optional(),
+  // Training parameters
+  steps: z.number().min(500, 'Minimum 500 steps').max(3000, 'Maximum 3000 steps').optional(),
+  learningRate: z.number().min(0.0001, 'Minimum 0.0001').max(0.01, 'Maximum 0.01').optional(),
+  loraRank: z.number().min(8, 'Minimum rank 8').max(128, 'Maximum rank 128').optional(),
 })
 
 type ModelFormData = z.infer<typeof modelSchema>
@@ -27,7 +31,8 @@ type ModelFormData = z.infer<typeof modelSchema>
 const steps = [
   { id: 1, title: 'Upload Images', description: 'Upload training images for your model' },
   { id: 2, title: 'Model Details', description: 'Name and describe your model' },
-  { id: 3, title: 'Review & Create', description: 'Review your model configuration' },
+  { id: 3, title: 'Training Settings', description: 'Configure training parameters' },
+  { id: 4, title: 'Review & Create', description: 'Review your model configuration' },
 ]
 
 export default function NewModelPage() {
@@ -37,6 +42,7 @@ export default function NewModelPage() {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [isCreating, setIsCreating] = useState(false)
   const [creationProgress, setCreationProgress] = useState('')
+  const [trainingId, setTrainingId] = useState<string | null>(null)
 
   const form = useForm<ModelFormData>({
     resolver: zodResolver(modelSchema),
@@ -45,6 +51,10 @@ export default function NewModelPage() {
       description: '',
       triggerWord: '',
       baseModel: 'black-forest-labs/FLUX.1-dev',
+      // Default training parameters based on research
+      steps: 1000,
+      learningRate: 0.0004,
+      loraRank: 16,
     },
   })
 
@@ -130,8 +140,8 @@ export default function NewModelPage() {
 
       const uploadResult = await uploadResponse.json()
 
-      // Step 3: Start Replicate training
-      setCreationProgress('Starting AI training...')
+      // Step 3: Start training with TrainingService (via API with custom parameters)
+      setCreationProgress('Starting AI training with custom parameters...')
       const trainingResponse = await fetch('/api/models/start-training', {
         method: 'POST',
         headers: {
@@ -140,6 +150,12 @@ export default function NewModelPage() {
         body: JSON.stringify({
           modelId: modelId,
           trainingImages: uploadResult.uploads,
+          // Include custom training parameters
+          trainingParams: {
+            steps: data.steps || 1000,
+            learningRate: data.learningRate || 0.0004,
+            loraRank: data.loraRank || 16,
+          }
         }),
       })
 
@@ -151,11 +167,13 @@ export default function NewModelPage() {
       const trainingResult = await trainingResponse.json()
       
       if (trainingResult.success) {
-        setCreationProgress('Training started successfully!')
-        // Redirect to models page after a short delay
+        setTrainingId(trainingResult.training.id)
+        setCreationProgress('Training started successfully! Redirecting to training dashboard...')
+        
+        // Redirect to training details page to monitor progress
         setTimeout(() => {
-          router.push('/dashboard/models')
-        }, 1500)
+          router.push(`/dashboard/training/${trainingResult.training.id}`)
+        }, 2000)
       } else {
         throw new Error(trainingResult.error || 'Failed to start training')
       }
@@ -190,7 +208,7 @@ export default function NewModelPage() {
         
         <h1 className="text-3xl font-bold text-gray-900">Create New Model</h1>
         <p className="text-gray-600 mt-2">
-          Train a custom AI model with your own images
+          Train a custom AI model with your own images using advanced FLUX LoRA training
         </p>
       </div>
 
@@ -211,7 +229,7 @@ export default function NewModelPage() {
                 <div className="text-xs text-gray-500">{step.description}</div>
               </div>
               {index < steps.length - 1 && (
-                <div className={`mx-4 w-16 h-0.5 ${
+                <div className={`mx-4 w-12 h-0.5 ${
                   currentStep > step.id ? 'bg-blue-600' : 'bg-gray-200'
                 }`} />
               )}
@@ -225,6 +243,7 @@ export default function NewModelPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             {currentStep === 1 && <Upload className="h-5 w-5" />}
+            {currentStep === 3 && <Settings className="h-5 w-5" />}
             {steps[currentStep - 1].title}
           </CardTitle>
         </CardHeader>
@@ -234,8 +253,8 @@ export default function NewModelPage() {
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h3 className="font-medium text-blue-900 mb-2">Training Image Guidelines</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Upload 5-20 high-quality images of the subject</li>
-                  <li>• Images must be at least 512×512 pixels (max 2048×2048)</li>
+                  <li>• Upload 5-30 high-quality images of the subject</li>
+                  <li>• Images must be at least 512×512 pixels (1024×1024 recommended)</li>
                   <li>• Supported formats: JPEG, PNG, WebP, TIFF (max 10MB each)</li>
                   <li>• Use different angles, lighting, and backgrounds</li>
                   <li>• Avoid blurry, low-resolution, or heavily edited images</li>
@@ -245,7 +264,7 @@ export default function NewModelPage() {
               
               <ImageUpload
                 onImagesUploaded={handleUploadSuccess}
-                maxFiles={20}
+                maxFiles={30}
               />
 
               {uploadedFiles.length > 0 && (
@@ -256,6 +275,11 @@ export default function NewModelPage() {
                   {uploadedFiles.length < 5 && (
                     <p className="text-sm text-amber-600">
                       Consider uploading at least 5 images for better training results
+                    </p>
+                  )}
+                  {uploadedFiles.length > 30 && (
+                    <p className="text-sm text-red-600">
+                      Too many images may reduce training quality. Consider using 25-30 images max.
                     </p>
                   )}
                 </div>
@@ -349,6 +373,131 @@ export default function NewModelPage() {
           )}
 
           {currentStep === 3 && (
+            <Form {...form}>
+              <div className="space-y-6">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-amber-600 mt-0.5" />
+                    <div>
+                      <h3 className="font-medium text-amber-900 mb-1">Advanced Training Parameters</h3>
+                      <p className="text-sm text-amber-800">
+                        These settings control how your model is trained. The defaults work well for most cases, 
+                        but you can adjust them based on your specific needs.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="steps"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Training Steps</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={500}
+                            max={3000}
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1000)}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Recommended: ~40 steps per image (25 images = 1000 steps)
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="learningRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Learning Rate</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.0001"
+                            min={0.0001}
+                            max={0.01}
+                            {...field}
+                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0.0004)}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-gray-500 mt-1">
+                          How fast the model learns. 0.0004 works well for most cases.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="loraRank"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>LoRA Rank</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={8}
+                            max={128}
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 16)}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Model complexity. 16-32 for most cases, 64-128 for complex concepts.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Estimated Cost</label>
+                    <div className="p-3 bg-gray-50 rounded-md">
+                      <p className="text-sm text-gray-600">
+                        Training cost: <span className="font-medium">$2-4</span>
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Based on {form.watch('steps') || 1000} steps on H100 GPU
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-medium text-blue-900 mb-2">Parameter Guidelines</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-800">
+                    <div>
+                      <p className="font-medium">For portraits/people:</p>
+                      <ul className="list-disc list-inside space-y-1 text-xs">
+                        <li>Steps: 800-1200</li>
+                        <li>Learning Rate: 0.0004</li>
+                        <li>LoRA Rank: 16-32</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-medium">For objects/styles:</p>
+                      <ul className="list-disc list-inside space-y-1 text-xs">
+                        <li>Steps: 1000-1500</li>
+                        <li>Learning Rate: 0.0003-0.0005</li>
+                        <li>LoRA Rank: 32-64</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Form>
+          )}
+
+          {currentStep === 4 && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -374,10 +523,22 @@ export default function NewModelPage() {
                 </div>
                 
                 <div>
-                  <h3 className="font-medium text-gray-900 mb-2">Training Data</h3>
+                  <h3 className="font-medium text-gray-900 mb-2">Training Configuration</h3>
                   <dl className="space-y-2 text-sm">
                     <div>
-                      <dt className="text-gray-600">Images:</dt>
+                      <dt className="text-gray-600">Training Steps:</dt>
+                      <dd className="font-medium">{form.getValues('steps') || 1000}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">Learning Rate:</dt>
+                      <dd className="font-medium">{form.getValues('learningRate') || 0.0004}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">LoRA Rank:</dt>
+                      <dd className="font-medium">{form.getValues('loraRank') || 16}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">Training Images:</dt>
                       <dd className="font-medium">{uploadedFiles.length} uploaded</dd>
                     </div>
                     <div>
@@ -388,12 +549,12 @@ export default function NewModelPage() {
                 </div>
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h3 className="font-medium text-yellow-900 mb-2">Training Process</h3>
-                <p className="text-sm text-yellow-800">
-                  Your model will be trained using Replicate's FLUX LoRA fine-tuning. 
-                  Training typically takes 15-30 minutes to complete.
-                  You'll be able to generate images once training is finished.
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h3 className="font-medium text-green-900 mb-2">Ready for Training</h3>
+                <p className="text-sm text-green-800">
+                  Your model will be trained using Replicate's FLUX LoRA fine-tuning with your custom parameters. 
+                  Training typically takes 15-30 minutes to complete. You'll be redirected to the training dashboard 
+                  to monitor real-time progress with detailed logs and stage visualization.
                 </p>
               </div>
 
@@ -403,6 +564,11 @@ export default function NewModelPage() {
                     <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                     <span className="text-sm font-medium text-blue-900">{creationProgress}</span>
                   </div>
+                  {trainingId && (
+                    <p className="text-xs text-blue-700 mt-2">
+                      Training ID: {trainingId}
+                    </p>
+                  )}
                 </div>
               )}
             </div>

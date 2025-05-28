@@ -97,7 +97,7 @@ export class TrainingService {
         modelName: params.modelName,
         triggerWord: params.triggerWord,
         trainingImages: params.trainingImages, // Keep for compatibility
-        zipUrl: zipResult.zipUrl, // New: ZIP URL for actual training
+        zipUrl: zipResult.zipUrl || '', // Ensure string type, fallback to empty string
         steps: params.steps,
         learningRate: params.learningRate,
         loraRank: params.loraRank,
@@ -346,7 +346,7 @@ export class TrainingService {
         status: 'completed',
         progress: 100,
         stage: 'Training completed successfully and model uploaded to HuggingFace',
-        huggingFaceRepo: await this.checkForExistingHuggingFaceModel(trainingId, modelName),
+        huggingFaceRepo: (await this.checkForExistingHuggingFaceModel(trainingId, modelName)) || undefined,
         debugData: this.debugger.getDebugSummary()
       }
     }

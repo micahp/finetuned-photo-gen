@@ -1,172 +1,3 @@
-# FLUX LoRA Training - ✅ **IMPLEMENTATION COMPLETE**
-
-## 🎉 **MILESTONE ACHIEVED: Complete Production-Ready Training Pipeline**
-
-### ✅ **FULLY IMPLEMENTED & TESTED:**
-- **✅ Complete Training Pipeline** - End-to-end workflow with debugging
-- **✅ ZIP Creation & Cloud Storage** - Cloudflare R2 + local fallback  
-- **✅ Replicate Training Integration** - FLUX LoRA trainer with full API integration
-- **✅ HuggingFace Model Publishing** - Real file uploads and repository creation
-- **✅ Comprehensive Debugging Infrastructure** - Production-ready error tracking and retry logic
-- **✅ Complete Test Coverage** - All 8 integration tests passing with 100% coverage
-- **✅ Configurable Storage System** - Cloud-first with emergency local fallback
-
-## 🎯 **What Was Successfully Built**
-
-### **🏗️ Complete Training Workflow**
-```
-✅ ZIP Creation → ✅ Replicate Training → ✅ HuggingFace Upload → ✅ Completion
-```
-
-### **🔧 Production-Ready Services**
-
-#### **1. TrainingService** - **Main Orchestrator** ✅
-- **File**: `src/lib/training-service.ts`
-- Complete workflow coordination with debugging
-- ZIP creation → Replicate training → HuggingFace upload
-- Comprehensive error handling and retry logic  
-- Stage-by-stage progress tracking
-- Parameter validation and training cancellation support
-
-#### **2. ZipCreationService** - **Image Processing & Storage** ✅
-- **File**: `src/lib/zip-creation-service.ts`  
-- Download and validate training images with retry logic
-- Image optimization for training (format conversion, size validation)
-- ZIP bundle creation with comprehensive error handling
-- Cloud storage integration (Cloudflare R2 or local fallback)
-- Full debugging integration
-
-#### **3. CloudStorageService** - **Configurable Storage** ✅ **NEW**
-- **File**: `src/lib/cloud-storage.ts`
-- **Primary**: Cloudflare R2 storage (production-ready)
-- **Fallback**: Local storage (emergency dev mode with `USE_LOCAL_ZIP_STORAGE=true`)
-- Automatic file cleanup with TTL
-- Secure file serving via Next.js API route
-
-#### **4. ReplicateService** - **Enhanced Training Integration** ✅
-- **File**: `src/lib/replicate-service.ts`
-- Updated to accept ZIP URLs from cloud storage
-- FLUX LoRA trainer integration with real Replicate API
-- Comprehensive training status monitoring
-- Cancellation support
-
-#### **5. HuggingFaceService** - **Model Publishing** ✅
-- **File**: `src/lib/huggingface-service.ts`  
-- Real file uploads using `@huggingface/hub` library
-- Repository creation with proper metadata
-- ZIP extraction and file processing
-- Full debugging integration
-
-#### **6. TrainingDebugger** - **Production Debugging** ✅ **NEW**
-- **File**: `src/lib/training-debug.ts`
-- Stage-by-stage tracking: `INITIALIZING` → `ZIP_CREATION` → `REPLICATE_TRAINING` → `HUGGINGFACE_UPLOAD` → `COMPLETION`
-- Automatic error categorization: `network`, `authentication`, `validation`, `rate_limit`, `service_error`, `file_error`, `timeout`
-- Retry logic with visibility and exponential backoff
-- Real-time progress monitoring with debug summaries
-
-### **🧪 Comprehensive Testing** ✅
-- **File**: `src/lib/__tests__/training-integration.test.ts`
-- Complete end-to-end workflow testing
-- Error scenario validation (ZIP failures, Replicate failures, HuggingFace failures)
-- Debug data verification and parameter validation testing
-- **All 8 tests passing with 100% coverage** ✅
-
----
-
-## **🚀 Production Configuration Ready**
-
-### **Environment Variables Configured**:
-```bash
-# Replicate API (Required)
-REPLICATE_API_TOKEN=your_replicate_token
-
-# HuggingFace Integration (Required)
-HUGGINGFACE_API_TOKEN=your_hf_token
-HUGGINGFACE_USERNAME=your_hf_username
-
-# Cloudflare R2 Storage - Primary (Recommended for Production)
-CLOUDFLARE_R2_ACCESS_KEY_ID=your_r2_access_key
-CLOUDFLARE_R2_SECRET_ACCESS_KEY=your_r2_secret_key
-CLOUDFLARE_R2_BUCKET=your_r2_bucket_name
-CLOUDFLARE_R2_ENDPOINT=your_account_id.r2.cloudflarestorage.com
-CLOUDFLARE_R2_PUBLIC_URL=your_public_r2_domain  # Optional
-
-# Emergency Dev Fallback
-USE_LOCAL_ZIP_STORAGE=true  # Only for development/emergency
-NEXT_PUBLIC_BASE_URL=http://localhost:3000
-```
-
-### **Dependencies Added** ✅:
-```json
-{
-  "@aws-sdk/client-s3": "latest",
-  "@aws-sdk/s3-request-presigner": "latest",
-  "jszip": "latest", 
-  "@huggingface/hub": "latest",
-  "archiver": "latest",
-  "form-data": "latest"
-}
-```
-
----
-
-## **📊 Real Production Debug Output**
-
-### **Successful Training Flow**:
-```console
-🔵 TRAINING INFO: { stage: 'initializing', message: 'Starting complete LoRA training workflow' }
-🔵 TRAINING INFO: { stage: 'zip_creation', message: 'Starting: Creating training images ZIP file' }
-🔵 TRAINING INFO: { stage: 'zip_creation', message: 'Completed: ZIP creation completed', data: { zipUrl: 'https://r2.../training.zip', imageCount: 10, totalSize: 5120000 } }
-🔵 TRAINING INFO: { stage: 'replicate_training', message: 'Starting: Starting Replicate training' }
-🔵 TRAINING INFO: { stage: 'replicate_training', message: 'Completed: Replicate training started', data: { replicateId: 'train_123', status: 'starting' } }
-🔵 TRAINING INFO: { stage: 'huggingface_upload', message: 'Starting: Starting HuggingFace upload' }
-🔵 TRAINING INFO: { stage: 'huggingface_upload', message: 'Completed: HuggingFace upload completed', data: { repoId: 'user/my-model' } }
-🔵 TRAINING INFO: { stage: 'completion', message: 'Completed: Training workflow completed successfully' }
-```
-
-### **Error Handling with Retry Logic**:
-```console
-🟡 TRAINING WARNING: { message: 'Download attempt 1 failed, retrying in 2000ms', error: 'Network timeout' }
-🔴 TRAINING ERROR: { stage: 'zip_creation', category: 'network', message: 'Failed after 3 retry attempts', retryable: false }
-```
-
----
-
-## 🎯 **NEXT PRIORITIES: COMPLETED** ✅ **PHASE 5.75 FINISHED**
-
-### **✅ COMPLETED - Enhanced Model Management** 
-- ✅ **Update `/app/dashboard/models/page.tsx`** - Complete model management interface
-- ✅ **Real-time training progress display** - Live status updates with debug data
-- ✅ **Stage progression visualization** - Training pipeline status tracking
-- ✅ **Training parameter display** - Complete configuration and cost breakdown
-- ✅ **Model details page** - Comprehensive `/app/dashboard/models/[id]/page.tsx`
-
-### **✅ COMPLETED - Advanced Generation Integration**
-- ✅ **Custom model selection** - Seamless integration with trained models
-- ✅ **Trigger word automation** - Auto-suggestions and prompt enhancement
-- ✅ **Model-specific features** - Enhanced prompting for custom models
-- ✅ **Direct navigation** - From model management to generation interface
-- ✅ **HuggingFace integration** - Direct links to published repositories
-
-### **✅ COMPLETED - Training Management Dashboard**
-- ✅ **Training History Page** (`/app/dashboard/training/page.tsx`) - Complete management interface
-- ✅ **Training Details Page** (`/app/dashboard/training/[id]/page.tsx`) - Comprehensive debug data
-- ✅ **Cost tracking and estimation** - Real-time cost calculation and analytics
-- ✅ **Debug logs and error analysis** - Production-ready monitoring
-
----
-
-## **🚀 CURRENT STATUS: ALL TRAINING & MODEL FEATURES COMPLETE**
-
-### **✅ ACHIEVEMENTS UNLOCKED:**
-1. **Complete Model Lifecycle Management** - From creation to generation
-2. **Seamless Training Integration** - Real-time monitoring and debugging
-3. **Advanced Generation Interface** - Custom model support with trigger words
-4. **Professional UI/UX** - Modern, responsive design with comprehensive features
-5. **Production-Ready Architecture** - Scalable, maintainable, and well-tested
-
----
-
 ## 🎯 **NEXT PRIORITIES: Phase 6 - Production Readiness**
 
 ### **Phase 6.1: Billing & Subscriptions (Week 6)**
@@ -193,7 +24,7 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
    - Request logging and monitoring setup
    - Input sanitization improvements
    - Database query optimization
-   - CDN setup for image delivery
+   - CDN setup for image delivery (Cloudflare Images handles this for generated images)
 
 ### **Phase 6.3: Production Deployment (Week 7)**
 1. **Infrastructure & Deployment**:
@@ -246,25 +77,6 @@ console.log(status.debugData)  // Complete debug information
 
 ## **✅ VALIDATION: All Systems Ready**
 
-### **Test Results** ✅:
-```bash
-npm test -- src/lib/__tests__/training-integration.test.ts
-# ✅ Training Integration Pipeline
-#   ✅ Complete Training Pipeline
-#     ✅ should successfully complete the full training workflow with debugging
-#     ✅ should handle ZIP creation failure with proper debugging  
-#     ✅ should handle Replicate training failure with retry logic
-#     ✅ should handle HuggingFace upload failure after successful training
-#   ✅ Training Parameter Validation
-#     ✅ should validate minimum required images
-#     ✅ should validate maximum allowed images
-#   ✅ Debug Data Integration
-#     ✅ should include comprehensive debug data in training status
-#     ✅ should track stage progression through the pipeline
-# 
-# Test Suites: 1 passed, 1 total
-# Tests: 8 passed, 8 total
-```
 
 ### **Production Readiness** ✅:
 - ✅ **Complete end-to-end workflow** tested and working
@@ -279,14 +91,131 @@ npm test -- src/lib/__tests__/training-integration.test.ts
 
 ## **🎉 ACHIEVEMENT SUMMARY**
 
-**The FLUX LoRA training pipeline is now COMPLETE and production-ready!**
-
-✅ **Built**: Complete training workflow with debugging  
-✅ **Tested**: All 8 integration tests passing  
-✅ **Documented**: Comprehensive implementation guide  
-✅ **Configured**: Production environment setup  
-✅ **Validated**: Real error handling and retry logic  
-
-**Ready for**: UI integration and user-facing training features! 🚀
 
 The next step is connecting this robust backend system to your existing UI for a complete training experience.
+
+# Next Steps: Project Completion
+
+## 🎯 Phase 5.75: LoRA Training UI Integration ✅ **COMPLETED WITH COMPREHENSIVE TESTING**
+- [x] **Model Creation UI Updates (`/app/dashboard/models/new/page.tsx`)**:
+    - [x] Integrate `TrainingService` with custom parameter support.
+    - [x] Display real-time training progress and debug data.
+    - [x] Visualize stage progression (ZIP → Replicate → HuggingFace → Complete).
+    - [x] Add controls for training parameters (steps, learning rate, LoRA rank).
+    - [x] Create training status component with error handling and retry options.
+    - [x] Enhanced 4-step wizard with dedicated training settings page.
+    - [x] Parameter validation and guidelines based on Replicate research.
+    - [x] Automatic redirection to training dashboard for real-time monitoring.
+
+- [x] **Advanced Training Parameter Controls**:
+    - [x] Custom controls for steps (500-3000), learning rate (0.0001-0.01), LoRA rank (8-128)
+    - [x] Real-time cost estimation ($2-4 based on steps)
+    - [x] Research-based parameter guidelines for portraits vs objects/styles
+    - [x] Parameter validation with comprehensive error handling
+    - [x] Research-based defaults: 1000 steps, 0.0004 LR, rank 16
+
+- [x] **TrainingService Enhancement**:
+    - [x] Add getTrainingOptions() method for UI integration
+    - [x] Implement validateTrainingParams() with comprehensive validation
+    - [x] Support custom parameters in training workflow
+    - [x] Fix TypeScript compatibility issues
+
+- [x] **API Integration**:
+    - [x] Add trainingParams object to Zod validation schema
+    - [x] Extract custom parameters with fallback defaults
+    - [x] Enhanced response messages with parameter details
+    - [x] Maintain backward compatibility
+
+- [x] **Comprehensive Test Coverage**:
+    - [x] Create training-parameters.test.ts with 9 passing tests
+    - [x] Test training options, parameter validation, and defaults
+    - [x] Verify research-based parameter recommendations
+    - [x] All tests passing with full functionality coverage
+    - [x] Integration testing for TrainingService methods
+
+**Git Commit**: `ccf015c` - feat: implement comprehensive training parameter controls with testing
+
+## 💳 Phase 6: Billing & Subscriptions
+
+### **Stripe & Subscription Integration** ✅ **COMPLETED**
+- [x] Stripe configuration and webhooks
+  - [x] Enhance `checkout.session.completed` webhook for subscriptions and one-time payments
+- [x] Pricing plans and products setup
+  - [x] 4-tier pricing structure (Free, Creator $20, Pro $40, Enterprise $99)
+  - [x] Comprehensive feature definitions and credit allocations
+- [x] Subscription API endpoints
+  - [x] Implement Create Subscription Checkout API endpoint (`/api/stripe/create-subscription-checkout`)
+  - [x] Customer Portal API endpoint for subscription management
+- [x] Frontend billing integration
+  - [x] Complete billing dashboard (`/dashboard/billing`)
+  - [x] Responsive pricing cards with subscription handling
+  - [x] Current subscription status display
+  - [x] Toast notifications for user feedback
+  - [x] Success/cancel handling from Stripe redirects
+- [x] Payment processing and billing dashboard
+  - [x] Stripe Checkout integration
+  - [x] Customer portal access for existing subscribers
+  - [x] Comprehensive test coverage for billing functionality
+- [x] **Model Upload Limits Enforcement**: Added `checkUsageLimits` to model creation API
+  - [x] Enforce tier-based model slot limits before model creation
+  - [x] Provide helpful error messages for different subscription tiers
+  - [x] Comprehensive test coverage with 4 passing tests
+- [ ] Consider if we need webhooks for replicate
+- [ ] **Model Privacy Tiers**: ~~Free users get public models, premium subscribers get private HuggingFace repositories~~ (No longer needed - using Replicate end-to-end)
+
+### Credit System & Usage Tracking ✅ **COMPLETED**
+- [x] **Comprehensive Credit System**: Complete CreditService with transaction logging
+  - [x] Credit spending, earning, and transaction recording
+  - [x] Usage analytics with trends and statistics
+  - [x] Low-credit notifications and warnings
+  - [x] Tier-based usage limits and permissions
+- [x] **Usage Analytics Dashboard**: Full-featured analytics interface
+  - [x] Real-time credit balance and usage tracking
+  - [x] Transaction history with detailed metadata
+  - [x] Usage trends and patterns visualization
+  - [x] Plan limits and permissions display
+- [x] **Usage Limits Enforcement**: Middleware and hooks for restrictions
+  - [x] API middleware for credit and model slot checking
+  - [x] React hooks for frontend permission management
+  - [x] Automatic tier-based feature restrictions
+- [x] **Integration with Existing Systems**: Updated all APIs
+  - [x] Image generation API uses CreditService
+  - [x] Stripe webhooks use CreditService for credit allocation
+  - [x] Comprehensive test coverage for all credit operations
+
+## ☁️ Phase 6.5: Nebius Integration
+- [ ] Flesh out tasks to add Nebius as a new training/generation provider.
+
+## 🧹 Phase 7: Housekeeping
+
+### Security Recommendations
+- [ ] Implement Admin API authentication (HIGH PRIORITY).
+- [ ] Develop rate limiting plan.
+- [ ] Define CORS configuration needs.
+- [ ] Implement security headers.
+- [ ] Set up request logging and monitoring.
+- [ ] Improve input sanitization.
+
+### General Housekeeping
+- [ ] Clean up ZIP files from failed trainings.
+- [ ] Clean up Replicate models from failed trainings.
+- [ ] Enforce single model limit for free/lower-tier users.
+- [ ] Audit and implement missing pages/components.
+- [ ] Implement subscription-based model privacy.
+- [ ] Add dark theme.
+
+## 🚀 Phase 8: Production Deployment
+
+### Infrastructure & Deployment
+- [ ] Configure Vercel deployment.
+- [ ] Set up environment variables.
+- [ ] Configure production database.
+- [ ] Configure S3 bucket.
+- [ ] Configure CDN for image delivery.
+
+### Monitoring & Analytics
+- [ ] Integrate Sentry for error tracking.
+- [ ] Integrate PostHog for user analytics.
+- [ ] Configure Stripe webhooks.
+- [ ] Set up performance monitoring.
+- [ ] Define custom metrics and dashboards.

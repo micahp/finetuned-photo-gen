@@ -98,7 +98,7 @@ export async function GET(
       progress: 0,
       stage: 'Initializing',
       estimatedTimeRemaining: undefined as number | undefined,
-      debugData: null,
+      debugData: null as any,
       error: job.errorMessage || null,
       logs: ''
     }
@@ -179,7 +179,7 @@ export async function GET(
         
       } catch (statusError) {
         console.error(`❌ Failed to get unified status for training ${payload.externalTrainingId}:`, statusError)
-        console.error('❌ Error stack:', statusError.stack)
+        console.error('❌ Error stack:', statusError instanceof Error ? statusError.stack : 'No stack trace')
         
         // Fall back to database status for completed/failed jobs
         if (job.status === 'completed') {
@@ -259,9 +259,9 @@ export async function GET(
     // Get HuggingFace repo from user model if available
     let huggingFaceRepo = payload?.huggingFaceRepo
     let validationInfo = {
-      validationStatus: null,
-      validationError: null,
-      lastValidationCheck: null
+      validationStatus: null as string | null,
+      validationError: null as string | null,
+      lastValidationCheck: null as string | null
     }
     
     if (!huggingFaceRepo && payload?.externalTrainingId) {

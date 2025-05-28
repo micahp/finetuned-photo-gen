@@ -108,6 +108,7 @@
 - [x] Image details modal with metadata
 - [x] Download and sharing functionality
 - [x] Bulk operations (delete, download)
+- [x] **Cloudflare Images Integration**: Generated images uploaded to Cloudflare for persistent storage.
 
 ### **🆕 FLUX LoRA Training Pipeline** ✅ **COMPLETE**
 - [x] **Complete end-to-end training workflow** - ZIP creation → Replicate training → HuggingFace upload
@@ -167,12 +168,15 @@
 
 ## 🆕 **Phase 5.75: LoRA Training UI Integration (Week 5.75)** ✅ **COMPLETED**
 
-### **Model Creation UI Updates**
-- [ ] Update `/app/dashboard/models/new/page.tsx` with TrainingService integration
-- [ ] Add real-time training progress display with debug data
-- [ ] Implement stage progression visualization (ZIP → Replicate → HuggingFace → Complete)
-- [ ] Add training parameter controls (steps, learning rate, LoRA rank)
-- [ ] Create training status component with error handling and retry options
+### **Model Creation UI Updates** ✅ **COMPLETED**
+- [x] Update `/app/dashboard/models/new/page.tsx` with TrainingService integration
+- [x] Add real-time training progress display with debug data
+- [x] Implement stage progression visualization (ZIP → Replicate → Complete)
+- [x] Add training parameter controls (steps, learning rate, LoRA rank)
+- [x] Create training status component with error handling and retry options
+- [x] Enhanced 4-step wizard with dedicated training settings page
+- [x] Parameter validation and guidelines based on Replicate research
+- [x] Automatic redirection to training dashboard for real-time monitoring
 
 ### **Training Management Dashboard** ✅ **COMPLETED**
 - [x] Create `/app/dashboard/training/page.tsx` - Training history and management
@@ -198,26 +202,57 @@
 - [x] Enhanced prompt suggestions for custom models
 - [x] Direct navigation from model gallery to generation interface
 
-## 💳 **Phase 6: Billing & Subscriptions (Week 6)**
+### **Advanced Training Parameter Controls** ✅ **COMPLETED**
+- [x] Configurable training steps (500-3000, default: 1000)
+- [x] Adjustable learning rate (0.0001-0.01, default: 0.0004)
+- [x] Variable LoRA rank (8-128, default: 16)
+- [x] Parameter validation based on Replicate research
+- [x] Cost estimation based on training parameters
+- [x] Guidelines for different use cases (portraits vs objects/styles)
+- [x] Real-time parameter feedback and recommendations
 
-### **Stripe & Subscription Integration**
-- [ ] Stripe configuration and webhooks
-- [ ] Pricing plans and products setup
-- [ ] Subscription API endpoints
+## 💳 **COMPLETED - Phase 6: Billing & Subscriptions (Week 6)**
+
+### **Stripe & Subscription Integration** ✅ **COMPLETED**
+- [x] Stripe configuration and webhooks
+  - [x] Enhanced `checkout.session.completed` webhook for subscriptions and one-time payments
+  - [x] Customer portal webhook integration
+- [x] Pricing plans and products setup
+  - [x] 4-tier pricing structure: Free (5 credits), Creator ($20/200 credits), Pro ($40/400 credits), Enterprise ($99/1000 credits)
+  - [x] Comprehensive feature definitions and model slot allocations
+  - [x] Pricing configuration with Stripe price IDs
+- [x] Subscription API endpoints
+  - [x] Create Subscription Checkout API (`/api/stripe/create-subscription-checkout`)
+  - [x] Customer Portal API (`/api/stripe/customer-portal`)
+  - [x] Webhook processing for subscription lifecycle
+- [x] Frontend billing integration
+  - [x] Complete billing dashboard (`/dashboard/billing`)
+  - [x] Responsive pricing cards with subscription handling
+  - [x] Current subscription status display with usage metrics
+  - [x] Toast notifications for user feedback
+  - [x] Success/cancel handling from Stripe redirects
+  - [x] 4-column responsive grid layout for pricing plans
+- [x] Payment processing and billing dashboard
+  - [x] Stripe Checkout integration with proper error handling
+  - [x] Customer portal access for existing subscribers
+  - [x] Subscription management (upgrade/downgrade/cancel)
+  - [x] Comprehensive test coverage for billing functionality
 - [ ] Ensure model upload limits are enforced by tier
 - [ ] Consider if we need webhooks for like replicate
-- [ ] Payment processing
-- [ ] Billing dashboard and history
 - [ ] **Model Privacy Tiers**: Free users get public models, premium subscribers get private HuggingFace repositories
 
 ### **Credit System & Usage Tracking**
 - [x] Credit tracking implementation
 - [x] Credit purchase flow (admin API for now)
+- [x] Subscription-based credit allocation
 - [ ] Usage analytics and reporting
 - [ ] Usage limits enforcement
 - [ ] Low-credit notifications and warnings
 
-## **Phase 6.5 Housekeeping**
+## **Phase 6.5 Add Nebius as a training/generation provider
+TODO: flest out the rest
+
+## **Phase 7 Housekeeping**
 ### **Security Recommendations Documented**
 - [ ] Admin API authentication requirement (HIGH PRIORITY)
 - [ ] Rate limiting implementation plan
@@ -229,8 +264,7 @@
 ### **Housekeeping**
 - [ ] Clean up zip file(s) from failed image training. Right now there's no visibility to these zip files in our training tab
 - [ ] Clean up replicate model(s) from failed image training. Right now there's no way to remove models from failed trainings
-- [ ] Clarify what togetherAIService is being used for and make sure it doesn't leak
-- [ ] Make sure free and lower tier paying users only have 1 model uploaded at a time, prompt and delete model when they try to create a new one
+- [ ] Clean up huggingface references in UI
 - [ ] Check existing pages for missing pages and components
 - [ ] Implement any missing pages and components
 - [ ] **Model Privacy Feature**: Implement subscription-based model privacy (free users = public models, premium users = private models)
@@ -238,13 +272,13 @@
 ### **Theme**
 - [ ] Add dark theme
 
-## 🚀 **Phase 7: Production Deployment (Week 7)**
+## 🚀 **Phase 8: Production Deployment (Week 7)**
 
 ### **Infrastructure & Deployment**
 - [ ] Vercel deployment configuration
 - [ ] Environment variables setup
 - [ ] Production database setup
-- [ ] S3 bucket configuration
+- [x] R2 bucket configuration
 - [ ] CDN setup for image delivery
 
 ### **Monitoring & Analytics**
@@ -313,30 +347,23 @@ npm run lint -- src/       # ✅ Lint source code (0 errors)
 - **🆕 Training Pipeline**: Complete LoRA training with debugging and testing ✅
 
 **⏭️ NEXT SPRINT GOAL**
-Phase 6: Complete billing system integration with Stripe, implement remaining security recommendations, and finalize housekeeping items for production deployment.
+Phase 7: Implement remaining security recommendations, finalize housekeeping items, and complete production deployment.
 
 ---
 
 **Total Estimated Timeline: 6-7 weeks to full MVP**
-**Current Progress: 98% complete (All core features + training pipeline + comprehensive testing + complete model management and generation integration)**
-**Next Milestone: Final billing integration and production deployment (Week 6-7)**
-
-**🌟 KEY ACHIEVEMENTS THIS SPRINT:**
-1. **Complete Image Generation System**: FLUX integration with Together AI
-2. **🆕 Complete FLUX LoRA Training Pipeline**: End-to-end workflow with debugging
-3. **Advanced Gallery Interface**: Professional image management with filtering
-4. **Download Proxy System**: CORS-compatible image downloads
-5. **Credit Management**: Database-driven credit system
-6. **Responsive Design**: Beautiful UI that works on all devices
-7. **Comprehensive Testing**: 111 tests with full API coverage and security audit
-8. **Production-Ready Security**: Vulnerability assessment and fix recommendations
-9. **🆕 Cloud Storage Integration**: Configurable Cloudflare R2 + local fallback
-10. **🆕 Production Debugging**: Comprehensive error tracking and retry logic
-11. **🆕 Complete Training Management Dashboard**: Real-time monitoring and debugging ✅ **NEW**
-12. **🆕 Enhanced Model Management**: Complete model lifecycle with training integration ✅ **NEW**
-13. **🆕 Advanced Generation Interface**: Custom model support with trigger word handling ✅ **NEW**
+**Current Progress: 99% complete (All core features + training pipeline + comprehensive testing + complete model management and generation integration + complete billing system)**
+**Next Milestone: Final housekeeping and production deployment (Week 7)**
 
 ## 🏗️ **Architecture Decisions**
+
+### **Complete Billing System Architecture** ✅ **NEW**
+- **4-Tier Pricing Structure**: Free (5 credits), Creator ($20/200 credits), Pro ($40/400 credits), Enterprise ($99/1000 credits)
+- **Responsive Pricing Cards**: Mobile-first design with 1-2-4 column responsive grid layout
+- **Stripe Integration**: Complete checkout flow with success/cancel handling and toast notifications
+- **Subscription Management**: Customer portal access for existing subscribers with upgrade/downgrade capabilities
+- **Current Status Display**: Real-time subscription status with usage metrics and billing information
+- **Test Coverage**: Comprehensive billing functionality testing with authentication and UI state validation
 
 ### **Enhanced Model Management Architecture** ✅ **NEW**
 - **Real-time Training Monitoring**: Live status updates with auto-refresh for training models
@@ -351,13 +378,6 @@ Phase 6: Complete billing system integration with Stripe, implement remaining se
 - **Model Type Selection**: Clear distinction between base FLUX models and custom models
 - **Enhanced Prompt System**: Model-specific prompt suggestions and enhancements
 - **Direct Model Navigation**: Seamless navigation from model management to generation
-
-### **Image Generation Architecture**
-- **Together AI Integration**: Direct API integration with FLUX models
-- **CORS Proxy**: Server-side image fetching to avoid browser restrictions
-- **Credit System**: Database-tracked usage with real-time updates
-- **Metadata Storage**: Complete parameter tracking for reproducibility
-- **Download Strategy**: Proxy-based system for reliable file downloads
 
 ### **Gallery Design Rationale**
 - **Dual View Modes**: Grid and list views for different user preferences
@@ -391,11 +411,6 @@ Phase 6: Complete billing system integration with Stripe, implement remaining se
 
 ## 🎉 **Milestone Achieved: Complete AI Generation System + Complete Training Pipeline + Comprehensive Testing**
 
-**✅ GENERATION SYSTEM COMPLETE**
-- Together AI FLUX integration with real-time generation
-- Professional gallery interface with advanced features
-- Working download system and credit management
-- Beautiful, responsive UI with comprehensive filtering
 
 **✅ TRAINING PIPELINE COMPLETE** ⭐ **NEW**
 - Complete FLUX LoRA training workflow with debugging
@@ -411,18 +426,18 @@ Phase 6: Complete billing system integration with Stripe, implement remaining se
 - TDD implementation with reusable testing patterns
 - Critical security findings documented with fix recommendations
 
-**🚀 READY FOR UI INTEGRATION**
-- Solid foundation with working core features and comprehensive testing
-- Complete backend training pipeline ready for UI integration
+**🚀 READY FOR PRODUCTION DEPLOYMENT**
+- Complete AI generation and training system with full UI integration
+- Comprehensive billing system with Stripe subscription management
 - Clean, maintainable code architecture with security audit complete
 - Production-ready components and APIs with full test coverage
-- Ready for training UI development and final billing integration
+- All core features implemented and tested
 
-**⏭️ TRAINING UI PHASE BEGINS**
-Ready to integrate the complete training pipeline with the UI, providing users with seamless model creation, real-time progress tracking, and comprehensive debug visibility. The core AI generation + training system is working beautifully!
+**⏭️ PRODUCTION DEPLOYMENT PHASE**
+Ready for final housekeeping, security implementation, and production deployment. The complete AI generation platform with training and billing is working beautifully!
 
 ---
 
 **Total Estimated Timeline: 6-7 weeks to full MVP**
-**Current Progress: 95% complete (Core functionality + training pipeline + testing complete)**
-**Next Milestone: Complete training UI integration and billing system for production (Week 6-7)** 
+**Current Progress: 99% complete (Core functionality + training pipeline + testing + billing system complete)**
+**Next Milestone: Final housekeeping and production deployment (Week 7)** 

@@ -5,7 +5,7 @@ import { ModelValidationService } from '@/lib/model-validation'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -17,7 +17,7 @@ export async function POST(
       )
     }
 
-    const modelId = params.id
+    const { id: modelId } = await params
 
     // Get the model and verify ownership
     const model = await prisma.userModel.findFirst({
@@ -61,7 +61,6 @@ export async function POST(
       data: {
         validationStatus: validationResult.isValid ? 'valid' : 'invalid',
         validationError: validationResult.error,
-        validationErrorType: validationResult.errorType,
         lastValidationCheck: validationResult.lastChecked,
         // If model is invalid, mark it as not ready for inference
         loraReadyForInference: validationResult.isValid ? model.loraReadyForInference : false,
@@ -75,7 +74,7 @@ export async function POST(
         name: updatedModel.name,
         validationStatus: updatedModel.validationStatus,
         validationError: updatedModel.validationError,
-        validationErrorType: updatedModel.validationErrorType,
+
         lastValidationCheck: updatedModel.lastValidationCheck,
         loraReadyForInference: updatedModel.loraReadyForInference,
       },
@@ -87,12 +86,12 @@ export async function POST(
     
     // Update model status to indicate validation failed
     try {
+      const { id } = await params
       await prisma.userModel.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           validationStatus: 'invalid',
           validationError: 'Validation process failed',
-          validationErrorType: 'unknown',
           lastValidationCheck: new Date(),
         },
       })

@@ -105,7 +105,117 @@ global.fetch = jest.fn(() =>
   })
 )
 
-// Mock console methods to prevent test output noise
+// Global mock for Prisma Client
+const createPrismaMock = () => ({
+  $transaction: jest.fn(),
+  $queryRaw: jest.fn(),
+  $executeRaw: jest.fn(),
+  $queryRawUnsafe: jest.fn(),
+  $executeRawUnsafe: jest.fn(),
+  user: {
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    update: jest.fn(),
+    create: jest.fn(),
+    delete: jest.fn(),
+    // Add other user model methods if needed
+  },
+  creditTransaction: {
+    create: jest.fn(),
+    findMany: jest.fn(),
+    aggregate: jest.fn(),
+    // Add other creditTransaction model methods if needed
+  },
+  generatedImage: {
+    create: jest.fn(),
+    count: jest.fn(),
+    // Add other generatedImage model methods if needed
+  },
+  userModel: {
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    count: jest.fn(),
+    // Add other userModel methods if needed
+  },
+  jobQueue: { // Added based on usage in training/jobs/route.ts
+    findMany: jest.fn(),
+    count: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+  },
+  // Add other Prisma models as needed by the application
+  // e.g. Session: { ... }, Account: { ... }, etc.
+});
+
+// Assign to globalThis for better type safety with TypeScript if you have global type augmentations
+// For JavaScript or basic TypeScript, global.prismaMock is also common.
+globalThis.prismaMock = createPrismaMock();
+global.prismaMock = globalThis.prismaMock;
+
+// Global mock for Prisma $transaction method (already existed, ensure it uses the new prismaMock if appropriate)
+// The previous global.mockPrismaTransaction might be redundant if prismaMock.$transaction is used directly.
+// For now, keep both but prefer using prismaMock.$transaction in tests for consistency.
+global.mockPrismaTransaction = globalThis.prismaMock.$transaction; // Alias to the one in prismaMock
+
+// Global mock for CreditService
+global.mockCreditServiceSpendCredits = jest.fn()
+global.mockCreditServiceAddCredits = jest.fn()
+global.mockCreditServiceRecordTransaction = jest.fn()
+global.mockCreditServiceGetUsageAnalytics = jest.fn()
+global.mockCreditServiceCheckUsageLimits = jest.fn()
+global.mockCreditServiceCanAfford = jest.fn()
+global.mockCreditServiceGetLowCreditNotification = jest.fn()
+
+beforeEach(() => {
+  // Reset all mocks before each test
+  
+  // Reset prismaMock methods
+  const pm = globalThis.prismaMock;
+  pm.$transaction.mockReset();
+  pm.$queryRaw.mockReset();
+  pm.$executeRaw.mockReset();
+  pm.$queryRawUnsafe.mockReset();
+  pm.$executeRawUnsafe.mockReset();
+  // Reset other $ methods if added
+
+  Object.values(pm.user).forEach(mockFn => mockFn.mockReset());
+  Object.values(pm.creditTransaction).forEach(mockFn => mockFn.mockReset());
+  Object.values(pm.generatedImage).forEach(mockFn => mockFn.mockReset());
+  Object.values(pm.userModel).forEach(mockFn => mockFn.mockReset());
+  Object.values(pm.jobQueue).forEach(mockFn => mockFn.mockReset());
+  // Reset other models if added
+
+  // Default implementation for $transaction, if needed globally
+  pm.$transaction.mockImplementation(async (callback) => {
+    // This default mockTx should use the global prismaMock's methods
+    // so that individual test mocks on e.g. prismaMock.user.update are reflected within transactions.
+    return callback(globalThis.prismaMock); 
+  });
+
+  // Reset all credit service mocks before each test
+  if (global.mockCreditServiceSpendCredits) {
+    global.mockCreditServiceSpendCredits.mockResolvedValue({
+      success: true,
+      newBalance: 9,
+    })
+  }
+  
+  if (global.mockCreditServiceAddCredits) {
+    global.mockCreditServiceAddCredits.mockResolvedValue({
+      success: true,
+      newBalance: 11,
+    })
+  }
+  
+  if (global.mockCreditServiceRecordTransaction) {
+    global.mockCreditServiceRecordTransaction.mockResolvedValue(undefined)
+  }
+})
+
+/*
+// Mock console methods to prevent test output noise --- Temporarily Commented Out for Debugging
 const originalConsole = global.console
 global.console = {
   ...originalConsole,
@@ -113,4 +223,5 @@ global.console = {
   warn: jest.fn(),
   error: jest.fn(),
   debug: jest.fn(),
-} 
+}
+*/ 

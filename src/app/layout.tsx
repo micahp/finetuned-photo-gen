@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
 import { auth } from "@/lib/next-auth";
 import AutoReloadErrorBoundary from "@/components/AutoReloadErrorBoundary";
+import { Toaster } from "sonner";
 import "@/utils/errorMonitor"; // Auto-setup error monitoring
 
 const geistSans = Geist({
@@ -36,6 +37,7 @@ export default async function RootLayout({
         <AutoReloadErrorBoundary>
           <AuthSessionProvider session={session}>
             {children}
+            <Toaster position="top-right" />
           </AuthSessionProvider>
         </AutoReloadErrorBoundary>
       </body>
