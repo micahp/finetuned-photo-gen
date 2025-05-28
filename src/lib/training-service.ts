@@ -641,7 +641,7 @@ export class TrainingService {
           description: 'High-quality FLUX model for detailed images'
         },
         {
-          id: 'stabilityai/stable-diffusion-xl-base-1.0',
+          id: 'stability-ai/sdxl',
           name: 'Stable Diffusion XL',
           description: 'High-resolution Stable Diffusion model'
         }

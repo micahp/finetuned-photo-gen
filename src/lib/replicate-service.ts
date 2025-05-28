@@ -147,11 +147,11 @@ export class ReplicateService {
       let trainerVersion: string
       let trainingInput: any
       
-      if (baseModel === 'stabilityai/stable-diffusion-xl-base-1.0') {
+      if (baseModel === 'stabilityai/stable-diffusion-xl-base-1.0' || baseModel === 'stability-ai/sdxl') {
         // SDXL trainer configuration
-        trainerOwner = "ostris"
+        trainerOwner = "edenartlab"
         trainerName = "sdxl-lora-trainer"
-        trainerVersion = "latest" // Will need to find the actual version hash
+        trainerVersion = "4767bababe6048535114863799de828c25ec5b935dab7f879d4fa29495118d22"
         trainingInput = {
           input_images: params.zipUrl,
           trigger_word: params.triggerWord,
@@ -588,13 +588,13 @@ export class ReplicateService {
         cost: '$0.001525 per second'
       },
       {
-        id: 'ostris/sdxl-lora-trainer',
+        id: 'edenartlab/sdxl-lora-trainer',
         name: 'SDXL LoRA Trainer', 
         description: 'Train LoRA models for Stable Diffusion XL',
-        version: 'latest', // Will need to find the actual version hash
-        baseModel: 'stabilityai/stable-diffusion-xl-base-1.0',
+        version: '4767bababe6048535114863799de828c25ec5b935dab7f879d4fa29495118d22',
+        baseModel: 'stability-ai/sdxl',
         estimatedTime: '15-45 minutes',
-        cost: '$0.001525 per second'
+        cost: 'Variable pricing'
       }
     ]
   }
