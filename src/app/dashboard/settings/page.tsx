@@ -577,7 +577,7 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-red-200">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-red-700">Danger Zone</CardTitle>
                 <CardDescription>
