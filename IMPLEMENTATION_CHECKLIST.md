@@ -407,7 +407,6 @@ Phase 7: Implement remaining security recommendations, finalize housekeeping ite
 - **Real-time Training Monitoring**: Live status updates with auto-refresh for training models
 - **Comprehensive Model Details**: Complete model information with training history and statistics
 - **Cost Tracking Integration**: Real-time cost calculation and analytics
-- **HuggingFace Integration**: Direct links to published models with repository information
 - **Training Pipeline Integration**: Seamless connection to training management dashboard
 
 ### **Advanced Generation System** ✅ **NEW**  

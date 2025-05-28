@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Photo Generator - Create Personalized Images",
+  title: "Fine Photo Gen - Create Personalized Images",
   description: "Generate stunning personalized photos using AI. Train custom models with your images and create unique content.",
 };
 
