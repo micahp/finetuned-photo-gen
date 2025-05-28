@@ -18,6 +18,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2 } from 'lucide-react'
 import { TogetherAIService } from '@/lib/together-ai'
 import { SmartImage } from '@/components/ui/smart-image'
+import { isPremiumUser, isPremiumModel, getPremiumFeatures } from '@/lib/subscription-utils'
+import { PremiumModelBadge } from '@/components/ui/premium-model-badge'
+import Link from 'next/link'
 
 const generateSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
@@ -60,10 +63,14 @@ export default function GeneratePage() {
   const searchParams = useSearchParams()
   const preselectedModelId = searchParams.get('model')
 
+  // Premium subscription checks
+  const hasPremiumAccess = isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
+  const premiumFeatures = getPremiumFeatures(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
+
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null)
   const [creditsRemaining, setCreditsRemaining] = useState(session?.user?.credits || 0)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | JSX.Element | null>(null)
   const [copiedPrompt, setCopiedPrompt] = useState<string | null>(null)
   const [userModels, setUserModels] = useState<UserModel[]>([])
   const [selectedUserModel, setSelectedUserModel] = useState<UserModel | null>(null)
@@ -270,7 +277,29 @@ export default function GeneratePage() {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred'
-      setError(errorMessage)
+      
+      // Check if this is an upgrade-required error for premium models
+      if (errorMessage.includes('Premium model access required') || 
+          errorMessage.includes('upgrade your subscription')) {
+        setError(
+          <div className="space-y-3">
+            <p className="text-red-600">{errorMessage}</p>
+            <PremiumModelBadge 
+              isPremium={true}
+              hasAccess={false}
+              modelName="FLUX Pro models"
+              variant="card"
+              className="!border-red-200 !bg-red-50"
+              onUpgradeClick={() => {
+                // Track conversion attempt
+                console.log('User clicked upgrade from generation error')
+              }}
+            />
+          </div>
+        )
+      } else {
+        setError(errorMessage)
+      }
       
       // If the error indicates model corruption, refresh the models list
       if (errorMessage.toLowerCase().includes('corrupted') || 
@@ -495,33 +524,78 @@ export default function GeneratePage() {
 
                   {/* Base Model Selection (only when not using custom models) */}
                   {!selectedUserModel && (
-                    <FormField
-                      control={form.control}
-                      name="modelId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Base Model</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a model" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {baseModels.map((model) => (
-                                <SelectItem key={model.id} value={model.id}>
-                                  <div className="flex items-center gap-2">
-                                    <span>{model.name}</span>
-                                    {model.free && <Badge variant="secondary" className="text-xs">Free</Badge>}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
+                    <div className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="modelId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Base Model</FormLabel>
+                            <Select 
+                              onValueChange={(value) => {
+                                // Check if trying to select premium model without access
+                                if (isPremiumModel(value) && !hasPremiumAccess) {
+                                  setError("Premium models require a paid subscription. Upgrade to access FLUX Pro models.")
+                                  return
+                                }
+                                setError(null)
+                                field.onChange(value)
+                              }} 
+                              defaultValue={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a model" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {baseModels.map((model) => {
+                                  const isModelPremium = isPremiumModel(model.id)
+                                  const hasModelAccess = !isModelPremium || hasPremiumAccess
+                                  
+                                  return (
+                                    <SelectItem 
+                                      key={model.id} 
+                                      value={model.id}
+                                      disabled={isModelPremium && !hasPremiumAccess}
+                                      className={isModelPremium && !hasPremiumAccess ? "opacity-60" : ""}
+                                    >
+                                      <div className="flex items-center gap-2 w-full">
+                                        <span className={isModelPremium && !hasPremiumAccess ? "text-gray-400" : ""}>
+                                          {model.name}
+                                        </span>
+                                        {model.free && (
+                                          <Badge variant="secondary" className="text-xs">Free</Badge>
+                                        )}
+                                        <PremiumModelBadge 
+                                          isPremium={isModelPremium}
+                                          hasAccess={hasModelAccess}
+                                          variant="badge"
+                                        />
+                                      </div>
+                                    </SelectItem>
+                                  )
+                                })}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      {/* Premium Model Upsell Card */}
+                      {!hasPremiumAccess && (
+                        <Link 
+                          href="/dashboard/billing" 
+                          className="text-xs text-gray-500 hover:text-purple-600 transition-colors mt-2"
+                          onClick={() => {
+                            console.log('User clicked upgrade from model selection')
+                          }}
+                        >
+                          Subscribe to unlock more models →
+                        </Link>
                       )}
-                    />
+                    </div>
                   )}
 
                   {/* Prompt */}
@@ -777,7 +851,7 @@ export default function GeneratePage() {
 
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                  {error}
+                  {typeof error === 'string' ? error : error}
                 </div>
               )}
             </form>

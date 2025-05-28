@@ -6,6 +6,7 @@ import { TogetherAIService } from '@/lib/together-ai'
 import { ReplicateService } from '@/lib/replicate-service'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
 import { CreditService } from '@/lib/credit-service'
+import { isPremiumUser, isPremiumModel } from '@/lib/subscription-utils'
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
@@ -47,7 +48,11 @@ export async function POST(request: NextRequest) {
     // Check if user has enough credits
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { credits: true }
+      select: { 
+        credits: true,
+        subscriptionPlan: true,
+        subscriptionStatus: true
+      }
     })
 
     if (!user || user.credits < 1) {
@@ -55,6 +60,21 @@ export async function POST(request: NextRequest) {
         { error: 'Insufficient credits' },
         { status: 400 }
       )
+    }
+
+    // Check premium model access
+    if (modelId && isPremiumModel(modelId)) {
+      const hasPremiumAccess = isPremiumUser(user.subscriptionPlan, user.subscriptionStatus)
+      
+      if (!hasPremiumAccess) {
+        return NextResponse.json(
+          { 
+            error: 'Premium model access required. Please upgrade your subscription to use FLUX Pro models.',
+            upgradeRequired: true
+          },
+          { status: 403 }
+        )
+      }
     }
 
     // Initialize services
