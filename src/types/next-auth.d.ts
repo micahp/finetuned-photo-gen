@@ -9,6 +9,7 @@ declare module 'next-auth' {
       subscriptionPlan: string | null
       stripeCustomerId: string | null
       credits: number
+      createdAt: string
     } & DefaultSession['user']
   }
 
@@ -18,6 +19,7 @@ declare module 'next-auth' {
     subscriptionPlan: string | null
     stripeCustomerId: string | null
     credits: number
+    createdAt: string
   }
 }
 
@@ -28,5 +30,6 @@ declare module 'next-auth/jwt' {
     subscriptionPlan: string | null
     stripeCustomerId: string | null
     credits: number
+    createdAt: string
   }
 } 

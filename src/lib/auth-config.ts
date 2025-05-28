@@ -42,6 +42,7 @@ export const authConfig: NextAuthConfig = {
         token.subscriptionPlan = user.subscriptionPlan
         token.stripeCustomerId = user.stripeCustomerId
         token.credits = user.credits
+        token.createdAt = user.createdAt
       }
       return token
     },
@@ -53,6 +54,7 @@ export const authConfig: NextAuthConfig = {
         session.user.subscriptionPlan = token.subscriptionPlan as string | null
         session.user.stripeCustomerId = token.stripeCustomerId as string | null
         session.user.credits = token.credits as number
+        session.user.createdAt = token.createdAt as string
       }
       return session
     },
@@ -89,6 +91,7 @@ export const authConfig: NextAuthConfig = {
             subscriptionPlan: user.subscriptionPlan,
             stripeCustomerId: user.stripeCustomerId,
             credits: user.credits,
+            createdAt: user.createdAt.toISOString(),
           }
         } catch (error) {
           console.error('Authentication error:', error)
