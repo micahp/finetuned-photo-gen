@@ -807,51 +807,6 @@ export default function GeneratePage() {
               )}
             </CardContent>
           </Card>
-
-          {/* User Models Quick Access */}
-          {!loadingModels && userModels.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  My Models
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {userModels.slice(0, 3).map((model) => (
-                    <div
-                      key={model.id}
-                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                        selectedUserModel?.id === model.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                      onClick={() => handleUserModelSelect(model.id)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{model.name}</p>
-                          {model.triggerWord && (
-                            <code className="text-xs bg-gray-100 px-1 rounded">{model.triggerWord}</code>
-                          )}
-                        </div>
-                        <Badge variant="secondary" className="text-xs ml-2">
-                          {model._count.generatedImages}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {userModels.length > 3 && (
-                    <p className="text-xs text-gray-500 text-center">
-                      +{userModels.length - 3} more models available
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
     </div>
