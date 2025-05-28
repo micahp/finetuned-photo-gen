@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
+import { PRICING_PLANS } from '@/lib/stripe/pricing'
 
 export default function HomePage() {
   return (
@@ -82,53 +84,45 @@ export default function HomePage() {
           Simple Pricing
         </h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle>Free</CardTitle>
-              <CardDescription>Get started with basic features</CardDescription>
-              <div className="text-3xl font-bold">$0</div>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2 text-sm">
-                <li>✓ 3 image generations</li>
-                <li>✓ 1 model training slot</li>
-                <li>✓ Basic support</li>
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card className="border-blue-500 border-2">
-            <CardHeader>
-              <CardTitle>Creator</CardTitle>
-              <CardDescription>Perfect for content creators</CardDescription>
-              <div className="text-3xl font-bold">$20<span className="text-sm text-gray-500">/month</span></div>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2 text-sm">
-                <li>✓ 200 monthly generations</li>
-                <li>✓ 3 model training slots</li>
-                <li>✓ Priority generation queue</li>
-                <li>✓ HD image downloads</li>
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Pro</CardTitle>
-              <CardDescription>For professional use</CardDescription>
-              <div className="text-3xl font-bold">$40<span className="text-sm text-gray-500">/month</span></div>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2 text-sm">
-                <li>✓ 500 monthly generations</li>
-                <li>✓ 10 model training slots</li>
-                <li>✓ Batch generation</li>
-                <li>✓ Commercial license</li>
-              </ul>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+          {PRICING_PLANS.map((plan) => (
+            <Card 
+              key={plan.id} 
+              className={`relative ${plan.popular ? 'border-blue-500 border-2 shadow-lg' : ''}`}
+            >
+              {plan.popular && (
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <Badge className="bg-blue-500 text-white">Most Popular</Badge>
+                </div>
+              )}
+              <CardHeader>
+                <CardTitle className="text-xl">{plan.name}</CardTitle>
+                <CardDescription className="text-sm">{plan.description}</CardDescription>
+                <div className="text-3xl font-bold">
+                  ${plan.price}
+                  {plan.price > 0 && <span className="text-sm text-gray-500">/month</span>}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm">
+                  <li>✓ {plan.credits} AI generations per month</li>
+                  <li>✓ {plan.maxModels} personalized model{plan.maxModels !== 1 ? 's' : ''}</li>
+                  {plan.features.slice(2, 5).map((feature, index) => (
+                    <li key={index}>✓ {feature}</li>
+                  ))}
+                </ul>
+                <Button 
+                  asChild 
+                  className={`w-full mt-4 ${plan.popular ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                  variant={plan.popular ? 'default' : 'outline'}
+                >
+                  <Link href="/register">
+                    {plan.buttonText}
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
 
