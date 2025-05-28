@@ -6,7 +6,7 @@ export interface PremiumFeatures {
 
 export function isPremiumUser(subscriptionPlan: string | null | undefined, subscriptionStatus: string | null | undefined): boolean {
   return subscriptionStatus === 'active' && 
-         subscriptionPlan && 
+         !!subscriptionPlan && 
          ['creator', 'pro', 'ultra'].includes(subscriptionPlan.toLowerCase())
 }
 

@@ -76,6 +76,7 @@ export default function GeneratePage() {
   const [selectedUserModel, setSelectedUserModel] = useState<UserModel | null>(null)
   const [loadingModels, setLoadingModels] = useState(true)
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false)
+  const [generatingPrompt, setGeneratingPrompt] = useState(false)
 
   // Initialize service without API key on client side (will be handled by API route)
   const getTogetherService = () => {
@@ -375,8 +376,37 @@ export default function GeneratePage() {
   }
 
   const generateRandomSeed = () => {
-    const seed = Math.floor(Math.random() * 1000000)
-    form.setValue('seed', seed)
+    const randomSeed = Math.floor(Math.random() * 1000000)
+    form.setValue('seed', randomSeed)
+  }
+
+  const handleGenerateRandomPrompt = async () => {
+    setGeneratingPrompt(true)
+    try {
+      const response = await fetch('/api/generate-prompt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.prompt) {
+        // If user has a selected model with trigger word, prepend it
+        let finalPrompt = result.prompt
+        if (selectedUserModel?.triggerWord) {
+          finalPrompt = `${selectedUserModel.triggerWord}, ${result.prompt}`
+        }
+        form.setValue('prompt', finalPrompt)
+      } else {
+        console.error('Failed to generate prompt:', result.error)
+      }
+    } catch (error) {
+      console.error('Error generating prompt:', error)
+    } finally {
+      setGeneratingPrompt(false)
+    }
   }
 
   const downloadImage = async () => {
@@ -604,7 +634,24 @@ export default function GeneratePage() {
                     name="prompt"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Prompt</FormLabel>
+                        <div className="flex items-center justify-between">
+                          <FormLabel>Prompt</FormLabel>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleGenerateRandomPrompt}
+                            disabled={generatingPrompt}
+                            className="h-8 w-8 p-0"
+                            title="Generate random prompt"
+                          >
+                            {generatingPrompt ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Wand2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
                         <FormControl>
                           <Textarea
                             placeholder={
