@@ -59,7 +59,7 @@ export class ReplicateService {
       throw new Error('Replicate API token is required. Please set REPLICATE_API_TOKEN environment variable.')
     }
     
-    console.log(`✅ Replicate API token loaded (${token.substring(0, 8)}...)`)
+    console.log('✅ Replicate API token found')
     
     try {
       this.client = new Replicate({
@@ -263,6 +263,168 @@ export class ReplicateService {
         id: trainingId,
         status: 'failed',
         error: error instanceof Error ? error.message : 'Failed to get status'
+      }
+    }
+  }
+
+  /**
+   * Generate image with base Replicate model (for FLUX Pro models)
+   */
+  async generateWithBaseModel(params: {
+    model: string // e.g., "black-forest-labs/flux-pro"
+    prompt: string
+    aspectRatio?: string
+    seed?: number
+    width?: number
+    height?: number
+  }): Promise<ReplicateGenerationResponse> {
+    try {
+      console.log(`🎨 Using Replicate base model: ${params.model}`)
+
+      // Convert aspect ratio to Replicate format
+      const aspectRatioMap: Record<string, string> = {
+        '1:1': '1:1',
+        '16:9': '16:9', 
+        '9:16': '9:16',
+        '3:4': '3:4',
+        '4:3': '4:3'
+      }
+      
+      const replicateAspectRatio = aspectRatioMap[params.aspectRatio || '1:1'] || '1:1'
+
+      // Use Replicate's client to run the model
+      const prediction = await this.client.run(
+        params.model as any,
+        {
+          input: {
+            prompt: params.prompt,
+            aspect_ratio: replicateAspectRatio,
+            output_format: "webp",
+            output_quality: 90,
+            safety_tolerance: 2,
+            seed: params.seed
+          }
+        }
+      )
+
+      console.log('🎯 Replicate base model prediction result:', {
+        predictionType: typeof prediction,
+        isArray: Array.isArray(prediction),
+        length: Array.isArray(prediction) ? prediction.length : 'not array',
+        hasUrlMethod: prediction && typeof prediction === 'object' && 'url' in prediction && typeof (prediction as any).url === 'function',
+        constructorName: prediction?.constructor?.name
+      })
+
+      // Handle Replicate response - modern versions return FileOutput objects for images
+      let imageUrl: string
+      
+      if (Array.isArray(prediction) && prediction.length > 0) {
+        // Handle array of results
+        const firstResult = prediction[0]
+        if (firstResult && typeof firstResult === 'object' && 'url' in firstResult && typeof firstResult.url === 'function') {
+          // Modern FileOutput object with .url() method
+          const urlResult = (firstResult as any).url()
+          imageUrl = String(urlResult) // Convert URL object to string
+          console.log('✅ Extracted URL from FileOutput array item:', imageUrl)
+        } else if (typeof firstResult === 'string') {
+          // Direct URL string
+          imageUrl = firstResult
+          console.log('✅ Using direct URL string from array:', imageUrl)
+        } else {
+          console.error('❌ Unknown array item format:', firstResult)
+          throw new Error('Unknown array item format in Replicate response')
+        }
+      } else if (prediction && typeof prediction === 'object' && 'url' in prediction && typeof prediction.url === 'function') {
+        // Single FileOutput object with .url() method
+        const urlResult = (prediction as any).url()
+        imageUrl = String(urlResult) // Convert URL object to string
+        console.log('✅ Extracted URL from FileOutput object:', imageUrl)
+      } else if (typeof prediction === 'string') {
+        // Direct URL string
+        imageUrl = prediction
+        console.log('✅ Using direct URL string:', imageUrl)
+      } else if (prediction && typeof prediction === 'object') {
+        // Handle object response - Replicate might return the URL directly or nested
+        const predictionObj = prediction as any
+        if (predictionObj.output) {
+          // If there's an output field, check if it's a FileOutput or string
+          const output = predictionObj.output
+          if (Array.isArray(output) && output.length > 0) {
+            const firstOutput = output[0]
+            if (firstOutput && typeof firstOutput === 'object' && 'url' in firstOutput && typeof firstOutput.url === 'function') {
+              const urlResult = (firstOutput as any).url()
+              imageUrl = String(urlResult) // Convert URL object to string
+            } else if (typeof firstOutput === 'string') {
+              imageUrl = firstOutput
+            } else {
+              throw new Error('Unknown output array format in Replicate response')
+            }
+          } else if (output && typeof output === 'object' && 'url' in output && typeof output.url === 'function') {
+            const urlResult = (output as any).url()
+            imageUrl = String(urlResult) // Convert URL object to string
+          } else if (typeof output === 'string') {
+            imageUrl = output
+          } else {
+            throw new Error('Unknown output format in Replicate response')
+          }
+        } else if (predictionObj.url) {
+          // Some models return a url field
+          imageUrl = String(predictionObj.url) // Ensure it's a string
+        } else {
+          // Try to find the first string value that looks like a URL
+          const values = Object.values(predictionObj)
+          const urlValue = values.find(val => 
+            typeof val === 'string' && 
+            (val.startsWith('http') || val.startsWith('data:'))
+          )
+          if (urlValue) {
+            imageUrl = urlValue as string
+          } else {
+            console.error('❌ Could not find image URL in prediction object:', prediction)
+            throw new Error('No image URL found in Replicate response')
+          }
+        }
+      } else {
+        console.error('❌ Unexpected prediction format:', prediction)
+        throw new Error('Invalid response from Replicate - no images returned')
+      }
+
+      if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('http')) {
+        const dimensions = this.getDimensions(params.aspectRatio)
+        
+        console.log('✅ Final extracted image URL:', {
+          url: imageUrl,
+          type: typeof imageUrl,
+          length: imageUrl.length,
+          isHttpUrl: imageUrl.startsWith('http'),
+          urlPreview: imageUrl.substring(0, 100) + (imageUrl.length > 100 ? '...' : '')
+        })
+        
+        return {
+          id: `replicate_base_${Date.now()}`,
+          status: 'completed',
+          images: [{
+            url: imageUrl,
+            width: params.width || dimensions.width,
+            height: params.height || dimensions.height
+          }]
+        }
+      } else {
+        console.error('❌ Invalid image URL:', {
+          url: imageUrl,
+          type: typeof imageUrl,
+          isString: typeof imageUrl === 'string',
+          startsWithHttp: typeof imageUrl === 'string' ? imageUrl.startsWith('http') : 'not string'
+        })
+        throw new Error('Image URL is empty or invalid')
+      }
+
+    } catch (error) {
+      console.error('❌ Replicate base model generation error:', error)
+      return {
+        id: `replicate_base_err_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Replicate base model generation failed'
       }
     }
   }
@@ -507,7 +669,7 @@ export class ReplicateService {
 
       // Handle the response
       if (prediction.status === 'succeeded' && prediction.output) {
-        const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+        const imageUrl = Array.isArray(prediction.output) ? String(prediction.output[0]) : String(prediction.output)
         
         return {
           id: String(prediction.id),

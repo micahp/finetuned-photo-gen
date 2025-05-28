@@ -96,6 +96,8 @@ export async function POST(request: NextRequest) {
 
     // Generate image
     let result
+    let actualProvider = 'together-ai' // Default provider
+    
     if (selectedUserModel && selectedUserModel.replicateModelId) {
       console.log('🎯 Generating with custom model via Replicate:', {
         modelId: selectedUserModel.id,
@@ -106,6 +108,8 @@ export async function POST(request: NextRequest) {
         steps: steps || 28
       })
 
+      actualProvider = 'replicate'
+      
       // Use Replicate for generation with trained model directly
       const replicate = new ReplicateService()
       result = await replicate.generateWithTrainedModel({
@@ -117,13 +121,23 @@ export async function POST(request: NextRequest) {
         seed
       })
     } else {
+      // Check if the base model should use Replicate
+      const shouldUseReplicate = together.getAvailableModels()
+        .find(m => m.id === (modelId || 'black-forest-labs/FLUX.1-schnell-Free'))
+        ?.provider === 'replicate'
+      
+      if (shouldUseReplicate) {
+        actualProvider = 'replicate'
+      }
+      
       console.log('🎯 Generating with base model:', {
         model: modelId || 'black-forest-labs/FLUX.1-schnell-Free',
+        provider: actualProvider,
         prompt: fullPrompt,
         steps
       })
 
-      // Use base model generation
+      // Use base model generation (TogetherAI service will route to Replicate if needed)
       result = await together.generateImage({
         prompt: fullPrompt,
         model: modelId,
@@ -175,7 +189,7 @@ export async function POST(request: NextRequest) {
         {
           prompt: fullPrompt,
           model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
-          provider: selectedUserModel ? 'replicate' : 'together-ai',
+          provider: actualProvider,
           aspectRatio,
           steps: selectedUserModel ? (steps || 28) : steps,
           seed,
@@ -207,7 +221,7 @@ export async function POST(request: NextRequest) {
           temporaryImageUrl,
           {
             originalPrompt: fullPrompt,
-            originalProvider: selectedUserModel ? 'replicate' : 'together-ai',
+            originalProvider: actualProvider,
             userId: session.user.id,
             userModelId: selectedUserModel?.id,
             width: imageWidth,
@@ -261,7 +275,7 @@ export async function POST(request: NextRequest) {
           
           generationParams: {
             model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
-            provider: selectedUserModel ? 'replicate' : 'together-ai',
+            provider: actualProvider,
             aspectRatio,
             steps: selectedUserModel ? (steps || 28) : steps,
             seed,

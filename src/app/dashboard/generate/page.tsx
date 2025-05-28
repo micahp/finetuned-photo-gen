@@ -82,13 +82,32 @@ export default function GeneratePage() {
             id: 'black-forest-labs/FLUX.1-schnell-Free',
             name: 'FLUX.1 Schnell (Free)',
             description: 'Fast, free FLUX model - perfect for testing',
-            free: true
+            free: true,
+            provider: 'together'
+          },
+          {
+            id: 'black-forest-labs/FLUX.1-schnell',
+            name: 'FLUX.1 Schnell (Turbo)',
+            description: 'Ultra-fast FLUX model with superior performance',
+            provider: 'together'
           },
           {
             id: 'black-forest-labs/FLUX.1-dev',
             name: 'FLUX.1 Dev',
-            description: 'High-quality FLUX model for professional results',
-            free: false
+            description: 'Higher quality FLUX model for better results',
+            provider: 'together'
+          },
+          {
+            id: 'black-forest-labs/FLUX.1-pro',
+            name: 'FLUX.1 Pro',
+            description: 'Premium FLUX model for highest quality (via Replicate)',
+            provider: 'replicate'
+          },
+          {
+            id: 'black-forest-labs/FLUX1.1-pro',
+            name: 'FLUX 1.1 Pro',
+            description: 'Latest premium model with 3x faster generation (via Replicate)',
+            provider: 'replicate'
           }
         ],
         getStylePresets: () => [
