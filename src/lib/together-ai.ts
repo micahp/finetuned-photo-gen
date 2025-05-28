@@ -1,4 +1,5 @@
 import { TogetherGenerationResponse, TogetherModelResponse } from '@/lib/types'
+import { ReplicateService } from '@/lib/replicate-service'
 
 interface GenerateImageParams {
   prompt: string
@@ -121,11 +122,25 @@ interface TogetherJobStatus {
 export class TogetherAIService {
   private apiKey: string
   private baseUrl = 'https://api.together.xyz/v1'
+  private replicateService: ReplicateService | null = null
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.TOGETHER_API_KEY || ''
     if (!this.apiKey) {
       throw new Error('Together AI API key is required')
+    }
+    
+    // Initialize Replicate service for Pro models only on server side
+    try {
+      // Check if we're on the server side and have the Replicate API token
+      if (typeof window === 'undefined' && process.env.REPLICATE_API_TOKEN) {
+        this.replicateService = new ReplicateService()
+        console.log('✅ Replicate service initialized for Pro models')
+      } else {
+        console.log('ℹ️ Replicate service not available (client-side or missing token)')
+      }
+    } catch (error) {
+      console.warn('Replicate service not available for Pro models:', error)
     }
   }
 
@@ -145,15 +160,24 @@ export class TogetherAIService {
   async generateImage(params: GenerateImageParams): Promise<GenerateImageResponse> {
     try {
       const { width, height } = this.getDimensions(params.aspectRatio)
+      const model = params.model || 'black-forest-labs/FLUX.1-schnell-Free'
+      
+      // Check if this model should use Replicate
+      if (this.shouldUseReplicate(model)) {
+        console.log(`🔄 Routing ${model} to Replicate`)
+        return await this.generateWithReplicate(params)
+      }
       
       // Use LoRA model if LoRAs are specified
-      const model = params.imageLoras && params.imageLoras.length > 0 
+      const togetherModel = params.imageLoras && params.imageLoras.length > 0 
         ? 'black-forest-labs/FLUX.1-dev-lora'
-        : params.model || 'black-forest-labs/FLUX.1-schnell-Free'
+        : model
+      
+      console.log(`🔄 Using Together AI for ${togetherModel}`)
       
       const requestBody: any = {
         prompt: params.prompt,
-        model,
+        model: togetherModel,
         width: params.width || width,
         height: params.height || height,
         steps: params.steps || (params.imageLoras?.length ? 28 : 3), // More steps for LoRA
@@ -216,6 +240,63 @@ export class TogetherAIService {
         id: `err_${Date.now()}`,
         status: 'failed',
         error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
+    }
+  }
+
+  // Generate image using Replicate for Pro models
+  private async generateWithReplicate(params: GenerateImageParams): Promise<GenerateImageResponse> {
+    try {
+      if (!this.replicateService) {
+        // Fallback to Together AI if Replicate is not available
+        console.warn('⚠️ Replicate service not available, falling back to Together AI')
+        
+        // Try to use a similar model on Together AI
+        const fallbackModel = params.model?.includes('1.1') 
+          ? 'black-forest-labs/FLUX.1-dev'  // Use dev as fallback for 1.1 pro
+          : 'black-forest-labs/FLUX.1-dev'  // Use dev as fallback for regular pro
+        
+        console.log(`🔄 Using fallback model: ${fallbackModel}`)
+        
+        return await this.generateImage({
+          ...params,
+          model: fallbackModel
+        })
+      }
+
+      const model = params.model || 'black-forest-labs/FLUX.1-schnell-Free'
+      const replicateModelId = this.getReplicateModelId(model)
+      
+      if (!replicateModelId) {
+        throw new Error(`No Replicate model mapping found for ${model}`)
+      }
+
+      console.log(`🎨 Using Replicate model: ${replicateModelId}`)
+
+      // Use the ReplicateService's public method
+      const result = await this.replicateService.generateWithBaseModel({
+        model: replicateModelId,
+        prompt: params.prompt,
+        aspectRatio: params.aspectRatio,
+        seed: params.seed,
+        width: params.width,
+        height: params.height
+      })
+
+      // Convert ReplicateGenerationResponse to GenerateImageResponse
+      return {
+        id: result.id,
+        status: result.status === 'completed' ? 'completed' : result.status === 'failed' ? 'failed' : 'processing',
+        images: result.images,
+        error: result.error
+      }
+
+    } catch (error) {
+      console.error('❌ Replicate generation error:', error)
+      return {
+        id: `replicate_err_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Replicate generation failed'
       }
     }
   }
@@ -652,35 +733,57 @@ export class TogetherAIService {
   }
 
   // Get available FLUX models
-  getAvailableModels(): Array<{ id: string; name: string; description: string; free?: boolean }> {
+  getAvailableModels(): Array<{ id: string; name: string; description: string; free?: boolean; provider?: string; replicateModel?: string }> {
     return [
       {
         id: 'black-forest-labs/FLUX.1-schnell-Free',
         name: 'FLUX.1 Schnell (Free)',
         description: 'Fast, free FLUX model - perfect for testing',
-        free: true
+        free: true,
+        provider: 'together'
       },
       {
         id: 'black-forest-labs/FLUX.1-schnell',
         name: 'FLUX.1 Schnell (Turbo)',
-        description: 'Ultra-fast FLUX model with superior performance'
+        description: 'Ultra-fast FLUX model with superior performance',
+        provider: 'together'
       },
       {
         id: 'black-forest-labs/FLUX.1-dev',
         name: 'FLUX.1 Dev',
-        description: 'Higher quality FLUX model for better results'
+        description: 'Higher quality FLUX model for better results',
+        provider: 'together'
       },
       {
         id: 'black-forest-labs/FLUX.1-pro',
         name: 'FLUX.1 Pro',
-        description: 'Premium FLUX model for highest quality'
+        description: 'Premium FLUX model for highest quality (via Replicate)',
+        provider: 'replicate',
+        replicateModel: 'black-forest-labs/flux-pro'
       },
       {
         id: 'black-forest-labs/FLUX1.1-pro',
         name: 'FLUX 1.1 Pro',
-        description: 'Latest premium model with 3x faster generation'
+        description: 'Latest premium model with 3x faster generation (via Replicate)',
+        provider: 'replicate',
+        replicateModel: 'black-forest-labs/flux-1.1-pro'
       }
     ]
+  }
+
+  // Helper method to determine if a model should use Replicate
+  private shouldUseReplicate(modelId: string): boolean {
+    const model = this.getAvailableModels().find(m => m.id === modelId)
+    return model?.provider === 'replicate'
+  }
+
+  // Helper method to get the Replicate model ID for a Together AI model
+  private getReplicateModelId(modelId: string): string | null {
+    const modelMap: Record<string, string> = {
+      'black-forest-labs/FLUX.1-pro': 'black-forest-labs/flux-pro',
+      'black-forest-labs/FLUX1.1-pro': 'black-forest-labs/flux-1.1-pro'
+    }
+    return modelMap[modelId] || null
   }
 
   // Get style presets
