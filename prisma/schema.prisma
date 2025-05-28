@@ -43,6 +43,7 @@ model UserModel {
   status                 String    @default("pending") // pending, training, ready, failed
   modelId                String?   @map("model_id") // Together AI model ID or LoRA ID
   triggerWord            String?   @map("trigger_word") // e.g., "johndoe_person"
+  baseModel              String?   @default("black-forest-labs/FLUX.1-dev") @map("base_model") // Base model used for training
   trainingImagesCount    Int?      @map("training_images_count")
   trainingStartedAt      DateTime? @map("training_started_at")
   trainingCompletedAt    DateTime? @map("training_completed_at")

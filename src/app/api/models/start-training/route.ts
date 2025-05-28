@@ -101,10 +101,10 @@ export async function POST(request: NextRequest) {
       const trainingResult = await trainingService.startTraining({
         modelName: model.name,
         triggerWord: model.triggerWord || model.name.toLowerCase().replace(/\s+/g, '_'),
-        description: `Custom FLUX LoRA model for ${model.name}`,
+        description: `Custom LoRA model for ${model.name}`,
         trainingImages: typedTrainingImages,
         userId: session.user.id,
-        baseModel: 'black-forest-labs/FLUX.1-dev',
+        baseModel: model.baseModel || 'black-forest-labs/FLUX.1-dev',
         steps,
         learningRate,
         loraRank,
