@@ -1,0 +1,52 @@
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Next.js
+.next
+out
+
+# Production build
+dist
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Testing
+coverage
+.nyc_output
+jest.config.js
+jest.setup.js
+src/__tests__
+tests
+
+# Development files
+.git
+.gitignore
+README.md
+*.md
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Temporary files
+temp
+.tmp
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore 

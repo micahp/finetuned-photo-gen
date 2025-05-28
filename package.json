@@ -13,10 +13,21 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:training": "jest src/__tests__/training.test.ts",
+    "install:legacy": "npm install --legacy-peer-deps",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "docker:dev": "bash scripts/docker-setup.sh dev",
+    "docker:prod": "bash scripts/docker-setup.sh prod",
+    "docker:stop": "bash scripts/docker-setup.sh stop",
+    "docker:clean": "bash scripts/docker-setup.sh clean",
+    "docker:migrate": "bash scripts/docker-setup.sh migrate",
+    "docker:seed": "bash scripts/docker-setup.sh seed",
+    "compose:up": "docker compose up --build",
+    "compose:up:bg": "docker compose up --build -d",
+    "compose:down": "docker compose down",
+    "compose:prod": "docker compose -f docker-compose.yml up --build -d"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.9.1",
