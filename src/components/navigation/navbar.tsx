@@ -3,6 +3,7 @@
 import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +27,15 @@ export function Navbar() {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link href="/" className="flex-shrink-0">
-              <h1 className="text-xl font-bold text-gray-900">Fine Photo Gen</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-gray-900">Fine Photo Gen</h1>
+                <Badge 
+                  variant="secondary" 
+                  className="text-[9px] font-normal px-1 py-0 bg-gray-100 text-gray-500 border border-gray-200 rounded-sm"
+                >
+                  beta
+                </Badge>
+              </div>
             </Link>
           </div>
 
