@@ -1,7 +1,7 @@
 # Test Suite Documentation
 
 ## Overview
-This directory contains the consolidated test suite for the finetuned-image-gen application. All tests have been unified under Jest for consistency and maintainability.
+This directory contains the consolidated test suite for the finetuned-photo-gen application. All tests have been unified under Jest for consistency and maintainability.
 
 ## Current Status ✅
 
