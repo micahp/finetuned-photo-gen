@@ -36,12 +36,21 @@ describe('Training Parameters Integration', () => {
     it('should return available base models', () => {
       const options = trainingService.getTrainingOptions()
       
-      expect(options.baseModels).toHaveLength(1)
-      expect(options.baseModels[0]).toMatchObject({
-        id: 'black-forest-labs/FLUX.1-dev',
-        name: 'FLUX.1-dev',
-        description: expect.stringContaining('FLUX model'),
-      })
+      expect(options.baseModels).toHaveLength(2)
+      expect(options.baseModels).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'black-forest-labs/FLUX.1-dev',
+            name: 'FLUX.1-dev',
+            description: expect.stringContaining('FLUX model'),
+          }),
+          expect.objectContaining({
+            id: 'stability-ai/sdxl',
+            name: 'Stable Diffusion XL',
+            description: expect.stringContaining('Stable Diffusion'),
+          })
+        ])
+      )
     })
   })
 

@@ -6,7 +6,7 @@ import {
   setupEnvironment,
   expectSuccessfulResponse,
   type MockServices 
-} from './utils/test-helpers';
+} from './utils/test-helpers.utils';
 import { 
   createCheckoutSessionEvent, 
   createMockUser, 
@@ -14,7 +14,7 @@ import {
   createMockSubscription,
   TEST_IDS, 
   TEST_PLANS 
-} from './fixtures/webhook-events';
+} from './fixtures/webhook-events.fixtures';
 
 describe('Stripe Webhook - checkout.session.completed', () => {
   let POST: any;

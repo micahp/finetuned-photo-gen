@@ -184,7 +184,7 @@ The next step is connecting this robust backend system to your existing UI for a
   - [x] Comprehensive test coverage for all credit operations
 
 ## ☁️ Phase 6.5: Nebius Integration
-- [ ] Flesh out tasks to add Nebius as a new training/generation provider.
+- [ ] Flesh out tasks to add Nebius as a new base generation provider.
 
 ## 🧹 Phase 7: Housekeeping
 
@@ -210,8 +210,8 @@ The next step is connecting this robust backend system to your existing UI for a
 - [ ] Configure Vercel deployment.
 - [ ] Set up environment variables.
 - [ ] Configure production database.
-- [ ] Configure S3 bucket.
-- [ ] Configure CDN for image delivery.
+- [x] Configure R2 bucket.
+- [x] Configure CDN for image delivery.
 
 ### Monitoring & Analytics
 - [ ] Integrate Sentry for error tracking.

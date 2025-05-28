@@ -1,5 +1,5 @@
 import { CreditService } from '../../credit-service';
-import { TEST_USER_ID, INITIAL_BALANCE, mockUser } from '../fixtures/credit-test-data';
+import { TEST_USER_ID, INITIAL_BALANCE, mockUser } from '../fixtures/credit-test-data.fixtures';
 
 // Access prismaMock from the global scope
 const prismaMock = (global as any).prismaMock;

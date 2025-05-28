@@ -190,7 +190,7 @@ describe('Together.ai Integration', () => {
 
         // Verify the request was made with HuggingFace URL format
         const requestBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string)
-        expect(requestBody.image_loras[0].path).toBe('https://huggingface.co/username/test-repo')
+        expect(requestBody.image_loras[0].path).toBe('huggingface.co/username/test-repo')
       })
 
       it('should generate with Together.ai custom model', async () => {
@@ -233,7 +233,7 @@ describe('Together.ai Integration', () => {
         })
 
         expect(result.status).toBe('failed')
-        expect(result.error).toContain('LoRA model file appears to be corrupted')
+        expect(result.error).toContain('HeaderTooLarge: Error while deserializing header')
       })
     })
   })
@@ -368,7 +368,7 @@ describe('Together.ai Integration', () => {
         // Verify it used Together.ai model format
         const requestBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string)
         expect(requestBody.image_loras[0].path).toBe('model-456')
-        expect(requestBody.prompt).toBe('custom custom model test')
+        expect(requestBody.prompt).toBe('custom, custom model test')
       })
     })
   })

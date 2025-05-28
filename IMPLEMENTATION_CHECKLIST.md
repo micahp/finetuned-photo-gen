@@ -274,7 +274,7 @@
   - [x] Build successful
 
 ### **Security Recommendations Documented**
-- [ ] Admin API authentication requirement (HIGH PRIORITY)
+- [x] Admin API authentication requirement (HIGH PRIORITY)
 - [ ] Rate limiting implementation plan
 - [ ] CORS configuration needs
 - [ ] Security headers implementation
@@ -345,6 +345,9 @@
   - [ ] Batch training capabilities
   - [ ] Custom training parameter presets
   - [ ] Enterprise-grade model privacy controls
+
+### **🆕 Batch Generation (up to 10 images at a time)** 📋 **PLANNED**
+
 
 ## 🔧 **Development Commands Reference**
 

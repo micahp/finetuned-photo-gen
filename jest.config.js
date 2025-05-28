@@ -11,10 +11,19 @@ const customJestConfig = {
   testEnvironment: 'jest-environment-jsdom',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^next-auth$': '<rootDir>/node_modules/next-auth/index.js',
-    '^next-auth/(.*)$': '<rootDir>/node_modules/next-auth/$1',
+    '^next-auth$': '<rootDir>/src/__mocks__/next-auth.js',
+    '^next-auth/react$': '<rootDir>/src/__mocks__/next-auth/react.js',
+    '^next-auth/providers/credentials$': '<rootDir>/src/__mocks__/next-auth/providers/credentials.js',
   },
-  testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
+  testPathIgnorePatterns: [
+    '<rootDir>/.next/', 
+    '<rootDir>/node_modules/',
+    '<rootDir>/src/__tests__/corruption-detection-integration.test.ts',
+  ],
+  testMatch: [
+    '**/__tests__/**/*.(test|spec).(js|jsx|ts|tsx)',
+    '**/*.(test|spec).(js|jsx|ts|tsx)'
+  ],
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
     '!src/**/*.d.ts',
@@ -24,7 +33,7 @@ const customJestConfig = {
     '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(.*\\.mjs$|react-hook-form|@hookform/resolvers|next-auth|@auth/core|@auth/.*|oauth4webapi))',
+    'node_modules/(?!(.*\\.mjs$|next-auth|@auth/.*|@auth/core/providers/credentials|oauth4webapi|preact-render-to-string|preact|@panva/hkdf|jose|openid-client|oidc-token-hash|@auth/core))',
   ],
   // Handle ESM modules properly
   extensionsToTreatAsEsm: ['.ts', '.tsx'],

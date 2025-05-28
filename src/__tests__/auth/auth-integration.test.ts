@@ -93,6 +93,7 @@ describe('Authentication Integration Tests', () => {
           id: true,
           email: true,
           name: true,
+          isAdmin: true,
           subscriptionStatus: true,
           subscriptionPlan: true,
           stripeCustomerId: true,

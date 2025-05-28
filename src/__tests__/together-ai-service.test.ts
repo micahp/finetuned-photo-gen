@@ -176,11 +176,11 @@ describe('TogetherAIService', () => {
       expect(result.images![0].url).toBe('https://example.com/lora-image.jpg')
       
       const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body)
-      expect(requestBody.prompt).toBe('geo a professional headshot')
+      expect(requestBody.prompt).toBe('geo, a professional headshot')
       expect(requestBody.model).toBe('black-forest-labs/FLUX.1-dev-lora')
       expect(requestBody.steps).toBe(30)
       expect(requestBody.image_loras).toEqual([{
-        path: 'https://huggingface.co/geoppls/geo-1748133826702-np1tbn',
+        path: 'huggingface.co/geoppls/geo-1748133826702-np1tbn',
         scale: 1.0
       }])
     })

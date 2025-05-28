@@ -63,11 +63,11 @@ export const PRICING_PLANS: PricingPlan[] = [
       '10 personalized models slots',
       'Advanced style customization',
       'Fastest generation speed',
-      '4K quality downloads',
-      'Batch generation (up to 10 images)',
-      'API access',
+      '4K quality downloads coming soon',
+      'Batch generation (up to 10 images) coming soon',
       'Priority support',
-      'Commercial usage rights'
+      'Commercial usage rights',
+      'Early access to new features'
     ],
     buttonText: 'Choose Pro'
   },
@@ -84,11 +84,11 @@ export const PRICING_PLANS: PricingPlan[] = [
       '25 personalized models slots',
       'Advanced style customization',
       'Fastest generation speed',
-      '4K quality downloads',
-      'Batch generation (up to 10 images)',
-      'API access',
+      '4K quality downloads coming soon',
+      'Batch generation (up to 10 images) coming soon',
       'Priority support',
-      'Commercial usage rights'
+      'Commercial usage rights',
+      'Early access to new features'
     ],
     buttonText: 'Choose Enterprise'
   }

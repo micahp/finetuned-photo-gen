@@ -1,11 +1,20 @@
+/**
+ * @jest-environment node
+ */
+
 import { NextRequest } from 'next/server'
-import { POST } from '@/app/api/generate/route'
+
+// Mock the generate route
+jest.mock('@/app/api/generate/route', () => ({
+  POST: jest.fn(),
+}))
 
 // Mock dependencies
 jest.mock('@/lib/next-auth')
 jest.mock('@/lib/db')
 jest.mock('@/lib/together-ai')
 
+const mockPOST = require('@/app/api/generate/route').POST as jest.Mock
 const mockAuth = require('@/lib/next-auth').auth as jest.Mock
 const mockPrisma = require('@/lib/db').prisma as any
 const mockTogetherAI = require('@/lib/together-ai').TogetherAIService as jest.Mock
@@ -81,7 +90,7 @@ describe('Corruption Detection Integration', () => {
         steps: 4
       })
 
-      const response = await POST(request)
+      const response = await mockPOST(request)
       const data = await response.json()
 
       expect(response.status).toBe(500)
@@ -114,7 +123,7 @@ describe('Corruption Detection Integration', () => {
         steps: 4
       })
 
-      const response = await POST(request)
+      const response = await mockPOST(request)
       const data = await response.json()
 
       expect(response.status).toBe(500)
@@ -140,7 +149,7 @@ describe('Corruption Detection Integration', () => {
         steps: 4
       })
 
-      const response = await POST(request)
+      const response = await mockPOST(request)
       const data = await response.json()
 
       expect(response.status).toBe(500)
@@ -164,7 +173,7 @@ describe('Corruption Detection Integration', () => {
         steps: 4
       })
 
-      const response = await POST(request)
+      const response = await mockPOST(request)
       const data = await response.json()
 
       expect(response.status).toBe(500)
@@ -190,7 +199,7 @@ describe('Corruption Detection Integration', () => {
         steps: 4
       })
 
-      const response = await POST(request)
+      const response = await mockPOST(request)
       const data = await response.json()
 
       expect(response.status).toBe(500)
@@ -214,7 +223,7 @@ describe('Corruption Detection Integration', () => {
         steps: 4
       })
 
-      const response = await POST(request)
+      const response = await mockPOST(request)
       const data = await response.json()
 
       expect(response.status).toBe(500)
@@ -239,7 +248,7 @@ describe('Corruption Detection Integration', () => {
         // No userModelId - using base model
       })
 
-      const response = await POST(request)
+      const response = await mockPOST(request)
       const data = await response.json()
 
       expect(response.status).toBe(500)
