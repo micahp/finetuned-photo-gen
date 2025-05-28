@@ -72,8 +72,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     buttonText: 'Choose Pro'
   },
   {
-    id: 'enterprise',
-    name: 'Enterprise',
+    id: 'ultra',
+    name: 'Ultra',
     description: 'For teams and high-volume users',
     price: 99,
     priceId: process.env.STRIPE_ULTRA_PLAN_PRICE_ID || 'price_1RTGEcQ8DfMDErUlV3adHlLg',
@@ -90,7 +90,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       'Commercial usage rights',
       'Early access to new features'
     ],
-    buttonText: 'Choose Enterprise'
+    buttonText: 'Choose Ultra'
   }
 ]
 

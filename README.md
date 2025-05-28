@@ -119,8 +119,8 @@ npm run dev
 ### **Subscription Tiers**
 - **Free**: 3 generations, 1 model slot
 - **Creator ($20/month)**: 200 generations, 3 models
-- **Pro ($40/month)**: 500 generations, 10 models
-- **Enterprise ($99/month)**: Unlimited access
+- **Pro ($40/month)**: 1000 generations, 10 models
+- **Ultra ($99/month)**: 5000 generations, 25 models
 
 ### **Revenue Projections**
 - Target: 1,000 MAUs by Month 6
