@@ -447,9 +447,9 @@ export async function POST(req: NextRequest) {
                 userId,
                 creditsToAllocate,
                 'invoice_payment_subscription_renewal' as any, // Cast for now, ensure enum is updated
-                `Credits for ${planName} renewal (Invoice: ${invoice.id.substring(0, 10)}...)`,
+                `Credits for ${planName} renewal (Invoice: ${invoice.id?.substring(0, 10) || 'unknown'}...)`,
                 'invoice' as any, // relatedEntityType - Cast for now, ensure enum is updated
-                invoice.id, // relatedEntityId
+                invoice.id || 'unknown', // relatedEntityId
                 { planName, stripeSubscriptionId: invSubscriptionId, invoiceId: invoice.id }
             );
             console.log(`✅ Credits added for user ${userId} from invoice ${invoice.id}. Plan: ${planName}, Credits: ${creditsToAllocate}.`);

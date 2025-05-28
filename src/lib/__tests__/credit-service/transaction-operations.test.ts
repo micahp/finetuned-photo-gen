@@ -11,13 +11,13 @@ import {
   createSpecificTransactionMock,
   expectSuccessfulTransaction,
   expectFailedTransaction,
-} from '../utils/credit-test-helpers';
+} from '../utils/credit-test-helpers.utils';
 import {
   TEST_USER_ID,
   INITIAL_BALANCE,
   mockTransactionData,
   errorMessages,
-} from '../fixtures/credit-test-data';
+} from '../fixtures/credit-test-data.fixtures';
 
 // Access prismaMock from the global scope for use in tests
 const prismaMock = (global as any).prismaMock;

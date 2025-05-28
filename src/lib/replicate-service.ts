@@ -12,6 +12,7 @@ interface ReplicateTrainingParams {
   triggerWord: string
   trainingImages: TrainingImage[] // Kept for backwards compatibility but not used
   zipUrl: string // REQUIRED: Must be a valid ZIP file URL for Replicate training
+  baseModel?: string // Base model to train on
   steps?: number
   learningRate?: number
   loraRank?: number
@@ -139,31 +140,66 @@ export class ReplicateService {
       
       console.log(`Using destination model: ${modelResult.modelId}`)
       
-      // Step 2: Start training with the created model and ZIP URL
-      console.log('Starting Replicate training with ZIP file...')
+      // Step 2: Select trainer based on base model
+      const baseModel = params.baseModel || 'black-forest-labs/FLUX.1-dev'
+      let trainerOwner: string
+      let trainerName: string
+      let trainerVersion: string
+      let trainingInput: any
+      
+      if (baseModel === 'stabilityai/stable-diffusion-xl-base-1.0' || baseModel === 'stability-ai/sdxl') {
+        // SDXL trainer configuration
+        trainerOwner = "edenartlab"
+        trainerName = "sdxl-lora-trainer"
+        trainerVersion = "4767bababe6048535114863799de828c25ec5b935dab7f879d4fa29495118d22"
+        trainingInput = {
+          input_images: params.zipUrl,
+          trigger_word: params.triggerWord,
+          max_train_steps: params.steps || 1000,
+          lora_rank: params.loraRank || 16,
+          optimizer: "adamw8bit",
+          batch_size: params.batchSize || 1,
+          resolution: params.resolution || "1024",
+          autocaption: true,
+          learning_rate: params.learningRate || 0.0004,
+          lr_scheduler: "constant",
+          lr_warmup_steps: 0,
+          seed: 42,
+          cache_latents_to_disk: false
+        }
+      } else {
+        // FLUX.1-dev trainer configuration (default)
+        trainerOwner = "ostris"
+        trainerName = "flux-dev-lora-trainer"
+        trainerVersion = "c6e78d2501e8088876e99ef21e4460d0dc121af7a4b786b9a4c2d75c620e300d"
+        trainingInput = {
+          input_images: params.zipUrl,
+          trigger_word: params.triggerWord,
+          steps: params.steps || 1000,
+          lora_rank: params.loraRank || 16,
+          optimizer: "adamw8bit",
+          batch_size: params.batchSize || 1,
+          resolution: params.resolution || "512,768,1024",
+          autocaption: true,
+          learning_rate: params.learningRate || 0.0004,
+          caption_dropout_rate: 0.05,
+          cache_latents_to_disk: false,
+          wandb_project: "flux_train_replicate",
+          wandb_save_interval: 100,
+          wandb_sample_interval: 100,
+          gradient_checkpointing: false,
+        }
+      }
+      
+      // Step 3: Start training with the selected trainer
+      console.log(`Starting ${baseModel} training with ${trainerOwner}/${trainerName}...`)
       const training = await this.client.trainings.create(
-        "ostris",
-        "flux-dev-lora-trainer",
-        "c6e78d2501e8088876e99ef21e4460d0dc121af7a4b786b9a4c2d75c620e300d",
+        trainerOwner,
+        trainerName,
+        trainerVersion,
         {
           destination: modelResult.modelId!,
-          input: {
-            input_images: params.zipUrl, // Use the provided ZIP URL
-            trigger_word: params.triggerWord,
-            steps: params.steps || 1000,
-            lora_rank: params.loraRank || 16,
-            optimizer: "adamw8bit",
-            batch_size: params.batchSize || 1,
-            resolution: params.resolution || "512,768,1024",
-            autocaption: true,
-            learning_rate: params.learningRate || 0.0004,
-            caption_dropout_rate: 0.05,
-            cache_latents_to_disk: false,
-            wandb_project: "flux_train_replicate",
-            wandb_save_interval: 100,
-            wandb_sample_interval: 100,
-            gradient_checkpointing: false,
-          }
+          input: trainingInput
         }
       )
 
@@ -547,8 +583,18 @@ export class ReplicateService {
         name: 'FLUX Dev LoRA Trainer',
         description: 'Train LoRA models for FLUX.1-dev using ai-toolkit',
         version: 'c6e78d2501e8088876e99ef21e4460d0dc121af7a4b786b9a4c2d75c620e300d',
+        baseModel: 'black-forest-labs/FLUX.1-dev',
         estimatedTime: '10-30 minutes',
         cost: '$0.001525 per second'
+      },
+      {
+        id: 'edenartlab/sdxl-lora-trainer',
+        name: 'SDXL LoRA Trainer', 
+        description: 'Train LoRA models for Stable Diffusion XL',
+        version: '4767bababe6048535114863799de828c25ec5b935dab7f879d4fa29495118d22',
+        baseModel: 'stability-ai/sdxl',
+        estimatedTime: '15-45 minutes',
+        cost: 'Variable pricing'
       }
     ]
   }

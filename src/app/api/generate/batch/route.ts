@@ -3,6 +3,7 @@ import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { TogetherAIService } from '@/lib/together-ai'
+import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
 
 const batchGenerateSchema = z.object({
   prompts: z.array(z.string().min(1, 'Prompt cannot be empty').max(500, 'Prompt too long'))
@@ -17,6 +18,9 @@ const batchGenerateSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Track generation start time for duration calculation
+    const generationStartTime = Date.now()
+    
     // Check authentication
     const session = await auth()
     if (!session?.user?.id) {
@@ -83,6 +87,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Calculate generation duration
+    const generationDuration = Date.now() - generationStartTime
+
     // Save successful generations and deduct credits
     const savedImages = []
     let creditsUsed = 0
@@ -90,12 +97,72 @@ export async function POST(request: NextRequest) {
     for (const result of batchResult.results) {
       if (result.image) {
         try {
+          // Extract image metadata from generation result
+          const imageData = result.image
+          const temporaryImageUrl = imageData.url
+          const imageWidth = imageData.width
+          const imageHeight = imageData.height
+
+          // *** ENHANCED METADATA COLLECTION START ***
+          let finalImageUrl = temporaryImageUrl // Fallback to temporary URL
+          let cloudflareImageId: string | undefined = undefined
+          let fileSize: number | undefined = undefined
+
+          try {
+            const cfImagesService = new CloudflareImagesService()
+            const uploadResult = await cfImagesService.uploadImageFromUrl(
+              temporaryImageUrl,
+              {
+                originalPrompt: result.prompt,
+                originalProvider: 'together-ai',
+                userId: session.user.id,
+                batchId: batchResult.batchId,
+                width: imageWidth,
+                height: imageHeight,
+                generationDuration
+              }
+            )
+
+            if (uploadResult.success && uploadResult.imageId) {
+              cloudflareImageId = uploadResult.imageId
+              finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId)
+              
+              // Try to get file size from Cloudflare response
+              if (uploadResult.originalResponse?.result?.metadata?.size) {
+                const sizeValue = uploadResult.originalResponse.result.metadata.size
+                fileSize = typeof sizeValue === 'string' ? parseInt(sizeValue) : typeof sizeValue === 'number' ? sizeValue : undefined
+              }
+              
+              console.log('✅ Batch image uploaded to Cloudflare:', { 
+                cloudflareImageId, 
+                finalImageUrl,
+                fileSize,
+                width: imageWidth,
+                height: imageHeight
+              })
+            } else {
+              console.warn('⚠️ Cloudflare upload failed for batch image, using temporary URL. Error:', uploadResult.error)
+            }
+          } catch (cfError) {
+            console.error('❌ Exception during Cloudflare upload for batch image:', cfError)
+          }
+          // *** ENHANCED METADATA COLLECTION END ***
+
           const generatedImage = await prisma.generatedImage.create({
             data: {
               userId: session.user.id,
               userModelId: null, // No custom model for base generation
               prompt: result.prompt,
-              imageUrl: result.image.url,
+              imageUrl: finalImageUrl, // ✅ Use Cloudflare URL when available
+              cloudflareImageId: cloudflareImageId, // ✅ Store Cloudflare Image ID
+              
+              // Enhanced metadata fields
+              width: imageWidth,
+              height: imageHeight,
+              fileSize: fileSize,
+              generationDuration: generationDuration,
+              originalTempUrl: temporaryImageUrl, // Store original URL for debugging
+              
               generationParams: {
                 model: modelId || 'black-forest-labs/FLUX.1-schnell-Free',
                 aspectRatio,
@@ -109,9 +176,12 @@ export async function POST(request: NextRequest) {
 
           savedImages.push({
             id: generatedImage.id,
-            url: result.image.url,
+            url: finalImageUrl, // ✅ Return Cloudflare URL when available
             prompt: result.prompt,
             aspectRatio,
+            width: imageWidth,
+            height: imageHeight,
+            generationDuration,
             createdAt: generatedImage.createdAt
           })
 
@@ -134,6 +204,7 @@ export async function POST(request: NextRequest) {
     const response = {
       success: true,
       batchId: batchResult.batchId,
+      generationDuration,
       results: batchResult.results.map(result => ({
         prompt: result.prompt,
         success: !!result.image,

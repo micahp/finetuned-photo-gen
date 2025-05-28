@@ -8,7 +8,7 @@ import {
   expectSuccessfulResponse,
   MOCK_WEBHOOK_SECRET,
   type MockServices 
-} from './utils/test-helpers';
+} from './utils/test-helpers.utils';
 
 describe('Stripe Webhook Handler - Basic Functionality', () => {
   let POST: any;

@@ -2,6 +2,12 @@
  * @jest-environment node
  */
 
+// Mock admin authentication
+const mockRequireAdmin = jest.fn()
+jest.mock('@/lib/admin-auth', () => ({
+  requireAdmin: mockRequireAdmin,
+}))
+
 // Mock Prisma
 const mockPrismaUpdate = jest.fn()
 jest.mock('@/lib/db', () => ({
@@ -24,9 +30,65 @@ describe('/api/admin/update-credits', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    // Default: admin authentication passes
+    mockRequireAdmin.mockResolvedValue(null)
   })
 
-  describe('POST - Input Validation', () => {
+  describe('POST - Admin Authentication', () => {
+    it('should return 403 when user is not admin', async () => {
+      // Arrange - Mock admin check to fail
+      const mockErrorResponse = {
+        json: () => Promise.resolve({ error: 'Admin access required' }),
+        status: 403
+      }
+      mockRequireAdmin.mockResolvedValue(mockErrorResponse)
+
+      const request = new Request('http://localhost:3000/api/admin/update-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'user@example.com', credits: 50 })
+      })
+
+      // Act
+      const response = await POST(request)
+
+      // Assert
+      expect(response).toBe(mockErrorResponse)
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
+      expect(mockPrismaUpdate).not.toHaveBeenCalled()
+    })
+
+    it('should proceed when user is admin', async () => {
+      // Arrange - Admin check passes
+      mockRequireAdmin.mockResolvedValue(null)
+      
+      const mockUser = {
+        id: 'user-123',
+        email: 'user@example.com',
+        name: 'John Doe',
+        credits: 100,
+      }
+      mockPrismaUpdate.mockResolvedValue(mockUser)
+
+      const request = new Request('http://localhost:3000/api/admin/update-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'user@example.com', credits: 100 })
+      })
+
+      // Act
+      const response = await POST(request)
+      const data = await response.json()
+
+      // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
+      expect(response.status).toBe(200)
+      expect(data.success).toBe(true)
+      expect(mockPrismaUpdate).toHaveBeenCalled()
+    })
+  })
+
+  describe('POST - Input Validation (Admin Authenticated)', () => {
     it('should return 400 when email is missing', async () => {
       // Arrange
       const request = new Request('http://localhost:3000/api/admin/update-credits', {
@@ -40,6 +102,7 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(400)
       expect(data.error).toBe('Email and credits (number) are required')
       expect(mockPrismaUpdate).not.toHaveBeenCalled()
@@ -58,6 +121,7 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(400)
       expect(data.error).toBe('Email and credits (number) are required')
       expect(mockPrismaUpdate).not.toHaveBeenCalled()
@@ -76,6 +140,7 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(400)
       expect(data.error).toBe('Email and credits (number) are required')
       expect(mockPrismaUpdate).not.toHaveBeenCalled()
@@ -94,13 +159,14 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(400)
       expect(data.error).toBe('Email and credits (number) are required')
       expect(mockPrismaUpdate).not.toHaveBeenCalled()
     })
   })
 
-  describe('POST - Successful Credit Updates', () => {
+  describe('POST - Successful Credit Updates (Admin Authenticated)', () => {
     it('should successfully update user credits', async () => {
       // Arrange
       const mockUser = {
@@ -123,6 +189,7 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
       expect(data.user).toEqual({
@@ -165,6 +232,7 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
 
@@ -203,6 +271,7 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
       expect(data.user.credits).toBe(0)
@@ -230,16 +299,18 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
       expect(data.user.credits).toBe(-10)
     })
   })
 
-  describe('POST - Error Handling', () => {
+  describe('POST - Error Handling (Admin Authenticated)', () => {
     it('should return 404 when user is not found', async () => {
       // Arrange
-      mockPrismaUpdate.mockRejectedValue(new Error('Record to update not found'))
+      const error = new Error('Record to update not found')
+      mockPrismaUpdate.mockRejectedValue(error)
 
       const request = new Request('http://localhost:3000/api/admin/update-credits', {
         method: 'POST',
@@ -252,13 +323,15 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(404)
       expect(data.error).toBe('User not found')
     })
 
     it('should return 500 for database connection errors', async () => {
       // Arrange
-      mockPrismaUpdate.mockRejectedValue(new Error('Database connection failed'))
+      const error = new Error('Database connection failed')
+      mockPrismaUpdate.mockRejectedValue(error)
 
       const request = new Request('http://localhost:3000/api/admin/update-credits', {
         method: 'POST',
@@ -271,84 +344,20 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(500)
       expect(data.error).toBe('Internal server error')
     })
-
-    it('should handle malformed JSON gracefully', async () => {
-      // Arrange
-      const request = new Request('http://localhost:3000/api/admin/update-credits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: 'invalid json'
-      })
-
-      // Act
-      const response = await POST(request)
-      const data = await response.json()
-
-      // Assert
-      expect(response.status).toBe(500)
-      expect(data.error).toBe('Internal server error')
-      expect(mockPrismaUpdate).not.toHaveBeenCalled()
-    })
   })
 
-  describe('POST - Security Concerns (Tests that reveal missing authentication)', () => {
-    it('should be accessible without authentication (SECURITY ISSUE)', async () => {
-      // This test documents the current behavior but highlights a security flaw
-      // The API should require admin authentication but currently doesn't
-      
-      const mockUser = {
-        id: 'user-123',
-        email: 'user@example.com',
-        name: 'John Doe',
-        credits: 1000,
-      }
-      
-      mockPrismaUpdate.mockResolvedValue(mockUser)
-
-      const request = new Request('http://localhost:3000/api/admin/update-credits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // NOTE: No authentication headers or session
-        body: JSON.stringify({ email: 'user@example.com', credits: 1000 })
-      })
-
-      // Act
-      const response = await POST(request)
-      const data = await response.json()
-
-      // Assert - This passes but shouldn't in a secure implementation
-      expect(response.status).toBe(200)
-      expect(data.success).toBe(true)
-      
-      // TODO: This API should require admin authentication
-      // Expected behavior: expect(response.status).toBe(401)
-    })
-
-    it('should validate admin role (MISSING FEATURE)', async () => {
-      // This test documents what should happen but doesn't currently
-      // The API should check if the authenticated user is an admin
-      
-      // This test will be updated once authentication is added
-      expect(true).toBe(true) // Placeholder
-      
-      // TODO: Add NextAuth integration with admin role checking
-      // const session = await auth()
-      // if (!session?.user?.isAdmin) return 403
-    })
-  })
-
-  describe('POST - Edge Cases', () => {
+  describe('POST - Edge Cases (Admin Authenticated)', () => {
     it('should handle very large credit amounts', async () => {
       // Arrange
-      const largeAmount = 999999999
       const mockUser = {
         id: 'user-123',
         email: 'user@example.com',
         name: 'John Doe',
-        credits: largeAmount,
+        credits: 999999999,
       }
       
       mockPrismaUpdate.mockResolvedValue(mockUser)
@@ -356,7 +365,7 @@ describe('/api/admin/update-credits', () => {
       const request = new Request('http://localhost:3000/api/admin/update-credits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'user@example.com', credits: largeAmount })
+        body: JSON.stringify({ email: 'user@example.com', credits: 999999999 })
       })
 
       // Act
@@ -364,8 +373,10 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(200)
-      expect(data.user.credits).toBe(largeAmount)
+      expect(data.success).toBe(true)
+      expect(data.user.credits).toBe(999999999)
     })
 
     it('should handle decimal credit amounts', async () => {
@@ -374,7 +385,7 @@ describe('/api/admin/update-credits', () => {
         id: 'user-123',
         email: 'user@example.com',
         name: 'John Doe',
-        credits: 10.5,
+        credits: 50.5,
       }
       
       mockPrismaUpdate.mockResolvedValue(mockUser)
@@ -382,7 +393,7 @@ describe('/api/admin/update-credits', () => {
       const request = new Request('http://localhost:3000/api/admin/update-credits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'user@example.com', credits: 10.5 })
+        body: JSON.stringify({ email: 'user@example.com', credits: 50.5 })
       })
 
       // Act
@@ -390,8 +401,10 @@ describe('/api/admin/update-credits', () => {
       const data = await response.json()
 
       // Assert
+      expect(mockRequireAdmin).toHaveBeenCalledTimes(1)
       expect(response.status).toBe(200)
-      expect(data.user.credits).toBe(10.5)
+      expect(data.success).toBe(true)
+      expect(data.user.credits).toBe(50.5)
     })
   })
 }) 

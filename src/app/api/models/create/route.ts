@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
         status: skipTraining ? 'pending' : 'pending',
         userId: session.user.id,
         triggerWord: finalTriggerWord,
+        baseModel: baseModel || 'black-forest-labs/FLUX.1-dev',
       },
     })
 

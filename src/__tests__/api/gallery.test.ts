@@ -5,6 +5,7 @@
 // Use ESM-compatible imports and mocking
 import { createMocks } from 'node-mocks-http'
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { NextRequest } from 'next/server'
 
 // Mock NextAuth using the ESM-compatible approach
 const mockAuth = jest.fn()
@@ -24,6 +25,14 @@ jest.mock('@/lib/db', () => ({
   },
 }))
 
+// Mock CloudflareImagesService
+const mockGetPublicUrl = jest.fn()
+jest.mock('@/lib/cloudflare-images-service', () => ({
+  CloudflareImagesService: jest.fn().mockImplementation(() => ({
+    getPublicUrl: mockGetPublicUrl,
+  })),
+}))
+
 describe('/api/gallery', () => {
   // Import the handler after mocks are set up
   let GET: any
@@ -36,6 +45,9 @@ describe('/api/gallery', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    
+    // Default Cloudflare mock
+    mockGetPublicUrl.mockReturnValue('https://imagedelivery.net/account-hash/cf-img-123/public')
   })
 
   describe('GET - Authentication Tests', () => {
@@ -84,7 +96,8 @@ describe('/api/gallery', () => {
       {
         id: 'img-1',
         prompt: 'A beautiful sunset',
-        imageUrl: 'https://example.com/sunset.jpg',
+        imageUrl: 'https://replicate.delivery/temp-url-1.jpg',
+        cloudflareImageId: 'cf-img-123',
         generationParams: { model: 'flux', width: 512, height: 512 },
         creditsUsed: 1,
         createdAt: new Date('2024-01-15T10:00:00Z'),
@@ -92,7 +105,8 @@ describe('/api/gallery', () => {
       {
         id: 'img-2', 
         prompt: 'A mountain landscape',
-        imageUrl: 'https://example.com/mountain.jpg',
+        imageUrl: 'https://replicate.delivery/temp-url-2.jpg',
+        cloudflareImageId: null,
         generationParams: { model: 'flux', width: 1024, height: 1024 },
         creditsUsed: 2,
         createdAt: new Date('2024-01-14T09:00:00Z'),
@@ -103,7 +117,7 @@ describe('/api/gallery', () => {
       mockAuth.mockResolvedValue({ user: mockUser })
     })
 
-    it('should return user images with default pagination', async () => {
+    it('should return user images with smart URL resolution', async () => {
       // Arrange
       mockPrismaFindMany.mockResolvedValue(mockImages)
       mockPrismaCount.mockResolvedValue(2)
@@ -119,33 +133,38 @@ describe('/api/gallery', () => {
       expect(data.success).toBe(true)
       expect(data.images).toHaveLength(2)
       
-      // Verify first image structure
+      // Verify first image uses Cloudflare URL (has cloudflareImageId)
       expect(data.images[0]).toEqual({
         id: 'img-1',
         prompt: 'A beautiful sunset',
-        imageUrl: 'https://example.com/sunset.jpg',
+        imageUrl: 'https://imagedelivery.net/account-hash/cf-img-123/public',
         generationParams: { model: 'flux', width: 512, height: 512 },
         creditsUsed: 1,
         createdAt: '2024-01-15T10:00:00.000Z',
       })
 
-      // Verify pagination metadata
-      expect(data.pagination).toEqual({
-        page: 1,
-        limit: 50,
-        total: 2,
-        totalPages: 1,
-        hasNext: false,
-        hasPrev: false,
+      // Verify second image uses original URL (no cloudflareImageId)
+      expect(data.images[1]).toEqual({
+        id: 'img-2',
+        prompt: 'A mountain landscape',
+        imageUrl: 'https://replicate.delivery/temp-url-2.jpg',
+        generationParams: { model: 'flux', width: 1024, height: 1024 },
+        creditsUsed: 2,
+        createdAt: '2024-01-14T09:00:00.000Z',
       })
 
-      // Verify database calls
+      // Verify Cloudflare service was called for first image only
+      expect(mockGetPublicUrl).toHaveBeenCalledTimes(1)
+      expect(mockGetPublicUrl).toHaveBeenCalledWith('cf-img-123')
+
+      // Verify database calls include cloudflareImageId
       expect(mockPrismaFindMany).toHaveBeenCalledWith({
         where: { userId: 'user-123' },
         select: {
           id: true,
           prompt: true,
           imageUrl: true,
+          cloudflareImageId: true,
           generationParams: true,
           creditsUsed: true,
           createdAt: true,
@@ -230,16 +249,38 @@ describe('/api/gallery', () => {
       mockPrismaFindMany.mockResolvedValue([])
       mockPrismaCount.mockResolvedValue(0)
       
-      const request = new Request('http://localhost:3000/api/gallery?page=abc&limit=xyz')
+      const request = new Request('http://localhost:3000/api/gallery?page=invalid&limit=abc')
 
       // Act
       const response = await GET(request)
-      const data = await response.json()
 
-      // Assert - should default to page 1, limit 50
+      // Assert
       expect(response.status).toBe(200)
-      expect(data.pagination.page).toBe(1)
-      expect(data.pagination.limit).toBe(50)
+      expect(mockPrismaFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skip: 0, // Should default to page 1
+          take: 50, // Should default to limit 50
+        })
+      )
+    })
+
+    it('should enforce maximum limit to prevent abuse', async () => {
+      // Arrange
+      mockPrismaFindMany.mockResolvedValue([])
+      mockPrismaCount.mockResolvedValue(0)
+      
+      const request = new Request('http://localhost:3000/api/gallery?limit=999')
+
+      // Act
+      const response = await GET(request)
+
+      // Assert
+      expect(response.status).toBe(200)
+      expect(mockPrismaFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          take: 100, // Should cap at 100
+        })
+      )
     })
   })
 

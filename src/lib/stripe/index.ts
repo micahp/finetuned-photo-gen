@@ -1,13 +1,13 @@
 import Stripe from 'stripe';
 
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const STRIPE_SECRET_KEY = process.env.STRIPE_API_TOKEN;
 
 if (!STRIPE_SECRET_KEY) {
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('Missing STRIPE_SECRET_KEY in environment variables for production.');
+    throw new Error('Missing STRIPE_API_TOKEN in environment variables for production.');
   } else {
     console.warn(
-      'WARN: Missing STRIPE_SECRET_KEY in environment variables. Stripe functionality will not work.' +
+      'WARN: Missing STRIPE_API_TOKEN in environment variables. Stripe functionality will not work.' +
       ' Please add it to your .env.local file for development.'
     );
   }
@@ -27,14 +27,14 @@ export const stripe = new Stripe(STRIPE_SECRET_KEY || 'sk_test_DUMMYKEYFORDEVELO
 });
 
 // Also export the publishable key for client-side use
-export const NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+export const NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_TOKEN;
 
 if (!NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY in environment variables for production.');
+    throw new Error('Missing STRIPE_PUBLISHABLE_TOKEN in environment variables for production.');
   } else {
     console.warn(
-      'WARN: Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY in environment variables. Stripe Checkout/Elements might not work.' +
+      'WARN: Missing STRIPE_PUBLISHABLE_TOKEN in environment variables. Stripe Checkout/Elements might not work.' +
       ' Please add it to your .env.local file for development.'
     );
   }

@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
+import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
+
+// Helper function to resolve the best image URL
+function resolveImageUrl(imageUrl: string, cloudflareImageId: string | null): string {
+  // If we have a Cloudflare Image ID, use that (it's permanent and fast)
+  if (cloudflareImageId) {
+    const cfService = new CloudflareImagesService()
+    return cfService.getPublicUrl(cloudflareImageId)
+  }
+  
+  // Otherwise, use the original URL (could be temporary Replicate URL)
+  return imageUrl
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,6 +45,15 @@ export async function GET(request: NextRequest) {
         id: true,
         prompt: true,
         imageUrl: true,
+        cloudflareImageId: true,
+        
+        // Enhanced metadata fields
+        width: true,
+        height: true,
+        fileSize: true,
+        generationDuration: true,
+        originalTempUrl: true,
+        
         generationParams: true,
         creditsUsed: true,
         createdAt: true,
@@ -55,7 +77,15 @@ export async function GET(request: NextRequest) {
       images: images.map(image => ({
         id: image.id,
         prompt: image.prompt,
-        imageUrl: image.imageUrl,
+        imageUrl: resolveImageUrl(image.imageUrl, image.cloudflareImageId),
+        
+        // Enhanced metadata with fallbacks for existing images
+        width: image.width || null,
+        height: image.height || null,
+        fileSize: image.fileSize || null,
+        generationDuration: image.generationDuration || null,
+        originalTempUrl: image.originalTempUrl || null,
+        
         generationParams: image.generationParams,
         creditsUsed: image.creditsUsed,
         createdAt: image.createdAt.toISOString()

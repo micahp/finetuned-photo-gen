@@ -98,6 +98,7 @@ export class TrainingService {
         triggerWord: params.triggerWord,
         trainingImages: params.trainingImages, // Keep for compatibility
         zipUrl: zipResult.zipUrl || '', // Ensure string type, fallback to empty string
+        baseModel: params.baseModel, // Pass the base model parameter
         steps: params.steps,
         learningRate: params.learningRate,
         loraRank: params.loraRank,
@@ -638,6 +639,11 @@ export class TrainingService {
           id: 'black-forest-labs/FLUX.1-dev',
           name: 'FLUX.1-dev',
           description: 'High-quality FLUX model for detailed images'
+        },
+        {
+          id: 'stability-ai/sdxl',
+          name: 'Stable Diffusion XL',
+          description: 'High-resolution Stable Diffusion model'
         }
       ],
       defaultSettings: {

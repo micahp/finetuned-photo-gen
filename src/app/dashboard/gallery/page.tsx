@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { SmartImage } from '@/components/ui/smart-image'
 import { 
   Search, 
   Download, 
@@ -30,6 +31,14 @@ interface GeneratedImage {
   id: string
   prompt: string
   imageUrl: string
+  
+  // Enhanced metadata fields
+  width?: number
+  height?: number
+  fileSize?: number
+  generationDuration?: number
+  originalTempUrl?: string
+  
   generationParams: {
     model: string
     aspectRatio: string
@@ -467,7 +476,7 @@ export default function GalleryPage() {
                       </DropdownMenu>
                     </div>
 
-                    <img
+                    <SmartImage
                       src={image.imageUrl}
                       alt={image.prompt}
                       className="w-full aspect-square object-cover rounded-lg cursor-pointer"
@@ -496,7 +505,7 @@ export default function GalleryPage() {
                       />
                     </div>
                     
-                    <img
+                    <SmartImage
                       src={image.imageUrl}
                       alt={image.prompt}
                       className="w-20 h-20 object-cover rounded-lg cursor-pointer flex-shrink-0"
@@ -558,7 +567,7 @@ export default function GalleryPage() {
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
-                  <img
+                  <SmartImage
                     src={selectedImage.imageUrl}
                     alt={selectedImage.prompt}
                     className="w-full rounded-lg shadow-lg"
@@ -602,8 +611,26 @@ export default function GalleryPage() {
                   </div>
                   
                   <div>
-                    <h3 className="font-medium text-gray-900 mb-2">Metadata</h3>
+                    <h3 className="font-medium text-gray-900 mb-2">Enhanced Metadata</h3>
                     <div className="space-y-2 text-sm">
+                      {selectedImage.width && selectedImage.height && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Dimensions:</span>
+                          <span>{selectedImage.width} × {selectedImage.height} px</span>
+                        </div>
+                      )}
+                      {selectedImage.fileSize && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">File Size:</span>
+                          <span>{(selectedImage.fileSize / 1024 / 1024).toFixed(2)} MB</span>
+                        </div>
+                      )}
+                      {selectedImage.generationDuration && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Generation Time:</span>
+                          <span>{(selectedImage.generationDuration / 1000).toFixed(1)}s</span>
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <span className="text-gray-600">Created:</span>
                         <span>{new Date(selectedImage.createdAt).toLocaleString()}</span>
@@ -612,6 +639,14 @@ export default function GalleryPage() {
                         <span className="text-gray-600">Credits Used:</span>
                         <span>{selectedImage.creditsUsed}</span>
                       </div>
+                      {selectedImage.originalTempUrl && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Original URL:</span>
+                          <span className="text-xs text-blue-600 truncate max-w-32" title={selectedImage.originalTempUrl}>
+                            {selectedImage.originalTempUrl.split('/').pop()}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   

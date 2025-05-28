@@ -6,14 +6,14 @@ import {
   setupEnvironment,
   expectSuccessfulResponse,
   type MockServices 
-} from './utils/test-helpers';
+} from './utils/test-helpers.utils';
 import { 
   createSubscriptionEvent, 
   createMockUser, 
   createMockProduct,
   TEST_IDS, 
   TEST_PLANS 
-} from './fixtures/webhook-events';
+} from './fixtures/webhook-events.fixtures';
 
 describe('Stripe Webhook - Subscription Events', () => {
   let POST: any;

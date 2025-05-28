@@ -77,29 +77,20 @@ export class CreditService {
     error?: string;
   }> {
     try {
+      let finalBalance = 0;
       let transactionResult: { id: string; balanceAfter: number } | null = null;
-      let finalBalance: number | undefined = undefined;
 
       await prisma.$transaction(async (tx) => {
-        // Get current user balance
-        const user = await tx.user.findUnique({
+        // Update user credits
+        const updatedUser = await tx.user.update({
           where: { id: data.userId },
+          data: { credits: { increment: data.amount } },
           select: { credits: true }
         });
 
-        if (!user) {
-          throw new Error('User not found');
-        }
+        finalBalance = updatedUser.credits;
 
-        finalBalance = user.credits + data.amount;
-
-        // Update user credits
-        await tx.user.update({
-          where: { id: data.userId },
-          data: { credits: finalBalance }
-        });
-
-        // Record transaction
+        // Create transaction record
         const createdTx = await tx.creditTransaction.create({
           data: {
             userId: data.userId,
@@ -109,17 +100,19 @@ export class CreditService {
             relatedEntityType: data.relatedEntityType,
             relatedEntityId: data.relatedEntityId,
             balanceAfter: finalBalance,
-            metadata: data.metadata
-          }
+            metadata: data.metadata,
+          },
+          select: { id: true }
         });
+
         transactionResult = { id: createdTx.id, balanceAfter: finalBalance }; 
       });
 
       if (transactionResult) {
         return {
           success: true,
-          newBalance: transactionResult.balanceAfter,
-          transactionId: transactionResult.id,
+          newBalance: (transactionResult as { id: string; balanceAfter: number }).balanceAfter,
+          transactionId: (transactionResult as { id: string; balanceAfter: number }).id,
         };
       } else {
         // This case should ideally not be reached if $transaction throws on failure

@@ -216,12 +216,21 @@ describe('Training Module - Comprehensive Test Suite', () => {
       it('should return available base models', () => {
         const options = trainingService.getTrainingOptions()
         
-        expect(options.baseModels).toHaveLength(1)
-        expect(options.baseModels[0]).toMatchObject({
-          id: 'black-forest-labs/FLUX.1-dev',
-          name: 'FLUX.1-dev',
-          description: expect.stringContaining('FLUX model'),
-        })
+        expect(options.baseModels).toHaveLength(2)
+        expect(options.baseModels).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: 'black-forest-labs/FLUX.1-dev',
+              name: 'FLUX.1-dev',
+              description: expect.stringContaining('FLUX model'),
+            }),
+            expect.objectContaining({
+              id: 'stability-ai/sdxl',
+              name: 'Stable Diffusion XL',
+              description: expect.stringContaining('Stable Diffusion'),
+            })
+          ])
+        )
       })
 
       it('should return default training settings', () => {
@@ -790,18 +799,25 @@ describe('Training Module - Comprehensive Test Suite', () => {
         ]
 
         testCases.forEach(({ status, expectedMin, expectedMax }) => {
+          let replicateStatus: 'starting' | 'processing' | 'succeeded' | 'failed'
+          if (status === 'failed') replicateStatus = 'failed'
+          else if (status === 'completed') replicateStatus = 'succeeded'
+          else if (status === 'uploading') replicateStatus = 'succeeded'
+          else if (status === 'starting') replicateStatus = 'starting'
+          else replicateStatus = 'processing'
+
           const sources = {
-            jobQueue: { status: 'running', errorMessage: null, completedAt: null },
+            jobQueue: { status: status === 'failed' ? 'failed' : 'running', errorMessage: null, completedAt: null },
             replicate: { 
-              status: (status === 'completed' ? 'succeeded' : status === 'uploading' ? 'succeeded' : status === 'starting' ? 'starting' : 'processing') as const, 
-              error: null, 
+              status: replicateStatus, 
+              error: status === 'failed' ? 'Training failed' : null, 
               logs: status === 'training' ? 'flux_train_replicate:  40% | 400/1000 [02:30<03:45, 2.67it/s]' : ''
             },
             userModel: { 
-              status: status === 'completed' ? 'ready' : 'training', 
-              huggingfaceRepo: status === 'completed' ? 'user123/model' : status === 'uploading' ? null : null,
+              status: status === 'completed' ? 'ready' : status, 
+              huggingfaceRepo: status === 'completed' ? 'user123/model' : null,
               loraReadyForInference: status === 'completed',
-              trainingCompletedAt: status === 'completed' ? new Date() : null,
+              trainingCompletedAt: null,
             },
           }
 
@@ -911,10 +927,17 @@ describe('Training Module - Comprehensive Test Suite', () => {
         ]
 
         testCases.forEach(({ status, expectedStage }) => {
+          let replicateStatus: 'starting' | 'processing' | 'succeeded' | 'failed'
+          if (status === 'failed') replicateStatus = 'failed'
+          else if (status === 'completed') replicateStatus = 'succeeded'
+          else if (status === 'uploading') replicateStatus = 'succeeded'
+          else if (status === 'starting') replicateStatus = 'starting'
+          else replicateStatus = 'processing'
+
           const sources = {
             jobQueue: { status: status === 'failed' ? 'failed' : 'running', errorMessage: null, completedAt: null },
             replicate: { 
-              status: (status === 'failed' ? 'failed' : status === 'completed' ? 'succeeded' : status === 'uploading' ? 'succeeded' : status === 'starting' ? 'starting' : 'processing') as const, 
+              status: replicateStatus, 
               error: status === 'failed' ? 'Training failed' : null, 
               logs: status === 'training' ? 'flux_train_replicate:  40% | 400/1000 [02:30<03:45, 2.67it/s]' : ''
             },

@@ -109,7 +109,7 @@ export default function BillingPage() {
 
   if (status === 'loading') {
     return (
-      <div className="flex items-center justify-center min-h-96">
+      <div className="flex items-center justify-center min-h-96" role="status">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )

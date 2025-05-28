@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
+import { requireAdmin } from '@/lib/admin-auth'
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication
-    const session = await auth()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
+    // Check admin authentication
+    const adminError = await requireAdmin()
+    if (adminError) {
+      return adminError
     }
-
-    // TODO: Add admin role checking
-    // For now, this is unprotected - add admin role validation here
-    console.log(`⚠️ ADMIN API ACCESS: User ${session.user.email} accessed admin models endpoint`)
 
     // Get all models across all users with user information
     const models = await prisma.userModel.findMany({

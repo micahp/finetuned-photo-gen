@@ -37,6 +37,7 @@ export const authConfig: NextAuthConfig = {
     },
     async jwt({ token, user }) {
       if (user) {
+        token.isAdmin = user.isAdmin
         token.subscriptionStatus = user.subscriptionStatus
         token.subscriptionPlan = user.subscriptionPlan
         token.stripeCustomerId = user.stripeCustomerId
@@ -47,6 +48,7 @@ export const authConfig: NextAuthConfig = {
     async session({ session, token }) {
       if (token) {
         session.user.id = token.sub!
+        session.user.isAdmin = token.isAdmin as boolean
         session.user.subscriptionStatus = token.subscriptionStatus as string
         session.user.subscriptionPlan = token.subscriptionPlan as string | null
         session.user.stripeCustomerId = token.stripeCustomerId as string | null
@@ -82,6 +84,7 @@ export const authConfig: NextAuthConfig = {
             id: user.id,
             email: user.email,
             name: user.name,
+            isAdmin: user.isAdmin,
             subscriptionStatus: user.subscriptionStatus,
             subscriptionPlan: user.subscriptionPlan,
             stripeCustomerId: user.stripeCustomerId,

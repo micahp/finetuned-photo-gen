@@ -35,7 +35,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Creator',
     description: 'For content creators and social media',
     price: 20,
-    priceId: process.env.NEXT_PUBLIC_STRIPE_CREATOR_PRICE_ID || 'price_1RTGE7Q8DfMDErUlV3adHlLg',
+    priceId: process.env.STRIPE_CREATOR_PLAN_PRICE_ID || 'price_1RTGE7Q8DfMDErUlV3adHlLg',
     credits: 200,
     maxModels: 3,
     features: [
@@ -55,7 +55,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Pro',
     description: 'For professionals and businesses',
     price: 40,
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || 'price_1RTGEaQ8DfMDErUlV3adHlLg',
+    priceId: process.env.STRIPE_PRO_PLAN_PRICE_ID || 'price_1RTGEaQ8DfMDErUlV3adHlLg',
     credits: 1000,
     maxModels: 10,
     features: [
@@ -63,11 +63,11 @@ export const PRICING_PLANS: PricingPlan[] = [
       '10 personalized models slots',
       'Advanced style customization',
       'Fastest generation speed',
-      '4K quality downloads',
-      'Batch generation (up to 10 images)',
-      'API access',
+      '4K quality downloads coming soon',
+      'Batch generation (up to 10 images) coming soon',
       'Priority support',
-      'Commercial usage rights'
+      'Commercial usage rights',
+      'Early access to new features'
     ],
     buttonText: 'Choose Pro'
   },
@@ -76,7 +76,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Enterprise',
     description: 'For teams and high-volume users',
     price: 99,
-    priceId: process.env.NEXT_PUBLIC_STRIPE_ENTERPRISE_PRICE_ID || 'price_1RTGEcQ8DfMDErUlV3adHlLg',
+    priceId: process.env.STRIPE_ULTRA_PLAN_PRICE_ID || 'price_1RTGEcQ8DfMDErUlV3adHlLg',
     credits: 5000,
     maxModels: 25,
     features: [
@@ -84,11 +84,11 @@ export const PRICING_PLANS: PricingPlan[] = [
       '25 personalized models slots',
       'Advanced style customization',
       'Fastest generation speed',
-      '4K quality downloads',
-      'Batch generation (up to 10 images)',
-      'API access',
+      '4K quality downloads coming soon',
+      'Batch generation (up to 10 images) coming soon',
       'Priority support',
-      'Commercial usage rights'
+      'Commercial usage rights',
+      'Early access to new features'
     ],
     buttonText: 'Choose Enterprise'
   }

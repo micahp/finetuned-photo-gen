@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireAdmin } from '@/lib/admin-auth'
 
 export async function POST(request: NextRequest) {
   try {
+    // Check admin authentication first
+    const adminError = await requireAdmin()
+    if (adminError) {
+      return adminError
+    }
+
     const { email, credits } = await request.json()
 
     if (!email || typeof credits !== 'number') {
