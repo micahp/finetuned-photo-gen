@@ -123,10 +123,10 @@ export default function GeneratePage() {
   const styles = together.getStylePresets()
   const suggestions = together.getPromptSuggestions()
   const quickPrompts = together.getQuickPrompts()
-  const categorizedPrompts = together.getCategorizedPrompts()
+  const categorizedPrompts = together.getCategorizedPrompts() as Record<string, Array<{ prompt: string; description: string }>>
   
   // Simple category name mapping
-  const categoryMapping = {
+  const categoryMapping: Record<string, string> = {
     'Dating Apps': 'Dating',
     'Professional Headshots': 'Professional',
     'Lifestyle & Social': 'Lifestyle', 
@@ -136,7 +136,7 @@ export default function GeneratePage() {
   }
   
   // Category emojis mapping
-  const categoryEmojis = {
+  const categoryEmojis: Record<string, string> = {
     'Dating Apps': '💖',
     'Professional Headshots': '💼',
     'Lifestyle & Social': '🌟',

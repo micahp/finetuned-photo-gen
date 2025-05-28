@@ -19,6 +19,7 @@ model User {
   email               String    @unique
   name                String?
   password            String?
+  isAdmin             Boolean   @default(false) @map("is_admin")
   subscriptionStatus  String    @default("free") @map("subscription_status")
   subscriptionPlan    String?   @map("subscription_plan")
   stripeCustomerId    String?   @map("stripe_customer_id")

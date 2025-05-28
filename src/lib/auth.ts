@@ -37,6 +37,7 @@ export async function createUser(email: string, password: string, name?: string)
       id: true,
       email: true,
       name: true,
+      isAdmin: true,
       subscriptionStatus: true,
       subscriptionPlan: true,
       stripeCustomerId: true,
