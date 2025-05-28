@@ -60,13 +60,15 @@ export function Navbar() {
                   <Button variant="ghost">Training</Button>
                 </Link>
                 
-                {/* Temporary admin access - should be protected later */}
-                <Link href="/admin">
-                  <Button variant="ghost" className="text-orange-600 hover:text-orange-700">
-                    <Shield className="h-4 w-4 mr-1" />
-                    Admin
-                  </Button>
-                </Link>
+                {/* Admin access for admin users */}
+                {session.user.isAdmin && (
+                  <Link href="/admin">
+                    <Button variant="ghost" className="text-orange-600 hover:text-orange-700">
+                      <Shield className="h-4 w-4 mr-1" />
+                      Admin
+                    </Button>
+                  </Link>
+                )}
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

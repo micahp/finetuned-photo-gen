@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { 
-  Search, Calendar, Users, Activity, AlertTriangle, 
+  Search, Calendar, Users, Activity, 
   ExternalLink, Trash2, RefreshCw, Shield 
 } from 'lucide-react'
 
@@ -142,6 +142,20 @@ export default function AdminPage() {
     )
   }
 
+  // Check if user is actually an admin
+  if (!session.user.isAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <Shield className="h-16 w-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-red-600">Access Denied</h2>
+          <p className="text-gray-500 mt-2">You don't have admin privileges</p>
+          <p className="text-gray-400 text-sm mt-1">Contact an administrator for access</p>
+        </div>
+      </div>
+    )
+  }
+
   const statusCounts = getStatusCounts()
 
   return (
@@ -155,10 +169,6 @@ export default function AdminPage() {
           <p className="text-gray-600 mt-2">
             Monitor all models across all users
           </p>
-          <div className="text-sm text-orange-600 mt-1 flex items-center gap-1">
-            <AlertTriangle className="h-4 w-4" />
-            ⚠️ This panel is currently unprotected - admin authentication needed
-          </div>
         </div>
         <Button onClick={fetchAdminModels} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
