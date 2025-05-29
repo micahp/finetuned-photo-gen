@@ -123,6 +123,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./next.config.js
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
 
+# Create a startup script that runs migrations then starts the server
+USER root
+RUN echo '#!/bin/sh\necho "Running database migrations..."\nnpx prisma migrate deploy\necho "Starting server..."\nnode server.js' > /app/start.sh && \
+    chmod +x /app/start.sh && \
+    chown nextjs:nodejs /app/start.sh
+USER nextjs
+
 # Expose port
 EXPOSE 3005
 
@@ -133,5 +140,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Use dumb-init for proper signal handling and graceful shutdown
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application with standalone server (server.js is now in root)
-CMD ["node", "server.js"] 
+# Start with the migration script
+CMD ["/app/start.sh"] 
