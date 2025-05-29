@@ -83,8 +83,12 @@ RUN mkdir -p /app/.next && \
     chown nextjs:nodejs /app/tmp
 USER nextjs
 
-# Copy production dependencies from the production deps stage
+# Copy production dependencies from the production deps stage  
 COPY --from=deps /app/node_modules ./node_modules
+
+# Copy Next.js binary specifically for runtime
+COPY --from=builder /app/node_modules/.bin/next ./node_modules/.bin/next
+COPY --from=builder /app/node_modules/next ./node_modules/next
 
 # Copy package.json for npm scripts
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
@@ -112,5 +116,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Use dumb-init for proper signal handling and graceful shutdown
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application with standard Next.js start
-CMD ["npm", "start"] 
+# Start the application with direct Next.js command
+CMD ["./node_modules/.bin/next", "start"] 
