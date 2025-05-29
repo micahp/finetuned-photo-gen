@@ -156,105 +156,102 @@ export class TrainingService {
    * Check training status and handle workflow progression with debugging
    */
   async getTrainingStatus(trainingId: string, modelName: string, allowUpload: boolean = false): Promise<TrainingStatus> {
-    // Initialize debugger if not exists (for status checks)
     if (!this.debugger) {
       this.debugger = new TrainingDebugger(trainingId)
     }
 
     try {
-      // Get all sources of truth
+      // Get fresh status from Replicate
       const replicateStatus = await this.replicate.getTrainingStatus(trainingId)
       
-      // Get job queue status
-      const { prisma } = await import('@/lib/db')
-      const job = await prisma.jobQueue.findFirst({
-        where: {
-          jobType: 'model_training',
-          payload: {
-            path: ['externalTrainingId'],
-            equals: trainingId
-          }
-        }
+      this.debugger.log('info', TrainingStage.REPLICATE_TRAINING, 'Retrieved Replicate status', {
+        status: replicateStatus.status,
+        trainingId
       })
+
+      // Get database imports
+      const { prisma } = await import('@/lib/db')
       
       // Get user model status
-      let userModel = await prisma.userModel.findFirst({
+      const userModel = await prisma.userModel.findFirst({
         where: { externalTrainingId: trainingId }
       })
-      
-      // If Replicate training succeeded, verify HuggingFace model existence and update database if needed
-      if (replicateStatus.status === 'succeeded' && userModel) {
-        userModel = await this.verifyAndUpdateHuggingFaceStatus(userModel, trainingId)
-      }
-      
-      // Build status sources
-      const sources: StatusSources = {
-        jobQueue: {
-          status: job?.status || 'unknown',
-          errorMessage: job?.errorMessage,
-          completedAt: job?.completedAt
-        },
-        replicate: {
-          status: replicateStatus.status,
-          error: replicateStatus.error,
-          logs: replicateStatus.logs
-        },
-        userModel: {
-          status: userModel?.status || 'unknown',
-          huggingfaceRepo: userModel?.huggingfaceRepo,
-          loraReadyForInference: userModel?.loraReadyForInference || false,
-          trainingCompletedAt: userModel?.trainingCompletedAt
+
+      // Parse logs for progress information
+      const logProgress = TrainingStatusResolver.parseTrainingLogs(replicateStatus.logs)
+
+      // Map Replicate status to our TrainingStatus
+      if (replicateStatus.status === 'succeeded') {
+        // For newly completed training, mark as ready immediately (no HF upload)
+        if (!userModel?.huggingfaceRepo) {
+          // Update model to ready status
+          if (userModel?.id) {
+            await prisma.userModel.update({
+              where: { id: userModel.id },
+              data: {
+                status: 'ready',
+                loraReadyForInference: true,
+                trainingCompletedAt: new Date(),
+              }
+            })
+          }
+
+          return {
+            id: trainingId,
+            status: 'completed',
+            progress: 100,
+            stage: 'Training completed successfully',
+            debugData: this.debugger.getDebugSummary()
+          }
+        }
+        
+        // Legacy models with existing HF repos
+        return {
+          id: trainingId,
+          status: 'completed',
+          progress: 100,
+          stage: 'Training completed successfully and model uploaded to HuggingFace',
+          huggingFaceRepo: userModel.huggingfaceRepo,
+          debugData: this.debugger.getDebugSummary()
         }
       }
+
+      // Handle other Replicate statuses (training, failed, etc)
+      const mappedStatus = this.mapReplicateStatus(replicateStatus.status)
       
-      // Resolve unified status
-      const unifiedStatus = TrainingStatusResolver.resolveStatus(trainingId, modelName, sources)
-      
-      // Update job queue status to match resolved status if needed
-      await this.updateJobQueueStatus(trainingId, unifiedStatus.status, unifiedStatus.error)
-      
-      // Handle upload logic if needed and allowed
-      if (unifiedStatus.needsUpload && allowUpload) {
-        console.log(`🚀 AUTOMATIC UPLOAD TRIGGERED: Training ${trainingId} completed successfully, starting HuggingFace upload for model "${modelName}"`)
-        return await this.handleTrainingCompletion(trainingId, modelName, replicateStatus)
-      } else if (unifiedStatus.needsUpload && !allowUpload) {
-        console.log(`⏸️ UPLOAD NEEDED BUT DISABLED: Training ${trainingId} completed successfully but allowUpload=false for model "${modelName}"`)
+      if (replicateStatus.status === 'failed') {
+        await this.updateJobQueueStatus(trainingId, 'failed', replicateStatus.error)
+        
+        return {
+          id: trainingId,
+          status: 'failed',
+          progress: 0,
+          stage: 'Training failed',
+          error: replicateStatus.error || 'Training failed on Replicate',
+          debugData: this.debugger.getDebugSummary()
+        }
       }
-      
-      // Convert unified status to TrainingStatus format
+
+      // Training still in progress - use log-based progress
       return {
-        id: unifiedStatus.id,
-        status: unifiedStatus.status,
-        progress: unifiedStatus.progress,
-        stage: unifiedStatus.stage,
-        estimatedTimeRemaining: unifiedStatus.estimatedTimeRemaining,
-        huggingFaceRepo: unifiedStatus.huggingFaceRepo,
-        error: unifiedStatus.error,
-        logs: unifiedStatus.logs,
-        debugData: {
-          ...this.debugger.getDebugSummary(),
-          sources: unifiedStatus.sources,
-          needsUpload: unifiedStatus.needsUpload,
-          canRetryUpload: unifiedStatus.canRetryUpload
-        }
+        id: trainingId,
+        status: mappedStatus,
+        progress: logProgress.progress,
+        stage: logProgress.stageDescription,
+        debugData: this.debugger.getDebugSummary()
       }
 
     } catch (error) {
-      const trainingError = this.debugger?.logError(
-        TrainingStage.REPLICATE_TRAINING,
-        error,
-        'Failed to check training status'
-      )
-
-      console.error('Training status check error:', error)
+      const trainingError = this.debugger.logError(TrainingStage.REPLICATE_TRAINING, error, 'Failed to get training status')
+      console.error('Error getting training status:', error)
       
       return {
         id: trainingId,
         status: 'failed',
         progress: 0,
-        stage: 'Failed to check training status',
-        error: error instanceof Error ? error.message : 'Status check failed',
-        debugData: this.debugger?.getDebugSummary()
+        stage: 'Failed to get training status',
+        error: trainingError?.message || (error instanceof Error ? error.message : 'Unknown error'),
+        debugData: this.debugger.getDebugSummary()
       }
     }
   }
@@ -312,284 +309,6 @@ export class TrainingService {
     } catch (error) {
       console.error('Error verifying HuggingFace status:', error)
       return userModel
-    }
-  }
-
-  /**
-   * Handle training completion and upload to HuggingFace with debugging
-   */
-  private async handleTrainingCompletion(
-    trainingId: string, 
-    modelName: string, 
-    replicateStatus: any,
-    isPrivate: boolean = false // MVP: Public models for all users, private models will be a premium feature
-  ): Promise<TrainingStatus> {
-    if (!this.debugger) {
-      this.debugger = new TrainingDebugger(trainingId)
-    }
-
-    // Check if upload is already in progress or completed
-    if (TrainingService.ongoingUploads.has(trainingId)) {
-      console.log(`🔄 UPLOAD IN PROGRESS: Training ${trainingId} upload already in progress, returning uploading status`)
-      return {
-        id: trainingId,
-        status: 'uploading',
-        progress: 95,
-        stage: 'Training completed, uploading to HuggingFace...',
-        debugData: this.debugger.getDebugSummary()
-      }
-    }
-
-    if (TrainingService.completedUploads.has(trainingId)) {
-      console.log(`✅ UPLOAD COMPLETED: Training ${trainingId} upload already completed, returning completed status`)
-      return {
-        id: trainingId,
-        status: 'completed',
-        progress: 100,
-        stage: 'Training completed successfully and model uploaded to HuggingFace',
-        huggingFaceRepo: (await this.checkForExistingHuggingFaceModel(trainingId, modelName)) || undefined,
-        debugData: this.debugger.getDebugSummary()
-      }
-    }
-
-    // Mark upload as in progress
-    console.log(`📤 STARTING UPLOAD: Marking training ${trainingId} as upload in progress`)
-    TrainingService.ongoingUploads.add(trainingId)
-
-    try {
-      this.debugger.startStage(TrainingStage.HUGGINGFACE_UPLOAD, 'Starting HuggingFace upload')
-      
-      console.log(`🔍 TRAINING COMPLETION DEBUG:`, {
-        trainingId,
-        modelName,
-        modelNameType: typeof modelName,
-        modelNameLength: modelName?.length,
-        replicateOutput: replicateStatus.output,
-        replicateOutputType: typeof replicateStatus.output,
-        replicateOutputArray: Array.isArray(replicateStatus.output),
-      })
-      
-      console.log(`Training completed for ${modelName}, uploading to HuggingFace...`)
-
-      // Extract model path from Replicate output with proper type handling
-      let modelPath: string = '';
-      
-      if (typeof replicateStatus.output === 'string') {
-        // Output is a single URL string
-        modelPath = replicateStatus.output;
-      } else if (Array.isArray(replicateStatus.output) && replicateStatus.output.length > 0) {
-        // Output is an array of URLs, take the first one
-        const firstOutput = replicateStatus.output[0];
-        if (typeof firstOutput === 'string') {
-          modelPath = firstOutput;
-        } else {
-          throw new Error(`Invalid output format: First array item is not a string (type: ${typeof firstOutput})`);
-        }
-      } else if (replicateStatus.output && typeof replicateStatus.output === 'object') {
-        // Output might be an object with file information
-        console.log(`🔍 Object output detected, keys: ${Object.keys(replicateStatus.output).join(', ')}`, replicateStatus.output);
-        
-        if (replicateStatus.output.url && typeof replicateStatus.output.url === 'string') {
-          modelPath = replicateStatus.output.url;
-        } else if (replicateStatus.output.file && typeof replicateStatus.output.file === 'string') {
-          modelPath = replicateStatus.output.file;
-        } else if (replicateStatus.output.weights && typeof replicateStatus.output.weights === 'string') {
-          // Handle Replicate's weights URL format
-          modelPath = replicateStatus.output.weights;
-        } else {
-          throw new Error(`Invalid output format: Object does not contain valid URL (keys: ${Object.keys(replicateStatus.output).join(', ')})`);
-        }
-      } else {
-        throw new Error(`Invalid output format: Expected string, array, or object with URL, got ${typeof replicateStatus.output}: ${JSON.stringify(replicateStatus.output)}`);
-      }
-
-      if (!modelPath || !modelPath.trim()) {
-        throw new Error('No valid model path extracted from Replicate output');
-      }
-
-      console.log(`📁 Extracted model path: ${modelPath} (type: ${typeof modelPath})`);
-
-      // Generate unique repository name to avoid conflicts
-      const baseModelName = modelName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'trained-model'
-      // Use a more unique timestamp format with milliseconds and a random suffix
-      const timestamp = Date.now()
-      const randomSuffix = Math.random().toString(36).substring(2, 8)
-      const uniqueModelName = `${baseModelName}-${timestamp}-${randomSuffix}`
-
-      console.log(`🤗 Creating unique HuggingFace repository: ${uniqueModelName} (original: ${modelName})`)
-
-      // Upload to HuggingFace using existing service instance
-      const uploadResponse = await this.huggingface.uploadModel({
-        modelName: uniqueModelName, // Use unique name
-        modelPath: modelPath, // Now guaranteed to be a string
-        description: `Custom FLUX LoRA model: ${modelName} (Training ID: ${trainingId})`,
-        tags: ['flux', 'lora', 'text-to-image', 'custom'],
-        isPrivate: isPrivate, // Use the provided privacy setting
-      })
-
-      if (uploadResponse.status === 'failed') {
-        // Handle specific HuggingFace errors
-        let errorMessage = uploadResponse.error || 'HuggingFace upload failed'
-        
-        if (errorMessage.includes('You already created this model repo') || errorMessage.includes('already exists')) {
-          // Try with an additional random suffix - make it even more unique
-          const extraRandomSuffix = Math.random().toString(36).substring(2, 10)
-          const retryModelName = `${baseModelName}-${timestamp}-${randomSuffix}-${extraRandomSuffix}`
-          
-          console.log(`🔄 Repository exists, retrying with: ${retryModelName}`)
-          
-          const retryResponse = await this.huggingface.uploadModel({
-            modelName: retryModelName,
-            modelPath: modelPath, // Use the same validated model path
-            description: `Custom FLUX LoRA model: ${modelName} (Training ID: ${trainingId})`,
-            tags: ['flux', 'lora', 'text-to-image', 'custom'],
-            isPrivate: isPrivate,
-          })
-          
-          if (retryResponse.status === 'completed') {
-            // Mark upload as completed and remove from ongoing
-            TrainingService.completedUploads.add(trainingId)
-            TrainingService.ongoingUploads.delete(trainingId)
-            
-            // Use the retry result
-            this.debugger.endStage(TrainingStage.HUGGINGFACE_UPLOAD, 'HuggingFace upload completed (retry)', {
-              repoId: retryResponse.repoId,
-              repoUrl: retryResponse.repoUrl
-            })
-
-            return {
-              id: trainingId,
-              status: 'completed',
-              progress: 100,
-              stage: 'Training completed successfully and model uploaded to HuggingFace',
-              huggingFaceRepo: retryResponse.repoId,
-              debugData: this.debugger.getDebugSummary()
-            }
-          } else {
-            errorMessage = retryResponse.error || 'HuggingFace retry upload failed'
-          }
-        }
-
-        // TrainingService.ongoingUploads.delete(trainingId); // Will be handled by finally
-        const error = this.debugger.logError(
-          TrainingStage.HUGGINGFACE_UPLOAD,
-          new Error(errorMessage),
-          'HuggingFace upload failed after training completion'
-        )
-
-        // Training succeeded but upload failed - be specific about this
-        return {
-          id: trainingId,
-          status: 'uploading', // Changed from 'failed' to 'uploading' to trigger retry UI
-          progress: 90,
-          stage: 'Training completed successfully, but HuggingFace upload failed',
-          error: `Model training completed successfully, but failed to upload to HuggingFace: ${error instanceof Error ? error.message : 'Upload failed'}`,
-          debugData: this.debugger.getDebugSummary()
-        }
-      }
-
-      // Mark upload as completed and remove from ongoing
-      TrainingService.completedUploads.add(trainingId)
-      // TrainingService.ongoingUploads.delete(trainingId); // Will be handled by finally
-
-      this.debugger.endStage(TrainingStage.HUGGINGFACE_UPLOAD, 'HuggingFace upload completed', {
-        repoId: uploadResponse.repoId,
-        repoUrl: uploadResponse.repoUrl
-      })
-
-      this.debugger.startStage(TrainingStage.COMPLETION, 'Finalizing training workflow')
-      this.debugger.endStage(TrainingStage.COMPLETION, 'Training workflow completed successfully')
-
-      // Training and upload completed successfully
-      return {
-        id: trainingId,
-        status: 'completed',
-        progress: 100,
-        stage: 'Training completed successfully and model uploaded to HuggingFace',
-        huggingFaceRepo: uploadResponse.repoId,
-        debugData: this.debugger.getDebugSummary()
-      }
-
-    } catch (error) {
-      // TrainingService.ongoingUploads.delete(trainingId); // Handled by finally
-      const trainingError = this.debugger.logError(
-        TrainingStage.HUGGINGFACE_UPLOAD,
-        error,
-        'Critical error during HuggingFace upload process',
-        { trainingId, modelName }
-      )
-      console.error(`💥 Critical error in handleTrainingCompletion for ${trainingId}:`, error)
-      return {
-        id: trainingId,
-        status: 'uploading', // Keep as 'uploading' to allow retry via UI
-        progress: 90, // Indicate progress, but not complete
-        stage: 'Training completed, but HuggingFace upload encountered a critical error.',
-        error: `Upload error: ${trainingError?.message || (error instanceof Error ? error.message : 'Unknown critical upload error')}`,
-        debugData: this.debugger.getDebugSummary(),
-      }
-    } finally {
-      // Ensure the trainingId is removed from ongoingUploads if the process
-      // didn't successfully complete and add it to completedUploads.
-      if (TrainingService.ongoingUploads.has(trainingId) && !TrainingService.completedUploads.has(trainingId)) {
-        console.log(`🧹 FINALLY CLEANUP (unsuccessful/error): Removing ${trainingId} from ongoingUploads.`);
-        TrainingService.ongoingUploads.delete(trainingId);
-      } else if (TrainingService.completedUploads.has(trainingId) && TrainingService.ongoingUploads.has(trainingId)) {
-        // This case handles if it was completed but somehow not yet removed from ongoing (e.g. error after completion add but before delete)
-        console.log(`🧹 FINALLY CLEANUP (successful completion): Removing ${trainingId} from ongoingUploads as it's in completedUploads.`);
-        TrainingService.ongoingUploads.delete(trainingId);
-      }
-    }
-  }
-
-  /**
-   * Manually trigger HuggingFace upload for a completed training
-   * This is used for retry upload functionality
-   */
-  async triggerHuggingFaceUpload(
-    trainingId: string, 
-    modelName: string, 
-    waitForCompletion: boolean = false
-  ): Promise<TrainingStatus> {
-    try {
-      // Get the current Replicate status
-      const replicateStatus = await this.replicate.getTrainingStatus(trainingId)
-      
-      if (replicateStatus.status !== 'succeeded') {
-        throw new Error(`Cannot upload model - Replicate training status is: ${replicateStatus.status}`)
-      }
-
-      if (waitForCompletion) {
-        // For retry API calls, wait for the actual upload to complete
-        console.log('🔄 Waiting for upload completion...')
-        return await this.handleTrainingCompletion(trainingId, modelName, replicateStatus)
-      } else {
-        // For manual triggers, return uploading status immediately and start upload in background
-        // This ensures the UI shows "uploading" state for manual retry actions
-        const uploadingStatus: TrainingStatus = {
-          id: trainingId,
-          status: 'uploading',
-          progress: 90,
-          stage: 'Training completed, uploading to HuggingFace...',
-          debugData: this.debugger?.getDebugSummary()
-        }
-
-        // Start the upload process in background (don't await)
-        this.handleTrainingCompletion(trainingId, modelName, replicateStatus).catch(error => {
-          console.error('Background upload failed:', error)
-        })
-
-        return uploadingStatus
-      }
-
-    } catch (error) {
-      console.error('Manual upload trigger error:', error)
-      return {
-        id: trainingId,
-        status: 'failed',
-        progress: 0,
-        stage: 'Failed to trigger upload',
-        error: error instanceof Error ? error.message : 'Upload trigger failed'
-      }
     }
   }
 
@@ -811,6 +530,28 @@ export class TrainingService {
         return 'failed'
       default:
         return 'training'
+    }
+  }
+
+  /**
+   * Manually trigger HuggingFace upload for a completed training
+   * This is used for retry upload functionality
+   */
+  async triggerHuggingFaceUpload(
+    trainingId: string, 
+    modelName: string, 
+    waitForCompletion: boolean = false
+  ): Promise<TrainingStatus> {
+    // HuggingFace upload functionality has been removed
+    // Models are now marked as ready immediately after Replicate training succeeds
+    console.log(`⚠️ HuggingFace upload functionality has been disabled. Model ${modelName} should already be ready.`)
+    
+    return {
+      id: trainingId,
+      status: 'completed',
+      progress: 100,
+      stage: 'Training completed successfully',
+      error: 'HuggingFace upload is no longer supported. Model is ready for use.'
     }
   }
 } 

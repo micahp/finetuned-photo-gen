@@ -3,6 +3,7 @@
 import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,8 +26,16 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Link href="/" className="flex-shrink-0">
-              <h1 className="text-xl font-bold text-gray-900">AI Photo Gen</h1>
+            <Link href={session ? "/dashboard" : "/"} className="flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-gray-900">Fine Photo Gen</h1>
+                <Badge 
+                  variant="secondary" 
+                  className="text-[9px] font-normal px-1 py-0 bg-gray-100 text-gray-500 border border-gray-200 rounded-sm"
+                >
+                  beta
+                </Badge>
+              </div>
             </Link>
           </div>
 
@@ -51,13 +60,15 @@ export function Navbar() {
                   <Button variant="ghost">Training</Button>
                 </Link>
                 
-                {/* Temporary admin access - should be protected later */}
-                <Link href="/admin">
-                  <Button variant="ghost" className="text-orange-600 hover:text-orange-700">
-                    <Shield className="h-4 w-4 mr-1" />
-                    Admin
-                  </Button>
-                </Link>
+                {/* Admin access for admin users */}
+                {session.user.isAdmin && (
+                  <Link href="/admin">
+                    <Button variant="ghost" className="text-orange-600 hover:text-orange-700">
+                      <Shield className="h-4 w-4 mr-1" />
+                      Admin
+                    </Button>
+                  </Link>
+                )}
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -86,12 +97,6 @@ export function Navbar() {
                       </div>
                     </div>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard/profile">
-                        <User className="mr-2 h-4 w-4" />
-                        Profile
-                      </Link>
-                    </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/dashboard/billing">
                         <CreditCard className="mr-2 h-4 w-4" />

@@ -391,29 +391,6 @@ export default function ModelsPage() {
                       )}
                     </div>
 
-                    {/* HuggingFace Repository Link */}
-                    {model.huggingfaceRepo && (
-                      <div className="mt-3 p-2 bg-green-50 rounded border">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-green-800 font-medium">🤗 Published</span>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 px-2 text-green-700 hover:text-green-900"
-                                onClick={() => window.open(`https://huggingface.co/${model.huggingfaceRepo}`, '_blank')}
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>View on HuggingFace</TooltipContent>
-                          </Tooltip>
-                        </div>
-                        <p className="text-xs text-green-700 truncate">{model.huggingfaceRepo}</p>
-                      </div>
-                    )}
-
                     {/* Action Buttons */}
                     <div className="flex gap-2 mt-4">
                       <Link href={`/dashboard/models/${model.id}`} className="flex-1">
@@ -486,12 +463,6 @@ export default function ModelsPage() {
                     <span className="text-red-500">✗</span>
                     {deletePreview._count.trainingImages} training images
                   </li>
-                  {deletePreview.huggingfaceRepo && (
-                    <li className="flex items-center gap-2">
-                      <span className="text-red-500">✗</span>
-                      HuggingFace repository: {deletePreview.huggingfaceRepo}
-                    </li>
-                  )}
                 </ul>
                 
                 <h4 className="font-semibold text-sm text-green-900 mt-4 mb-2">What will be preserved:</h4>

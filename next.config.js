@@ -7,6 +7,9 @@ const nextConfig = {
   },
   transpilePackages: ['next-auth'],
   
+  // Enable standalone output for Docker
+  output: 'standalone',
+  
   // Development optimizations to prevent CSS issues
   experimental: {
     turbo: {

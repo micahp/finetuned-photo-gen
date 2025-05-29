@@ -18,6 +18,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2 } from 'lucide-react'
 import { TogetherAIService } from '@/lib/together-ai'
 import { SmartImage } from '@/components/ui/smart-image'
+import { isPremiumUser, isPremiumModel, getPremiumFeatures } from '@/lib/subscription-utils'
+import { PremiumModelBadge } from '@/components/ui/premium-model-badge'
+import Link from 'next/link'
 
 const generateSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
@@ -60,15 +63,20 @@ export default function GeneratePage() {
   const searchParams = useSearchParams()
   const preselectedModelId = searchParams.get('model')
 
+  // Premium subscription checks
+  const hasPremiumAccess = isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
+  const premiumFeatures = getPremiumFeatures(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
+
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null)
   const [creditsRemaining, setCreditsRemaining] = useState(session?.user?.credits || 0)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | JSX.Element | null>(null)
   const [copiedPrompt, setCopiedPrompt] = useState<string | null>(null)
   const [userModels, setUserModels] = useState<UserModel[]>([])
   const [selectedUserModel, setSelectedUserModel] = useState<UserModel | null>(null)
   const [loadingModels, setLoadingModels] = useState(true)
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false)
+  const [generatingPrompt, setGeneratingPrompt] = useState(false)
 
   // Initialize service without API key on client side (will be handled by API route)
   const getTogetherService = () => {
@@ -82,13 +90,32 @@ export default function GeneratePage() {
             id: 'black-forest-labs/FLUX.1-schnell-Free',
             name: 'FLUX.1 Schnell (Free)',
             description: 'Fast, free FLUX model - perfect for testing',
-            free: true
+            free: true,
+            provider: 'together'
+          },
+          {
+            id: 'black-forest-labs/FLUX.1-schnell',
+            name: 'FLUX.1 Schnell (Turbo)',
+            description: 'Ultra-fast FLUX model with superior performance',
+            provider: 'together'
           },
           {
             id: 'black-forest-labs/FLUX.1-dev',
             name: 'FLUX.1 Dev',
-            description: 'High-quality FLUX model for professional results',
-            free: false
+            description: 'Higher quality FLUX model for better results',
+            provider: 'together'
+          },
+          {
+            id: 'black-forest-labs/FLUX.1-pro',
+            name: 'FLUX.1 Pro',
+            description: 'Premium FLUX model for highest quality (via Replicate)',
+            provider: 'replicate'
+          },
+          {
+            id: 'black-forest-labs/FLUX1.1-pro',
+            name: 'FLUX 1.1 Pro',
+            description: 'Latest premium model with 3x faster generation (via Replicate)',
+            provider: 'replicate'
           }
         ],
         getStylePresets: () => [
@@ -251,7 +278,29 @@ export default function GeneratePage() {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred'
-      setError(errorMessage)
+      
+      // Check if this is an upgrade-required error for premium models
+      if (errorMessage.includes('Premium model access required') || 
+          errorMessage.includes('upgrade your subscription')) {
+        setError(
+          <div className="space-y-3">
+            <p className="text-red-600">{errorMessage}</p>
+            <PremiumModelBadge 
+              isPremium={true}
+              hasAccess={false}
+              modelName="FLUX Pro models"
+              variant="card"
+              className="!border-red-200 !bg-red-50"
+              onUpgradeClick={() => {
+                // Track conversion attempt
+                console.log('User clicked upgrade from generation error')
+              }}
+            />
+          </div>
+        )
+      } else {
+        setError(errorMessage)
+      }
       
       // If the error indicates model corruption, refresh the models list
       if (errorMessage.toLowerCase().includes('corrupted') || 
@@ -327,8 +376,37 @@ export default function GeneratePage() {
   }
 
   const generateRandomSeed = () => {
-    const seed = Math.floor(Math.random() * 1000000)
-    form.setValue('seed', seed)
+    const randomSeed = Math.floor(Math.random() * 1000000)
+    form.setValue('seed', randomSeed)
+  }
+
+  const handleGenerateRandomPrompt = async () => {
+    setGeneratingPrompt(true)
+    try {
+      const response = await fetch('/api/generate-prompt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.prompt) {
+        // If user has a selected model with trigger word, prepend it
+        let finalPrompt = result.prompt
+        if (selectedUserModel?.triggerWord) {
+          finalPrompt = `${selectedUserModel.triggerWord}, ${result.prompt}`
+        }
+        form.setValue('prompt', finalPrompt)
+      } else {
+        console.error('Failed to generate prompt:', result.error)
+      }
+    } catch (error) {
+      console.error('Error generating prompt:', error)
+    } finally {
+      setGeneratingPrompt(false)
+    }
   }
 
   const downloadImage = async () => {
@@ -476,33 +554,78 @@ export default function GeneratePage() {
 
                   {/* Base Model Selection (only when not using custom models) */}
                   {!selectedUserModel && (
-                    <FormField
-                      control={form.control}
-                      name="modelId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Base Model</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a model" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {baseModels.map((model) => (
-                                <SelectItem key={model.id} value={model.id}>
-                                  <div className="flex items-center gap-2">
-                                    <span>{model.name}</span>
-                                    {model.free && <Badge variant="secondary" className="text-xs">Free</Badge>}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
+                    <div className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="modelId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Base Model</FormLabel>
+                            <Select 
+                              onValueChange={(value) => {
+                                // Check if trying to select premium model without access
+                                if (isPremiumModel(value) && !hasPremiumAccess) {
+                                  setError("Premium models require a paid subscription. Upgrade to access FLUX Pro models.")
+                                  return
+                                }
+                                setError(null)
+                                field.onChange(value)
+                              }} 
+                              defaultValue={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a model" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {baseModels.map((model) => {
+                                  const isModelPremium = isPremiumModel(model.id)
+                                  const hasModelAccess = !isModelPremium || hasPremiumAccess
+                                  
+                                  return (
+                                    <SelectItem 
+                                      key={model.id} 
+                                      value={model.id}
+                                      disabled={isModelPremium && !hasPremiumAccess}
+                                      className={isModelPremium && !hasPremiumAccess ? "opacity-60" : ""}
+                                    >
+                                      <div className="flex items-center gap-2 w-full">
+                                        <span className={isModelPremium && !hasPremiumAccess ? "text-gray-400" : ""}>
+                                          {model.name}
+                                        </span>
+                                        {model.free && (
+                                          <Badge variant="secondary" className="text-xs">Free</Badge>
+                                        )}
+                                        <PremiumModelBadge 
+                                          isPremium={isModelPremium}
+                                          hasAccess={hasModelAccess}
+                                          variant="badge"
+                                        />
+                                      </div>
+                                    </SelectItem>
+                                  )
+                                })}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      {/* Premium Model Upsell Card */}
+                      {!hasPremiumAccess && (
+                        <Link 
+                          href="/dashboard/billing" 
+                          className="text-xs text-gray-500 hover:text-purple-600 transition-colors mt-2"
+                          onClick={() => {
+                            console.log('User clicked upgrade from model selection')
+                          }}
+                        >
+                          Subscribe to unlock more models →
+                        </Link>
                       )}
-                    />
+                    </div>
                   )}
 
                   {/* Prompt */}
@@ -511,7 +634,24 @@ export default function GeneratePage() {
                     name="prompt"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Prompt</FormLabel>
+                        <div className="flex items-center justify-between">
+                          <FormLabel>Prompt</FormLabel>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleGenerateRandomPrompt}
+                            disabled={generatingPrompt}
+                            className="h-8 w-8 p-0"
+                            title="Generate random prompt"
+                          >
+                            {generatingPrompt ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Wand2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
                         <FormControl>
                           <Textarea
                             placeholder={
@@ -758,7 +898,7 @@ export default function GeneratePage() {
 
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                  {error}
+                  {typeof error === 'string' ? error : error}
                 </div>
               )}
             </form>
@@ -807,51 +947,6 @@ export default function GeneratePage() {
               )}
             </CardContent>
           </Card>
-
-          {/* User Models Quick Access */}
-          {!loadingModels && userModels.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  My Models
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {userModels.slice(0, 3).map((model) => (
-                    <div
-                      key={model.id}
-                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                        selectedUserModel?.id === model.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                      onClick={() => handleUserModelSelect(model.id)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{model.name}</p>
-                          {model.triggerWord && (
-                            <code className="text-xs bg-gray-100 px-1 rounded">{model.triggerWord}</code>
-                          )}
-                        </div>
-                        <Badge variant="secondary" className="text-xs ml-2">
-                          {model._count.generatedImages}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {userModels.length > 3 && (
-                    <p className="text-xs text-gray-500 text-center">
-                      +{userModels.length - 3} more models available
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
     </div>

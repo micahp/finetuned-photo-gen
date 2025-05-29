@@ -5,10 +5,12 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { registerSchema, type RegisterFormData } from '@/lib/validations'
 import { ApiResponse, UserProfile } from '@/lib/types'
+import Link from 'next/link'
 
 interface RegisterFormProps {
   onSuccess?: (user: UserProfile) => void
@@ -24,6 +26,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       email: '',
       password: '',
       name: '',
+      agreeToTerms: false,
     },
   })
 
@@ -119,6 +122,42 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
                     />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="agreeToTerms"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-sm">
+                      I agree to the{' '}
+                      <Link
+                        href="/legal/terms"
+                        className="text-blue-600 hover:text-blue-800 underline"
+                        target="_blank"
+                      >
+                        Terms of Service
+                      </Link>{' '}
+                      and{' '}
+                      <Link
+                        href="/legal/privacy"
+                        className="text-blue-600 hover:text-blue-800 underline"
+                        target="_blank"
+                      >
+                        Privacy Policy
+                      </Link>
+                    </FormLabel>
+                    <FormMessage />
+                  </div>
                 </FormItem>
               )}
             />

@@ -100,7 +100,7 @@ The next step is connecting this robust backend system to your existing UI for a
 - [x] **Model Creation UI Updates (`/app/dashboard/models/new/page.tsx`)**:
     - [x] Integrate `TrainingService` with custom parameter support.
     - [x] Display real-time training progress and debug data.
-    - [x] Visualize stage progression (ZIP → Replicate → HuggingFace → Complete).
+    - [x] Visualize stage progression (ZIP → Replicate → Complete).
     - [x] Add controls for training parameters (steps, learning rate, LoRA rank).
     - [x] Create training status component with error handling and retry options.
     - [x] Enhanced 4-step wizard with dedicated training settings page.
@@ -141,7 +141,7 @@ The next step is connecting this robust backend system to your existing UI for a
 - [x] Stripe configuration and webhooks
   - [x] Enhance `checkout.session.completed` webhook for subscriptions and one-time payments
 - [x] Pricing plans and products setup
-  - [x] 4-tier pricing structure (Free, Creator $20, Pro $40, Enterprise $99)
+  - [x] 4-tier pricing structure (Free, Creator $20, Pro $40, Ultra $99)
   - [x] Comprehensive feature definitions and credit allocations
 - [x] Subscription API endpoints
   - [x] Implement Create Subscription Checkout API endpoint (`/api/stripe/create-subscription-checkout`)

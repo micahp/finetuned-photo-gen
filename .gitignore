@@ -12,7 +12,9 @@
 
 # testing
 /coverage
-/scripts
+
+# Backup files (exclude from version control)
+/backups/
 
 # next.js
 /.next/

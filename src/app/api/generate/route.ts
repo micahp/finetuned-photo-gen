@@ -6,6 +6,7 @@ import { TogetherAIService } from '@/lib/together-ai'
 import { ReplicateService } from '@/lib/replicate-service'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
 import { CreditService } from '@/lib/credit-service'
+import { isPremiumUser, isPremiumModel } from '@/lib/subscription-utils'
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
@@ -47,7 +48,11 @@ export async function POST(request: NextRequest) {
     // Check if user has enough credits
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { credits: true }
+      select: { 
+        credits: true,
+        subscriptionPlan: true,
+        subscriptionStatus: true
+      }
     })
 
     if (!user || user.credits < 1) {
@@ -55,6 +60,21 @@ export async function POST(request: NextRequest) {
         { error: 'Insufficient credits' },
         { status: 400 }
       )
+    }
+
+    // Check premium model access
+    if (modelId && isPremiumModel(modelId)) {
+      const hasPremiumAccess = isPremiumUser(user.subscriptionPlan, user.subscriptionStatus)
+      
+      if (!hasPremiumAccess) {
+        return NextResponse.json(
+          { 
+            error: 'Premium model access required. Please upgrade your subscription to use FLUX Pro models.',
+            upgradeRequired: true
+          },
+          { status: 403 }
+        )
+      }
     }
 
     // Initialize services
@@ -96,6 +116,8 @@ export async function POST(request: NextRequest) {
 
     // Generate image
     let result
+    let actualProvider = 'together-ai' // Default provider
+    
     if (selectedUserModel && selectedUserModel.replicateModelId) {
       console.log('🎯 Generating with custom model via Replicate:', {
         modelId: selectedUserModel.id,
@@ -106,6 +128,8 @@ export async function POST(request: NextRequest) {
         steps: steps || 28
       })
 
+      actualProvider = 'replicate'
+      
       // Use Replicate for generation with trained model directly
       const replicate = new ReplicateService()
       result = await replicate.generateWithTrainedModel({
@@ -117,13 +141,23 @@ export async function POST(request: NextRequest) {
         seed
       })
     } else {
+      // Check if the base model should use Replicate
+      const shouldUseReplicate = together.getAvailableModels()
+        .find(m => m.id === (modelId || 'black-forest-labs/FLUX.1-schnell-Free'))
+        ?.provider === 'replicate'
+      
+      if (shouldUseReplicate) {
+        actualProvider = 'replicate'
+      }
+      
       console.log('🎯 Generating with base model:', {
         model: modelId || 'black-forest-labs/FLUX.1-schnell-Free',
+        provider: actualProvider,
         prompt: fullPrompt,
         steps
       })
 
-      // Use base model generation
+      // Use base model generation (TogetherAI service will route to Replicate if needed)
       result = await together.generateImage({
         prompt: fullPrompt,
         model: modelId,
@@ -175,7 +209,7 @@ export async function POST(request: NextRequest) {
         {
           prompt: fullPrompt,
           model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
-          provider: selectedUserModel ? 'replicate' : 'together-ai',
+          provider: actualProvider,
           aspectRatio,
           steps: selectedUserModel ? (steps || 28) : steps,
           seed,
@@ -207,7 +241,7 @@ export async function POST(request: NextRequest) {
           temporaryImageUrl,
           {
             originalPrompt: fullPrompt,
-            originalProvider: selectedUserModel ? 'replicate' : 'together-ai',
+            originalProvider: actualProvider,
             userId: session.user.id,
             userModelId: selectedUserModel?.id,
             width: imageWidth,
@@ -261,7 +295,7 @@ export async function POST(request: NextRequest) {
           
           generationParams: {
             model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
-            provider: selectedUserModel ? 'replicate' : 'together-ai',
+            provider: actualProvider,
             aspectRatio,
             steps: selectedUserModel ? (steps || 28) : steps,
             seed,
