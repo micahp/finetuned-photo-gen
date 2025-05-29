@@ -1,6 +1,12 @@
 import { NextAuthConfig } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
-import { validateCredentials } from './auth'
+
+// Dynamic import to avoid Edge Runtime issues with bcryptjs
+async function validateCredentials(email: string, password: string) {
+  // Use dynamic import to load Node.js-specific auth functions only when needed
+  const { validateCredentials: validateCreds } = await import('./auth')
+  return validateCreds(email, password)
+}
 
 export const authConfig: NextAuthConfig = {
   trustHost: true,
@@ -72,7 +78,7 @@ export const authConfig: NextAuthConfig = {
         }
 
         try {
-          // Use direct validation instead of HTTP call to avoid CSRF issues
+          // Use dynamic import to avoid Edge Runtime issues
           const user = await validateCredentials(
             credentials.email as string, 
             credentials.password as string

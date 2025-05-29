@@ -47,6 +47,18 @@ CMD ["npm", "run", "dev"]
 # Builder stage - optimized for build performance
 FROM build-deps AS builder
 
+# Build environment variables - needed for static analysis during build
+ARG STRIPE_API_TOKEN
+ARG STRIPE_PUBLISHABLE_TOKEN
+ARG NEXTAUTH_SECRET
+ARG DATABASE_URL
+
+# Set environment variables for build
+ENV STRIPE_API_TOKEN=${STRIPE_API_TOKEN}
+ENV STRIPE_PUBLISHABLE_TOKEN=${STRIPE_PUBLISHABLE_TOKEN}
+ENV NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+ENV DATABASE_URL=${DATABASE_URL}
+
 # Copy source code
 COPY . .
 
