@@ -1,6 +1,9 @@
 # Dependencies
 node_modules
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
 # Next.js
 .next
@@ -8,6 +11,7 @@ out
 
 # Production build
 dist
+build
 
 # Environment variables
 .env
@@ -15,6 +19,7 @@ dist
 .env.development.local
 .env.test.local
 .env.production.local
+.env.example
 
 # Testing
 coverage
@@ -23,30 +28,88 @@ jest.config.js
 jest.setup.js
 src/__tests__
 tests
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
 
 # Development files
 .git
 .gitignore
 README.md
 *.md
+CHANGELOG.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
 
-# IDE
+# IDE and editor files
 .vscode
 .idea
+*.swp
+*.swo
+*~
+.vim
+.emacs
+.sublime-*
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
 # Logs
 logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+pids
+*.pid
+*.seed
+*.pid.lock
 
 # Temporary files
 temp
 .tmp
+.temp
 
-# Docker
-Dockerfile
+# Docker and deployment
+Dockerfile*
 docker-compose*.yml
-.dockerignore 
+.dockerignore
+k8s/
+kubernetes/
+.docker/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+.jenkins/
+
+# Documentation and examples
+docs/
+examples/
+.storybook/
+
+# Cache directories
+.cache
+.parcel-cache
+.eslintcache
+.stylelintcache
+
+# Development scripts
+scripts/dev-*
+scripts/test-*
+
+# Backup files
+*.backup
+*.bak
+*.orig
+
+# Security sensitive files
+*.pem
+*.key
+*.crt
+.secrets/ 
