@@ -128,5 +128,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Use dumb-init for proper signal handling and graceful shutdown
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application with direct Next.js command
-CMD ["./node_modules/.bin/next", "start"] 
+# Start the application with standalone server (required for output: standalone)
+CMD ["node", ".next/standalone/server.js"] 
