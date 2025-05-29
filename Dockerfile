@@ -72,8 +72,10 @@ ENV NODE_ENV=production
 # Build the application
 RUN npm run build
 
-# Verify the build completed successfully
+# Verify the build completed successfully and standalone assets exist
 RUN ls -la .next && test -f .next/BUILD_ID
+RUN ls -la .next/standalone && test -f .next/standalone/server.js
+RUN ls -la .next/static
 
 # Production runner stage - security and performance optimized
 FROM base AS runner
@@ -108,8 +110,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 # Copy built application with proper ownership
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# Ensure we copy the complete Next.js build output
-COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+# Copy standalone server files (the main server)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+
+# Copy static assets to the correct location for standalone server
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Also copy next.config.js if it affects runtime
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./next.config.js
@@ -128,5 +133,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Use dumb-init for proper signal handling and graceful shutdown
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application with standalone server (required for output: standalone)
-CMD ["node", ".next/standalone/server.js"] 
+# Start the application with standalone server (server.js is now in root)
+CMD ["node", "server.js"] 
