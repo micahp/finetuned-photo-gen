@@ -3,10 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { PRICING_PLANS } from '@/lib/stripe/pricing'
+import { Navbar } from '@/components/navigation/navbar'
+import { Footer } from '@/components/navigation/footer'
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100">
+      <Navbar />
+      
       {/* Hero Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center">
@@ -142,6 +146,8 @@ export default function HomePage() {
           </Button>
         </div>
       </div>
+
+      <Footer />
     </div>
   )
 }

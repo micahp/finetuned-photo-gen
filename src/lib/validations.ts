@@ -15,6 +15,11 @@ export const registerSchema = z.object({
     .min(1, 'Name is required')
     .max(100, 'Name must be less than 100 characters')
     .optional(),
+  agreeToTerms: z
+    .boolean()
+    .refine(val => val === true, {
+      message: 'You must agree to the Terms of Service and Privacy Policy'
+    }),
 })
 
 export const loginSchema = z.object({
