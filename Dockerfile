@@ -60,6 +60,9 @@ ENV NODE_ENV=production
 # Build the application
 RUN npm run build
 
+# Verify the build completed successfully
+RUN ls -la .next && test -f .next/BUILD_ID
+
 # Production runner stage - security and performance optimized
 FROM base AS runner
 
@@ -89,8 +92,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 # Copy built application with proper ownership
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# Copy entire Next.js build output (more reliable than standalone)
+# Ensure we copy the complete Next.js build output
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+
+# Also copy next.config.js if it affects runtime
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./next.config.js
 
 # Copy Prisma files for database operations
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
