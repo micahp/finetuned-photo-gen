@@ -83,12 +83,14 @@ USER nextjs
 # Copy production dependencies from the production deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
+# Copy package.json for npm scripts
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+
 # Copy built application with proper ownership
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# Copy Next.js build output (standalone mode)
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy entire Next.js build output (more reliable than standalone)
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 
 # Copy Prisma files for database operations
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
@@ -104,5 +106,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Use dumb-init for proper signal handling and graceful shutdown
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application
-CMD ["node", "server.js"] 
+# Start the application with standard Next.js start
+CMD ["npm", "start"] 
