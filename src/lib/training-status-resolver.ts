@@ -166,22 +166,22 @@ export class TrainingStatusResolver {
     // Case 1: Model is fully completed with HuggingFace repo
     if (hasHuggingFaceRepo && isModelReady) {
       resolvedStatus = 'completed'
-      stage = 'Training completed successfully and model uploaded to HuggingFace'
+      stage = 'Training completed successfully'
       progress = 100
     }
     // Case 2: Replicate succeeded but no HuggingFace upload yet
     else if (replicate.status === 'succeeded' && !hasHuggingFaceRepo) {
-      resolvedStatus = 'uploading'
-      stage = 'Training completed successfully, ready for upload to HuggingFace'
-      progress = 90
-      needsUpload = true
-      canRetryUpload = true
+      resolvedStatus = 'completed'
+      stage = 'Training completed successfully'
+      progress = 100
+      needsUpload = false  // No longer need upload
+      canRetryUpload = false  // No longer support retry
     }
     // Case 3: Replicate succeeded and upload in progress (model exists but not ready)
     else if (replicate.status === 'succeeded' && hasHuggingFaceRepo && !isModelReady) {
-      resolvedStatus = 'uploading'
-      stage = 'Training completed, uploading to HuggingFace...'
-      progress = 95
+      resolvedStatus = 'completed'
+      stage = 'Training completed successfully'
+      progress = 100
     }
     // Case 4: Replicate failed
     else if (replicate.status === 'failed') {
@@ -266,7 +266,7 @@ export class TrainingStatusResolver {
     const error = replicateError || jobError || ''
     
     if (error.toLowerCase().includes('zip') || error.toLowerCase().includes('image')) {
-      return 'Failed during image preparation'
+      return 'Failed during image processing'
     }
     if (error.toLowerCase().includes('initializing') || error.toLowerCase().includes('setup')) {
       return 'Failed during initialization'
@@ -275,7 +275,7 @@ export class TrainingStatusResolver {
       return 'Failed during LoRA training'
     }
     if (error.toLowerCase().includes('upload') || error.toLowerCase().includes('huggingface')) {
-      return 'Failed during HuggingFace upload'
+      return 'Training completed but failed during upload processing'
     }
     
     return 'Training failed'
@@ -291,11 +291,11 @@ export class TrainingStatusResolver {
     const hasHuggingFaceRepo = !!userModel.huggingfaceRepo
     const isModelReady = userModel.status === 'ready'
     
-    // If model is ready with HF repo, override job queue status
-    if (isModelReady && hasHuggingFaceRepo) {
+    // If model is ready, override job queue status
+    if (isModelReady) {
       return {
         status: 'completed' as const,
-        stage: 'Training completed successfully and model uploaded to HuggingFace',
+        stage: 'Training completed successfully',
         progress: 100,
         error: undefined,
         needsUpload: false,
@@ -303,15 +303,15 @@ export class TrainingStatusResolver {
       }
     }
     
-    // If job queue shows succeeded but no HF repo
-    if (jobQueue.status === 'succeeded' && !hasHuggingFaceRepo) {
+    // If job queue shows succeeded
+    if (jobQueue.status === 'succeeded') {
       return {
-        status: 'uploading' as const,
-        stage: 'Training completed successfully, ready for upload to HuggingFace',
-        progress: 90,
+        status: 'completed' as const,
+        stage: 'Training completed successfully',
+        progress: 100,
         error: undefined,
-        needsUpload: true,
-        canRetryUpload: true
+        needsUpload: false,
+        canRetryUpload: false
       }
     }
     

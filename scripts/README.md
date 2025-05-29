@@ -22,7 +22,6 @@ node scripts/maintenance/comprehensive_db_cleanup.js
 - Compares database status with actual Replicate status
 - Fixes job queue entries that don't match reality
 - Updates user model statuses based on actual state
-- Verifies HuggingFace model availability
 
 ### `fix_db_inconsistencies.js`
 **Purpose**: Earlier version of database fixes (kept for reference).
