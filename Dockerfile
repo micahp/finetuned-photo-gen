@@ -16,7 +16,7 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Dependencies stage - optimized for layer caching
+# Dependencies stage - production only
 FROM base AS deps
 
 # Copy package files for dependency installation
@@ -24,6 +24,16 @@ COPY package.json package-lock.json* ./
 
 # Install production dependencies with optimizations
 RUN npm ci --only=production --no-audit --no-fund --legacy-peer-deps && \
+    npm cache clean --force
+
+# Build dependencies stage - includes devDependencies needed for build
+FROM base AS build-deps
+
+# Copy package files for dependency installation
+COPY package.json package-lock.json* ./
+
+# Install ALL dependencies (including devDependencies for build process)
+RUN npm ci --no-audit --no-fund --legacy-peer-deps && \
     npm cache clean --force
 
 # Development stage (unchanged for compatibility)
@@ -35,10 +45,7 @@ RUN npx prisma generate
 CMD ["npm", "run", "dev"]
 
 # Builder stage - optimized for build performance
-FROM base AS builder
-
-# Copy production dependencies
-COPY --from=deps /app/node_modules ./node_modules
+FROM build-deps AS builder
 
 # Copy source code
 COPY . .
@@ -72,6 +79,9 @@ RUN mkdir -p /app/.next && \
     mkdir -p /app/tmp && \
     chown nextjs:nodejs /app/tmp
 USER nextjs
+
+# Copy production dependencies from the production deps stage
+COPY --from=deps /app/node_modules ./node_modules
 
 # Copy built application with proper ownership
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
