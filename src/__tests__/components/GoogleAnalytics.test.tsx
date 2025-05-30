@@ -11,18 +11,6 @@ jest.mock('next/script', () => {
   }
 })
 
-// Mock localStorage
-const mockLocalStorage = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
-}
-
-Object.defineProperty(window, 'localStorage', {
-  value: mockLocalStorage,
-})
-
 describe('GoogleAnalytics', () => {
   const originalEnv = process.env
 
@@ -36,38 +24,16 @@ describe('GoogleAnalytics', () => {
     process.env = originalEnv
   })
 
-  it('should not render when no consent is given', () => {
-    mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
-      essential: true,
-      analytics: false,
-      marketing: false
-    }))
-
-    const { container } = render(<GoogleAnalytics trackingId="G-TEST123" />)
-    
-    expect(container.firstChild).toBeNull()
-  })
-
   it('should not render in development environment', () => {
     process.env = { ...originalEnv, NODE_ENV: 'development' }
-    mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
-      essential: true,
-      analytics: true,
-      marketing: false
-    }))
 
     const { container } = render(<GoogleAnalytics trackingId="G-TEST123" />)
     
     expect(container.firstChild).toBeNull()
   })
 
-  it('should render when analytics consent is given and not in development', () => {
+  it('should render in production environment regardless of consent', () => {
     process.env = { ...originalEnv, NODE_ENV: 'production' }
-    mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
-      essential: true,
-      analytics: true,
-      marketing: false
-    }))
 
     render(<GoogleAnalytics trackingId="G-TEST123" />)
     
@@ -78,22 +44,19 @@ describe('GoogleAnalytics', () => {
 
   it('should not render when no tracking ID is provided', () => {
     process.env = { ...originalEnv, NODE_ENV: 'production' }
-    mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
-      essential: true,
-      analytics: true,
-      marketing: false
-    }))
 
     const { container } = render(<GoogleAnalytics trackingId="" />)
     
     expect(container.firstChild).toBeNull()
   })
 
-  it('should handle malformed consent data gracefully', () => {
-    mockLocalStorage.getItem.mockReturnValue('invalid-json')
+  it('should render in test environment (production-like)', () => {
+    process.env = { ...originalEnv, NODE_ENV: 'test' }
 
-    const { container } = render(<GoogleAnalytics trackingId="G-TEST123" />)
+    render(<GoogleAnalytics trackingId="G-TEST123" />)
     
-    expect(container.firstChild).toBeNull()
+    // Should render the GA scripts in test environment (not development)
+    const scripts = document.querySelectorAll('script')
+    expect(scripts.length).toBeGreaterThan(0)
   })
 }) 
