@@ -6,6 +6,7 @@ import { auth } from "@/lib/next-auth";
 import AutoReloadErrorBoundary from "@/components/AutoReloadErrorBoundary";
 import { Toaster } from "sonner";
 import { CookieConsent } from "@/components/legal/CookieConsent";
+import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import "@/utils/errorMonitor"; // Auto-setup error monitoring
 
 const geistSans = Geist({
@@ -42,6 +43,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await auth()
+  const gaTrackingId = process.env.NEXT_PUBLIC_GA_TRACKING_ID
 
   return (
     <html lang="en">
@@ -53,6 +55,7 @@ export default async function RootLayout({
             {children}
             <Toaster position="top-right" />
             <CookieConsent />
+            {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} />}
           </AuthSessionProvider>
         </AutoReloadErrorBoundary>
       </body>

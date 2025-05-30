@@ -15,6 +15,7 @@ services:
         STRIPE_PUBLISHABLE_TOKEN: ${STRIPE_PUBLISHABLE_TOKEN}
         NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
         DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finetuned_photo_gen}
+        NEXT_PUBLIC_GA_TRACKING_ID: ${NEXT_PUBLIC_GA_TRACKING_ID:-}
     env_file:
       - .env
     environment:
@@ -39,6 +40,7 @@ services:
         STRIPE_PUBLISHABLE_TOKEN: ${STRIPE_PUBLISHABLE_TOKEN}
         NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
         DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finetuned_photo_gen}
+        NEXT_PUBLIC_GA_TRACKING_ID: ${NEXT_PUBLIC_GA_TRACKING_ID:-}
     env_file:
       - .env
     ports:
@@ -51,6 +53,7 @@ services:
       - DATABASE_URL=postgresql://postgres:password@db:5432/finetuned_photo_gen
       - NEXTAUTH_URL=https://photogen.innovativehype.xyz
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXT_PUBLIC_GA_TRACKING_ID=${NEXT_PUBLIC_GA_TRACKING_ID:-}
       # Add other production environment variables as needed
       - NEXT_TELEMETRY_DISABLED=1
     depends_on:

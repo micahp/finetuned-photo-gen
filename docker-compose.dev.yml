@@ -16,6 +16,7 @@ services:
       - DATABASE_URL=postgresql://postgres:password@db:5432/finetuned_photo_gen
       - NEXTAUTH_URL=http://localhost:3000
       - NEXTAUTH_SECRET=dev-secret-key
+      - NEXT_PUBLIC_GA_TRACKING_ID=${NEXT_PUBLIC_GA_TRACKING_ID:-}
     depends_on:
       db:
         condition: service_healthy
