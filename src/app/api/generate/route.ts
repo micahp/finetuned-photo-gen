@@ -263,7 +263,7 @@ export async function POST(request: NextRequest) {
 
           if (uploadResult.success && uploadResult.imageId) {
             cloudflareImageId = uploadResult.imageId
-            finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId) // Uses default 'public' variant
+            finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId!) // Uses default 'public' variant
             
             // Try to get file size from Cloudflare response
             if (uploadResult.originalResponse?.result?.metadata?.size) {
