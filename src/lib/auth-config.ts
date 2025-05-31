@@ -41,7 +41,7 @@ export const authConfig: NextAuthConfig = {
       if (new URL(url).origin === baseUrl) return url
       return baseUrl
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.isAdmin = user.isAdmin
         token.subscriptionStatus = user.subscriptionStatus
@@ -50,6 +50,34 @@ export const authConfig: NextAuthConfig = {
         token.credits = user.credits
         token.createdAt = user.createdAt
       }
+      
+      // If session is being updated, refresh user data from database
+      if (trigger === 'update' && token.sub) {
+        try {
+          const { prisma } = await import('@/lib/db')
+          const refreshedUser = await prisma.user.findUnique({
+            where: { id: token.sub },
+            select: {
+              credits: true,
+              subscriptionStatus: true,
+              subscriptionPlan: true,
+              stripeCustomerId: true,
+              isAdmin: true
+            }
+          })
+          
+          if (refreshedUser) {
+            token.credits = refreshedUser.credits
+            token.subscriptionStatus = refreshedUser.subscriptionStatus
+            token.subscriptionPlan = refreshedUser.subscriptionPlan
+            token.stripeCustomerId = refreshedUser.stripeCustomerId
+            token.isAdmin = refreshedUser.isAdmin
+          }
+        } catch (error) {
+          console.error('Failed to refresh user data in JWT callback:', error)
+        }
+      }
+      
       return token
     },
     async session({ session, token }) {

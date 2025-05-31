@@ -136,9 +136,8 @@ export class TogetherAIService {
       if (typeof window === 'undefined' && process.env.REPLICATE_API_TOKEN) {
         this.replicateService = new ReplicateService()
         console.log('✅ Replicate service initialized for Pro models')
-      } else {
-        console.log('ℹ️ Replicate service not available (client-side or missing token)')
       }
+      // Client-side initialization without Replicate is expected and secure
     } catch (error) {
       console.warn('Replicate service not available for Pro models:', error)
     }
