@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { TogetherAIService } from '@/lib/together-ai'
 import { ReplicateService } from '@/lib/replicate-service'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
+import { ImageProcessingService } from '@/lib/image-processing-service'
 import { CreditService } from '@/lib/credit-service'
 import { isPremiumUser, isPremiumModel } from '@/lib/subscription-utils'
 
@@ -227,8 +228,8 @@ export async function POST(request: NextRequest) {
       // Extract image metadata from generation result
       const imageData = result.images[0]
       const temporaryImageUrl = imageData.url
-      const imageWidth = imageData.width
-      const imageHeight = imageData.height
+      let imageWidth = imageData.width
+      let imageHeight = imageData.height
 
       // *** ENHANCED METADATA COLLECTION START ***
       let finalImageUrl = temporaryImageUrl // Fallback to temporary URL
@@ -247,17 +248,43 @@ export async function POST(request: NextRequest) {
           uploadAttempts++
           console.log(`🔄 Uploading to Cloudflare (attempt ${uploadAttempts}/${maxRetries})...`)
           
-          uploadResult = await cfImagesService.uploadImageFromUrl(
+          // *** NEW: Process image before upload to ensure it's under size limit ***
+          console.log('🖼️ Processing image to ensure compatibility with Cloudflare limits...')
+          
+          const processingResult = await ImageProcessingService.processImageFromUrl(
             temporaryImageUrl,
+            ImageProcessingService.getOptimalOptions(
+              0, // We don't know original size yet, will be determined in processing
+              imageWidth,
+              imageHeight
+            ),
+            actualProvider // Pass provider for optimization
+          )
+
+          if (!processingResult.success) {
+            console.error('❌ Image processing failed:', processingResult.error)
+            uploadResult = { success: false, error: `Image processing failed: ${processingResult.error}` }
+            break // Don't retry if processing failed
+          }
+
+          // Upload processed image buffer instead of URL
+          uploadResult = await cfImagesService.uploadImageFromBuffer(
+            processingResult.buffer!,
+            `generated-${Date.now()}.jpg`,
             {
               originalPrompt: fullPrompt,
               originalProvider: actualProvider,
               userId: session.user.id,
               userModelId: selectedUserModel?.id,
-              width: imageWidth,
-              height: imageHeight,
+              width: processingResult.width,
+              height: processingResult.height,
               generationDuration,
-              uploadAttempt: uploadAttempts
+              uploadAttempt: uploadAttempts,
+              originalSize: processingResult.originalSize,
+              compressedSize: processingResult.compressedSize,
+              compressionRatio: processingResult.originalSize 
+                ? ((processingResult.originalSize - processingResult.compressedSize!) / processingResult.originalSize * 100).toFixed(1) + '%'
+                : undefined
             }
           )
 
@@ -265,19 +292,26 @@ export async function POST(request: NextRequest) {
             cloudflareImageId = uploadResult.imageId
             finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId!) // Uses default 'public' variant
             
-            // Try to get file size from Cloudflare response
-            if (uploadResult.originalResponse?.result?.metadata?.size) {
-              const sizeValue = uploadResult.originalResponse.result.metadata.size
-              fileSize = typeof sizeValue === 'string' ? parseInt(sizeValue) : typeof sizeValue === 'number' ? sizeValue : undefined
+            // Use processed image metadata
+            fileSize = processingResult.compressedSize
+            // Update dimensions if they changed during processing
+            if (processingResult.width && processingResult.height) {
+              imageWidth = processingResult.width
+              imageHeight = processingResult.height
             }
             
-            console.log('✅ Image uploaded to Cloudflare:', { 
+            console.log('✅ Processed image uploaded to Cloudflare:', { 
               cloudflareImageId, 
               finalImageUrl, 
               fileSize,
               width: imageWidth,
               height: imageHeight,
-              attempt: uploadAttempts
+              attempt: uploadAttempts,
+              originalSize: processingResult.originalSize ? (processingResult.originalSize / 1024 / 1024).toFixed(2) + 'MB' : 'unknown',
+              compressedSize: (processingResult.compressedSize! / 1024 / 1024).toFixed(2) + 'MB',
+              compressionRatio: processingResult.originalSize 
+                ? ((processingResult.originalSize - processingResult.compressedSize!) / processingResult.originalSize * 100).toFixed(1) + '%'
+                : 'N/A'
             })
             break // Success - exit retry loop
           } else {

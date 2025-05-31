@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { TogetherAIService } from '@/lib/together-ai'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
+import { ImageProcessingService } from '@/lib/image-processing-service'
+import { CreditService } from '@/lib/credit-service'
 
 const batchGenerateSchema = z.object({
   prompts: z.array(z.string().min(1, 'Prompt cannot be empty').max(500, 'Prompt too long'))
@@ -100,8 +102,8 @@ export async function POST(request: NextRequest) {
           // Extract image metadata from generation result
           const imageData = result.image
           const temporaryImageUrl = imageData.url
-          const imageWidth = imageData.width
-          const imageHeight = imageData.height
+          let imageWidth = imageData.width
+          let imageHeight = imageData.height
 
           // *** ENHANCED METADATA COLLECTION START ***
           let finalImageUrl = temporaryImageUrl // Fallback to temporary URL
@@ -110,38 +112,70 @@ export async function POST(request: NextRequest) {
 
           try {
             const cfImagesService = new CloudflareImagesService()
-            const uploadResult = await cfImagesService.uploadImageFromUrl(
+            
+            // *** NEW: Process image before upload to ensure it's under size limit ***
+            console.log('🖼️ Processing batch image to ensure compatibility with Cloudflare limits...')
+            
+            const processingResult = await ImageProcessingService.processImageFromUrl(
               temporaryImageUrl,
-              {
-                originalPrompt: result.prompt,
-                originalProvider: 'together-ai',
-                userId: session.user.id,
-                batchId: batchResult.batchId,
-                width: imageWidth,
-                height: imageHeight,
-                generationDuration
-              }
+              ImageProcessingService.getOptimalOptions(
+                0, // We don't know original size yet, will be determined in processing
+                imageWidth,
+                imageHeight
+              ),
+              'together-ai' // Pass provider for optimization (batch is always together-ai)
             )
 
-            if (uploadResult.success && uploadResult.imageId) {
-              cloudflareImageId = uploadResult.imageId
-              finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId)
-              
-              // Try to get file size from Cloudflare response
-              if (uploadResult.originalResponse?.result?.metadata?.size) {
-                const sizeValue = uploadResult.originalResponse.result.metadata.size
-                fileSize = typeof sizeValue === 'string' ? parseInt(sizeValue) : typeof sizeValue === 'number' ? sizeValue : undefined
-              }
-              
-              console.log('✅ Batch image uploaded to Cloudflare:', { 
-                cloudflareImageId, 
-                finalImageUrl,
-                fileSize,
-                width: imageWidth,
-                height: imageHeight
-              })
+            if (!processingResult.success) {
+              console.warn('⚠️ Batch image processing failed, using temporary URL. Error:', processingResult.error)
             } else {
-              console.warn('⚠️ Cloudflare upload failed for batch image, using temporary URL. Error:', uploadResult.error)
+              // Upload processed image buffer instead of URL
+              const uploadResult = await cfImagesService.uploadImageFromBuffer(
+                processingResult.buffer!,
+                `batch-${batchResult.batchId}-${Date.now()}.jpg`,
+                {
+                  originalPrompt: result.prompt,
+                  originalProvider: 'together-ai',
+                  userId: session.user.id,
+                  batchId: batchResult.batchId,
+                  width: processingResult.width,
+                  height: processingResult.height,
+                  generationDuration,
+                  originalSize: processingResult.originalSize,
+                  compressedSize: processingResult.compressedSize,
+                  compressionRatio: processingResult.originalSize 
+                    ? ((processingResult.originalSize - processingResult.compressedSize!) / processingResult.originalSize * 100).toFixed(1) + '%'
+                    : undefined
+                }
+              )
+
+              if (uploadResult.success && uploadResult.imageId) {
+                cloudflareImageId = uploadResult.imageId
+                finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId)
+                
+                // Use processed image metadata
+                fileSize = processingResult.compressedSize
+                // Update dimensions if they changed during processing
+                if (processingResult.width && processingResult.height) {
+                  imageWidth = processingResult.width
+                  imageHeight = processingResult.height
+                }
+                
+                console.log('✅ Processed batch image uploaded to Cloudflare:', { 
+                  cloudflareImageId, 
+                  finalImageUrl,
+                  fileSize,
+                  width: imageWidth,
+                  height: imageHeight,
+                  originalSize: processingResult.originalSize ? (processingResult.originalSize / 1024 / 1024).toFixed(2) + 'MB' : 'unknown',
+                  compressedSize: (processingResult.compressedSize! / 1024 / 1024).toFixed(2) + 'MB',
+                  compressionRatio: processingResult.originalSize 
+                    ? ((processingResult.originalSize - processingResult.compressedSize!) / processingResult.originalSize * 100).toFixed(1) + '%'
+                    : 'N/A'
+                })
+              } else {
+                console.warn('⚠️ Cloudflare upload failed for processed batch image, using temporary URL. Error:', uploadResult.error)
+              }
             }
           } catch (cfError) {
             console.error('❌ Exception during Cloudflare upload for batch image:', cfError)
