@@ -237,43 +237,89 @@ export async function POST(request: NextRequest) {
 
       try {
         const cfImagesService = new CloudflareImagesService()
-        const uploadResult = await cfImagesService.uploadImageFromUrl(
-          temporaryImageUrl,
-          {
-            originalPrompt: fullPrompt,
-            originalProvider: actualProvider,
-            userId: session.user.id,
-            userModelId: selectedUserModel?.id,
-            width: imageWidth,
-            height: imageHeight,
-            generationDuration
-          }
-        )
+        
+        // Retry upload up to 3 times for transient failures
+        let uploadResult: any = null
+        let uploadAttempts = 0
+        const maxRetries = 3
+        
+        while (uploadAttempts < maxRetries && (!uploadResult || !uploadResult.success)) {
+          uploadAttempts++
+          console.log(`🔄 Uploading to Cloudflare (attempt ${uploadAttempts}/${maxRetries})...`)
+          
+          uploadResult = await cfImagesService.uploadImageFromUrl(
+            temporaryImageUrl,
+            {
+              originalPrompt: fullPrompt,
+              originalProvider: actualProvider,
+              userId: session.user.id,
+              userModelId: selectedUserModel?.id,
+              width: imageWidth,
+              height: imageHeight,
+              generationDuration,
+              uploadAttempt: uploadAttempts
+            }
+          )
 
-        if (uploadResult.success && uploadResult.imageId) {
-          cloudflareImageId = uploadResult.imageId
-          finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId) // Uses default 'public' variant
-          
-          // Try to get file size from Cloudflare response
-          if (uploadResult.originalResponse?.result?.metadata?.size) {
-            const sizeValue = uploadResult.originalResponse.result.metadata.size
-            fileSize = typeof sizeValue === 'string' ? parseInt(sizeValue) : typeof sizeValue === 'number' ? sizeValue : undefined
+          if (uploadResult.success && uploadResult.imageId) {
+            cloudflareImageId = uploadResult.imageId
+            finalImageUrl = cfImagesService.getPublicUrl(cloudflareImageId) // Uses default 'public' variant
+            
+            // Try to get file size from Cloudflare response
+            if (uploadResult.originalResponse?.result?.metadata?.size) {
+              const sizeValue = uploadResult.originalResponse.result.metadata.size
+              fileSize = typeof sizeValue === 'string' ? parseInt(sizeValue) : typeof sizeValue === 'number' ? sizeValue : undefined
+            }
+            
+            console.log('✅ Image uploaded to Cloudflare:', { 
+              cloudflareImageId, 
+              finalImageUrl, 
+              fileSize,
+              width: imageWidth,
+              height: imageHeight,
+              attempt: uploadAttempts
+            })
+            break // Success - exit retry loop
+          } else {
+            console.warn(`⚠️ Cloudflare upload attempt ${uploadAttempts} failed:`, uploadResult.error)
+            
+            // Wait before retry (exponential backoff)
+            if (uploadAttempts < maxRetries) {
+              const delay = Math.pow(2, uploadAttempts) * 1000 // 2s, 4s, 8s
+              console.log(`   ⏳ Waiting ${delay}ms before retry...`)
+              await new Promise(resolve => setTimeout(resolve, delay))
+            }
           }
-          
-          console.log('✅ Image uploaded to Cloudflare:', { 
-            cloudflareImageId, 
-            finalImageUrl, 
-            fileSize,
-            width: imageWidth,
-            height: imageHeight
-          })
-        } else {
-          console.warn('⚠️ Cloudflare upload failed, using temporary URL. Error:', uploadResult.error)
-          // Optionally, you could decide to not save to DB or return an error if CF upload is critical
         }
+        
+        // Final check - if all retries failed
+        if (!uploadResult?.success) {
+          console.error('❌ All Cloudflare upload attempts failed:', {
+            totalAttempts: uploadAttempts,
+            lastError: uploadResult?.error,
+            temporaryImageUrl,
+            userId: session.user.id,
+            prompt: fullPrompt.substring(0, 100)
+          })
+          
+          // ⚠️ CRITICAL: Log this failure for monitoring
+          // In production, you might want to send this to an error tracking service
+          console.error('🚨 PERMANENT STORAGE FAILURE - Image will use temporary URL:', {
+            imageId: `temp_${Date.now()}`,
+            userId: session.user.id,
+            temporaryUrl: temporaryImageUrl
+          })
+        }
+        
       } catch (cfError) {
         console.error('❌ Exception during Cloudflare upload:', cfError)
-        // Fallback to temporary URL, error already logged
+        // Log detailed error for debugging
+        console.error('🔍 Cloudflare upload exception details:', {
+          error: cfError instanceof Error ? cfError.message : 'Unknown error',
+          stack: cfError instanceof Error ? cfError.stack : undefined,
+          temporaryImageUrl,
+          userId: session.user.id
+        })
       }
       // *** ENHANCED METADATA COLLECTION END ***
 
