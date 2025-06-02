@@ -1,23 +1,29 @@
+# Development Docker Compose configuration
+# Use: docker compose -f docker-compose.dev.yml up
+# This provides hot reloading and development optimizations
+
+version: '3.8'
+
 services:
   app:
     build:
       context: .
-      target: base
+      target: dev  # Uses the dev stage from Dockerfile
     ports:
-      - "3000:3000"
+      - "3000:3000"  # Dev port
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:password@db:5432/finetuned_photo_gen
       - NEXTAUTH_URL=http://localhost:3000
       - NEXTAUTH_SECRET=dev-secret-key
+      - NEXT_PUBLIC_GA_TRACKING_ID=${NEXT_PUBLIC_GA_TRACKING_ID:-}
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/.next
-    command: npm run dev
+      - .:/app                    # Mount source code for hot reload
+      - /app/node_modules         # Exclude node_modules
+      - /app/.next               # Exclude .next build cache
     networks:
       - app-network
 
@@ -32,7 +38,7 @@ services:
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d finetuned_photo_gen"]
       interval: 10s
       timeout: 5s
       retries: 5

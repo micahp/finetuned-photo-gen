@@ -112,6 +112,90 @@ export class CloudflareImagesService {
   }
 
   /**
+   * Uploads an image to Cloudflare Images from a Buffer.
+   * @param imageBuffer The image data as a Buffer.
+   * @param filename The filename for the uploaded image.
+   * @param metadata Optional metadata to associate with the image.
+   * @param requireSignedURLs Whether the image should require signed URLs for access. Defaults to false.
+   * @returns {Promise<UploadResult>} An object containing the success status, Cloudflare image ID, and any errors.
+   */
+  async uploadImageFromBuffer(
+    imageBuffer: Buffer,
+    filename: string,
+    metadata?: Record<string, any>,
+    requireSignedURLs = false
+  ): Promise<UploadResult> {
+    if (!this.accountId || !this.apiToken) {
+      return { success: false, error: 'Cloudflare service not configured (missing accountId or apiToken).' };
+    }
+
+    const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/images/v1`;
+
+    const formData = new FormData();
+    
+    // Create a Blob from the buffer and append as file
+    const blob = new Blob([imageBuffer], { type: 'image/jpeg' });
+    formData.append('file', blob, filename);
+    formData.append('requireSignedURLs', String(requireSignedURLs));
+    
+    if (metadata) {
+      formData.append('metadata', JSON.stringify(metadata));
+    }
+
+    try {
+      console.log('🔄 Uploading processed image buffer to Cloudflare:', {
+        filename,
+        size: (imageBuffer.length / 1024 / 1024).toFixed(2) + 'MB',
+        hasMetadata: !!metadata
+      })
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiToken}`,
+          // 'Content-Type' will be set automatically by fetch for FormData
+        },
+        body: formData,
+      });
+
+      const responseData: CloudflareImageUploadResponse = await response.json();
+      const validation = cloudflareImageUploadResponseSchema.safeParse(responseData);
+
+      if (!validation.success) {
+        console.error('Cloudflare API response validation error:', validation.error.issues);
+        return { 
+          success: false, 
+          error: 'Invalid response structure from Cloudflare API.',
+          originalResponse: responseData // include for debugging
+        };
+      }
+      
+      const validatedData = validation.data;
+
+      if (validatedData.success && validatedData.result?.id) {
+        console.log('✅ Buffer upload to Cloudflare successful:', {
+          imageId: validatedData.result.id,
+          filename
+        })
+        
+        return {
+          success: true,
+          imageId: validatedData.result.id,
+          variants: validatedData.result.variants,
+          originalResponse: validatedData
+        };
+      } else {
+        const errorMessage = validatedData.errors?.[0]?.message || 'Unknown error during Cloudflare upload.';
+        console.error('Cloudflare buffer upload failed:', validatedData.errors);
+        return { success: false, error: errorMessage, originalResponse: validatedData };
+      }
+    } catch (error: any) {
+      console.error('Error uploading buffer to Cloudflare:', error);
+      return { success: false, error: error.message || 'Network error or unexpected issue during Cloudflare upload.' };
+    }
+  }
+
+  /**
    * Constructs the public URL for an image stored in Cloudflare Images.
    * @param imageId The ID of the image in Cloudflare.
    * @param variantName The name of the variant to use (e.g., 'public', 'thumbnail'). Defaults to 'public'.

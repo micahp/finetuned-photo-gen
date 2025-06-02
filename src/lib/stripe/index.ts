@@ -1,11 +1,12 @@
 import Stripe from 'stripe';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_API_TOKEN;
+const IS_BUILD_TIME = process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.RAILWAY_ENVIRONMENT;
 
 if (!STRIPE_SECRET_KEY) {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' && !IS_BUILD_TIME) {
     throw new Error('Missing STRIPE_API_TOKEN in environment variables for production.');
-  } else {
+  } else if (!IS_BUILD_TIME) {
     console.warn(
       'WARN: Missing STRIPE_API_TOKEN in environment variables. Stripe functionality will not work.' +
       ' Please add it to your .env.local file for development.'
@@ -30,9 +31,9 @@ export const stripe = new Stripe(STRIPE_SECRET_KEY || 'sk_test_DUMMYKEYFORDEVELO
 export const NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_TOKEN;
 
 if (!NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' && !IS_BUILD_TIME) {
     throw new Error('Missing STRIPE_PUBLISHABLE_TOKEN in environment variables for production.');
-  } else {
+  } else if (!IS_BUILD_TIME) {
     console.warn(
       'WARN: Missing STRIPE_PUBLISHABLE_TOKEN in environment variables. Stripe Checkout/Elements might not work.' +
       ' Please add it to your .env.local file for development.'

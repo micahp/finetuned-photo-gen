@@ -59,7 +59,7 @@ interface UserModel {
 }
 
 export default function GeneratePage() {
-  const { data: session } = useSession()
+  const { data: session, update } = useSession()
   const searchParams = useSearchParams()
   const preselectedModelId = searchParams.get('model')
 
@@ -268,11 +268,8 @@ export default function GeneratePage() {
         setGeneratedImage(result.image)
         setCreditsRemaining(result.creditsRemaining)
         
-        // Trigger a refresh of dashboard stats in the background
-        // This will update the dashboard when user navigates back
-        fetch('/api/dashboard/stats').catch(() => {
-          // Silent fail - this is just for cache warming
-        })
+        // Refresh session to update credits across all components
+        await update()
       } else {
         throw new Error(result.error || 'Generation failed')
       }

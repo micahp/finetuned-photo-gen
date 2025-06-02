@@ -1,72 +1,139 @@
-# Multi-stage build for production optimization
-FROM node:18-alpine AS base
+# Production-optimized multi-stage build for AI image generation app
+FROM node:18.19.1-alpine3.19 AS base
+
+# Install security updates and essential packages
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    libc6-compat \
+    ca-certificates \
+    dumb-init \
+    && rm -rf /var/cache/apk/*
+
+# Set working directory
 WORKDIR /app
 
-# Install dependencies only when needed
+# Create non-root user early for better security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Dependencies stage - production only
 FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat
 
-# Install dependencies based on the preferred package manager
+# Copy package files for dependency installation
 COPY package.json package-lock.json* ./
-RUN npm ci --only=production --legacy-peer-deps
 
-# Development stage
+# Install production dependencies with optimizations
+RUN npm ci --only=production --no-audit --no-fund --legacy-peer-deps && \
+    npm cache clean --force
+
+# Build dependencies stage - includes devDependencies needed for build
+FROM base AS build-deps
+
+# Copy package files for dependency installation
+COPY package.json package-lock.json* ./
+
+# Install ALL dependencies (including devDependencies for build process)
+RUN npm ci --no-audit --no-fund --legacy-peer-deps && \
+    npm cache clean --force
+
+# Development stage (unchanged for compatibility)
 FROM base AS dev
-RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps
 COPY . .
 RUN npx prisma generate
 CMD ["npm", "run", "dev"]
 
-# Rebuild the source code only when needed
-FROM base AS builder
-RUN apk add --no-cache libc6-compat
-COPY --from=deps /app/node_modules ./node_modules
+# Builder stage - optimized for build performance
+FROM build-deps AS builder
+
+# Build environment variables - needed for static analysis during build
+ARG STRIPE_API_TOKEN
+ARG STRIPE_PUBLISHABLE_TOKEN
+ARG NEXTAUTH_SECRET
+ARG DATABASE_URL
+ARG NEXT_PUBLIC_GA_TRACKING_ID
+
+# Set environment variables for build
+ENV STRIPE_API_TOKEN=${STRIPE_API_TOKEN}
+ENV STRIPE_PUBLISHABLE_TOKEN=${STRIPE_PUBLISHABLE_TOKEN}
+ENV NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+ENV DATABASE_URL=${DATABASE_URL}
+ENV NEXT_PUBLIC_GA_TRACKING_ID=${NEXT_PUBLIC_GA_TRACKING_ID}
+
+# Copy source code
 COPY . .
 
 # Generate Prisma client
 RUN npx prisma generate
 
+# Build optimizations
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+
 # Build the application
-ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build
 
-# Production image, copy all the files and run next
+# Verify the build completed successfully and standalone assets exist
+RUN ls -la .next && test -f .next/BUILD_ID
+RUN ls -la .next/standalone && test -f .next/standalone/server.js
+RUN ls -la .next/static
+
+# Production runner stage - security and performance optimized
 FROM base AS runner
 
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
+# Production environment variables
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3005
+ENV HOSTNAME="0.0.0.0"
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy the public folder
-COPY --from=builder /app/public ./public
-
-# Set the correct permission for prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-# Copy Prisma files and generated client
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/src/generated ./src/generated
-
+# Security: ensure we're running as non-root
 USER nextjs
 
-EXPOSE 3000
+# Create necessary directories with proper permissions
+USER root
+RUN mkdir -p /app/.next && \
+    chown nextjs:nodejs /app/.next && \
+    mkdir -p /app/tmp && \
+    chown nextjs:nodejs /app/tmp
+USER nextjs
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+# Copy production dependencies from the production deps stage  
+COPY --from=deps /app/node_modules ./node_modules
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+# Copy Next.js binary specifically for runtime
+COPY --from=builder /app/node_modules/.bin/next ./node_modules/.bin/next
+COPY --from=builder /app/node_modules/next ./node_modules/next
 
+# Copy package.json for npm scripts
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+
+# Copy built application with proper ownership
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Copy standalone server files (the main server)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+
+# Copy static assets to the correct location for standalone server
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Also copy next.config.js if it affects runtime
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./next.config.js
+
+# Copy Prisma files for database operations
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
+
+# Expose port
+EXPOSE 3005
+
+# Enhanced health check with better error handling
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider --timeout=3 http://localhost:3005/api/health || exit 1
+
+# Use dumb-init for proper signal handling and graceful shutdown
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application with standalone server
 CMD ["node", "server.js"] 

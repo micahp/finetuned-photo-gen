@@ -35,6 +35,28 @@ const nextConfig = {
         aggregateTimeout: 300,
       }
     }
+
+    // Suppress critical dependency warnings for known issues
+    config.module = {
+      ...config.module,
+      exprContextCritical: false, // Suppresses "Critical dependency: the request of a dependency is an expression"
+    }
+
+    // Handle Node.js modules that may be problematic in browser environment
+    config.resolve = {
+      ...config.resolve,
+      fallback: {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+        stream: false,
+        util: false,
+        buffer: false,
+      },
+    }
+
     return config
   },
   
