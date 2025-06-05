@@ -157,17 +157,16 @@ export class TogetherAIService {
 
   // Generate image using FLUX models
   async generateImage(params: GenerateImageParams): Promise<GenerateImageResponse> {
+    // --- START OUTER TRY-CATCH FOR ROUTING AND OVERALL FAILURE ---
     try {
       const { width, height } = this.getDimensions(params.aspectRatio)
       const model = params.model || 'black-forest-labs/FLUX.1-schnell-Free'
       
-      // Check if this model should use Replicate
       if (this.shouldUseReplicate(model)) {
         console.log(`🔄 Routing ${model} to Replicate`)
         return await this.generateWithReplicate(params)
       }
       
-      // Use LoRA model if LoRAs are specified
       const togetherModel = params.imageLoras && params.imageLoras.length > 0 
         ? 'black-forest-labs/FLUX.1-dev-lora'
         : model
@@ -179,13 +178,12 @@ export class TogetherAIService {
         model: togetherModel,
         width: params.width || width,
         height: params.height || height,
-        steps: params.steps || (params.imageLoras?.length ? 28 : 3), // More steps for LoRA
+        steps: params.steps || (params.imageLoras?.length ? 28 : 3),
         seed: params.seed,
         n: 1,
         response_format: 'url'
       }
 
-      // Add LoRA parameters if specified
       if (params.imageLoras && params.imageLoras.length > 0) {
         requestBody.image_loras = params.imageLoras.map(lora => ({
           path: lora.path,
@@ -193,53 +191,89 @@ export class TogetherAIService {
         }))
       }
 
-      const response = await fetch(`${this.baseUrl}/images/generations`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      })
+      // --- START RETRY LOGIC ---
+      const maxRetries = 3;
+      let attempt = 0;
+      let lastError: any = null;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        let errorMessage = errorData.error?.message || `API request failed: ${response.status}`
-        
-        // We no longer override specific errors like HeaderTooLarge with custom "corruption" messages.
-        // Let the original error from the service pass through.
-        if (errorMessage.includes('HeaderTooLarge') || errorMessage.includes('Error while deserializing header')) {
-          // Potentially log that a known "bad header" error occurred for internal tracking
-          console.warn(`Together AI returned an error indicative of model header issues: ${errorMessage}`);
-        }
-        
-        return {
-          status: 'failed' as const,
-          error: errorMessage,
-          id: ''
+      while (attempt < maxRetries) {
+        attempt++;
+        try {
+          const response = await fetch(`${this.baseUrl}/images/generations`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            let errorMessage = errorData.error?.message || `API request failed: ${response.status}`;
+            lastError = new Error(errorMessage); // Store error for potential rethrow
+            (lastError as any).status = response.status; // Attach status code
+
+            // Only retry on server errors or network issues, not client errors (4xx)
+            // unless it's a rate limit error that might be retryable (e.g. 429)
+            if (response.status >= 500 || response.status === 429) { 
+              console.warn(`Together AI API attempt ${attempt} failed with status ${response.status}: ${errorMessage}. Retrying...`);
+              if (attempt < maxRetries) {
+                const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue; // Next attempt
+              }
+            } else if (errorMessage.includes('HeaderTooLarge') || errorMessage.includes('Error while deserializing header')) {
+              console.warn(`Together AI returned a non-retryable model header issue: ${errorMessage}`);
+              // Fall through to return failed status, do not retry
+            } else {
+               // Non-retryable client error (e.g. 400, 401, 403)
+              console.warn(`Together AI API returned non-retryable client error ${response.status}: ${errorMessage}`);
+              // Fall through to return failed status, do not retry
+            }
+            
+            // If not retrying or last attempt failed, return failure
+            return {
+              status: 'failed' as const,
+              error: errorMessage,
+              id: '' 
+            };
+          }
+
+          const data = await response.json();
+          return {
+            id: data.id || `img_${Date.now()}`,
+            status: 'completed',
+            images: data.data.map((img: any) => ({
+              url: img.url,
+              width: requestBody.width,
+              height: requestBody.height,
+            }))
+          };
+
+        } catch (error: any) {
+          lastError = error;
+          console.error(`Together AI generation attempt ${attempt} network/request error:`, error);
+          if (attempt < maxRetries) {
+            const delay = Math.pow(2, attempt) * 1000;
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            // All retries failed for network/request errors
+            throw lastError; // Rethrow to be caught by the outer try-catch
+          }
         }
       }
+      // Should not be reached if loop completes, but as a fallback:
+      if (lastError) throw lastError;
+      // --- END RETRY LOGIC ---
 
-      const data = await response.json()
-      
-      // Together AI returns images directly, not as a job
-      return {
-        id: data.id || `img_${Date.now()}`,
-        status: 'completed',
-        images: data.data.map((img: any) => ({
-          url: img.url,
-          width: requestBody.width,
-          height: requestBody.height,
-        }))
-      }
-
-    } catch (error) {
-      console.error('Together AI generation error:', error)
+    } catch (error) { // Outer catch for routing errors or rethrown retry errors
+      console.error('Together AI generation error (outer catch):', error);
       return {
         id: `err_${Date.now()}`,
         status: 'failed',
         error: error instanceof Error ? error.message : 'Unknown error occurred'
-      }
+      };
     }
   }
 

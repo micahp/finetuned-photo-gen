@@ -34,6 +34,25 @@ model User {
   jobQueue            JobQueue[]
   creditTransactions  CreditTransaction[]
   
+  // Stripe fields
+  stripeSubscriptionId    String?   @unique @map("stripe_subscription_id")
+  stripePriceId           String?   @map("stripe_price_id")
+  stripeCurrentPeriodEnd  DateTime? @map("stripe_current_period_end")
+  stripeSubscriptionStatus String?  @map("stripe_subscription_status") // e.g., "active", "canceled", "past_due"
+  
+  // For tracking one-time purchases like credit packs
+  purchasedCreditPacks Json? @default("[]") // Array of { packId: string, purchaseDate: Date, credits: number, stripeChargeId: string }
+  
+  // For advanced usage tracking, if needed beyond simple credit count
+  lastApiCallAt DateTime?
+  apiCallCount  Int       @default(0)
+  
+  // Preferences
+  emailPreferences Json? @default("{\"marketing\": true, \"transactional\": true, \"usage_reports\": false}")
+  
+  // Admin notes
+  adminNotes String? @db.Text
+  
   @@map("users")
 }
 
@@ -168,4 +187,28 @@ model CreditTransaction {
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("credit_transactions")
+}
+
+enum CreditTransactionType {
+  earned
+  spent
+  purchased
+  subscription_renewal
+  refund
+  admin_adjustment
+}
+
+enum RelatedEntityType {
+  image_generation
+  model_training
+  subscription
+  admin_action
+}
+
+model ProcessedStripeEvent {
+  id        String   @id @default(cuid())
+  eventId   String   @unique // The Stripe event ID
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
 }

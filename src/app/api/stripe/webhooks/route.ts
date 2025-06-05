@@ -156,7 +156,8 @@ export async function POST(req: NextRequest) {
                 stripeSubscriptionId: stripeSubscription.id,
                 periodStart: new Date((stripeSubscription as any).current_period_start * 1000),
                 periodEnd: new Date((stripeSubscription as any).current_period_end * 1000)
-              }
+              },
+              event.id // Pass Stripe event ID for idempotency
             );
 
             console.log(`✅ User ${userId} subscription ${stripeSubscription.id} processed. Plan: ${planName}, Credits: ${creditsToAllocate}.`);
@@ -189,7 +190,8 @@ export async function POST(req: NextRequest) {
                   sessionId: session.id,
                   stripeCustomerId,
                   paymentMode: 'payment'
-                }
+                },
+                event.id // Pass Stripe event ID for idempotency
               );
               
               console.log(`✅ User ${userId} credited with ${creditsPurchased} credits.`);
@@ -320,7 +322,8 @@ export async function POST(req: NextRequest) {
               creditReason,
               'subscription',
               subId,
-              { planName, stripeSubscriptionId: subId, status: subscription.status }
+              { planName, stripeSubscriptionId: subId, status: subscription.status },
+              event.id // Pass Stripe event ID for idempotency
             );
             console.log(`✅ Credits added for user ${userId} via ${event.type}. Plan: ${planName}, Credits: ${creditsToAllocate}.`);
           } else {
@@ -446,11 +449,12 @@ export async function POST(req: NextRequest) {
             await CreditService.addCredits(
                 userId,
                 creditsToAllocate,
-                'invoice_payment_subscription_renewal' as any, // Cast for now, ensure enum is updated
+                'subscription_renewal',
                 `Credits for ${planName} renewal (Invoice: ${invoice.id?.substring(0, 10) || 'unknown'}...)`,
                 'invoice' as any, // relatedEntityType - Cast for now, ensure enum is updated
                 invoice.id || 'unknown', // relatedEntityId
-                { planName, stripeSubscriptionId: invSubscriptionId, invoiceId: invoice.id }
+                { planName, stripeSubscriptionId: invSubscriptionId, invoiceId: invoice.id },
+                event.id // Pass Stripe event ID for idempotency
             );
             console.log(`✅ Credits added for user ${userId} from invoice ${invoice.id}. Plan: ${planName}, Credits: ${creditsToAllocate}.`);
           }
@@ -477,14 +481,14 @@ export async function POST(req: NextRequest) {
                 status: stripeSubscription.status,
                 currentPeriodStart: new Date(invoiceLineItem.period!.start * 1000),
                 currentPeriodEnd: new Date(invoiceLineItem.period!.end * 1000),
-                monthlyCredits: creditsToAllocate > 0 ? creditsToAllocate : (user.subscriptions?.[0]?.monthlyCredits || 0), // Keep old if new is 0
+                monthlyCredits: (creditsToAllocate >= 0 ? creditsToAllocate : 0),
               },
               update: {
                 planName: planName,
                 status: stripeSubscription.status,
                 currentPeriodStart: new Date(invoiceLineItem.period!.start * 1000),
                 currentPeriodEnd: new Date(invoiceLineItem.period!.end * 1000),
-                monthlyCredits: creditsToAllocate > 0 ? creditsToAllocate : undefined, // Only update if new credits are positive
+                monthlyCredits: (creditsToAllocate >= 0 ? creditsToAllocate : undefined),
               },
             });
           });
@@ -495,14 +499,18 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ received: true, eventId: event.id, error: 'Failed to process invoice. View logs.', details: err.message }, { status: 200 });
         }
         break;
-      // ... handle other event types
       default:
-        // console.warn(`🤷‍♀️ Unhandled event type: ${event.type}`);
+        console.log(`🔔 Received unhandled event type: ${event.type}`, { eventId: event.id });
+        // Optional: Store unhandled events in DB for review if they become frequent
+        // await prisma.unhandledStripeEvent.create({ data: { eventId: event.id, eventType: event.type, rawPayload: event }});
     }
 
-    return NextResponse.json({ received: true, eventId: event.id }, { status: 200 });
+    // Return a 200 response to acknowledge receipt of the event
+    // console.log(`[TEST_DEBUG] Event ${event.id} processed. Sending 200 OK.`);
+    return NextResponse.json({ received: true, eventId: event.id });
 
   } catch (err: any) {
+    // console.error('[TEST_DEBUG] Error in webhook handler:', err.message);
     console.error('🔴 Error processing Stripe webhook:', err.message);
 
     // Check for Stripe signature verification error more safely

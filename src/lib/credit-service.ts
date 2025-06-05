@@ -23,6 +23,7 @@ export interface CreditTransactionData {
   relatedEntityType?: RelatedEntityType
   relatedEntityId?: string
   metadata?: Record<string, any>
+  stripeEventId?: string;
 }
 
 export interface UsageAnalytics {
@@ -75,22 +76,44 @@ export class CreditService {
     newBalance?: number;
     transactionId?: string;
     error?: string;
+    alreadyProcessed?: boolean;
   }> {
     try {
       let finalBalance = 0;
       let transactionResult: { id: string; balanceAfter: number } | null = null;
+      let wasAlreadyProcessed = false;
 
       await prisma.$transaction(async (tx) => {
-        // Update user credits
+        if (data.stripeEventId) {
+          const existingEvent = await tx.processedStripeEvent.findUnique({
+            where: { eventId: data.stripeEventId },
+          });
+
+          if (existingEvent) {
+            console.log(
+              `Stripe event ${data.stripeEventId} already processed. Skipping transaction.`,
+            );
+            wasAlreadyProcessed = true;
+            // Fetch current balance to return accurately
+            const user = await tx.user.findUnique({
+              where: { id: data.userId },
+              select: { credits: true },
+            });
+            finalBalance = user?.credits ?? 0; // Fallback to 0 if user not found, though unlikely here
+            // No transactionResult will be set, so it remains null
+            return; // Exit the transaction block early
+          }
+        }
+
+        // If not already processed, or no stripeEventId, proceed with transaction
         const updatedUser = await tx.user.update({
           where: { id: data.userId },
           data: { credits: { increment: data.amount } },
-          select: { credits: true }
+          select: { credits: true },
         });
 
         finalBalance = updatedUser.credits;
 
-        // Create transaction record
         const createdTx = await tx.creditTransaction.create({
           data: {
             userId: data.userId,
@@ -101,25 +124,67 @@ export class CreditService {
             relatedEntityId: data.relatedEntityId,
             balanceAfter: finalBalance,
             metadata: data.metadata,
+            // stripeEventId is not directly stored on CreditTransaction model, but on ProcessedStripeEvent
           },
-          select: { id: true }
+          select: { id: true },
         });
 
-        transactionResult = { id: createdTx.id, balanceAfter: finalBalance }; 
+        if (data.stripeEventId && !wasAlreadyProcessed) {
+          await tx.processedStripeEvent.create({
+            data: { eventId: data.stripeEventId },
+          });
+        }
+
+        transactionResult = { id: createdTx.id, balanceAfter: finalBalance };
       });
+
+      if (wasAlreadyProcessed) {
+        return {
+          success: true,
+          alreadyProcessed: true,
+          newBalance: finalBalance, // Balance after confirming it was a duplicate
+        };
+      }
 
       if (transactionResult) {
         return {
           success: true,
-          newBalance: (transactionResult as { id: string; balanceAfter: number }).balanceAfter,
-          transactionId: (transactionResult as { id: string; balanceAfter: number }).id,
+          newBalance: transactionResult.balanceAfter,
+          transactionId: transactionResult.id,
         };
       } else {
-        // This case should ideally not be reached if $transaction throws on failure
-        return { success: false, error: 'Transaction did not complete as expected.', newBalance: finalBalance };
+        // This case might be reached if wasAlreadyProcessed is true AND something went wrong fetching balance
+        // or if transaction genuinely failed before setting transactionResult, outside of wasAlreadyProcessed logic
+        return { 
+          success: false, 
+          error: 'Transaction did not complete as expected.', 
+          newBalance: finalBalance // finalBalance might be from pre-duplicate check or initial value
+        };
       }
     } catch (error: any) {
       console.error('Error in recordTransaction:', error);
+      // If the error is due to a unique constraint violation on ProcessedStripeEvent (e.g., race condition if not handled by above check)
+      // This might be overly specific here, as the check above should prevent it.
+      // However, if a race condition bypasses the initial check and hits the DB constraint on ProcessedStripeEvent,
+      // it would be good to handle it as 'alreadyProcessed'. Prisma specific error code for unique constraint is P2002.
+      if (error.code === 'P2002' && data.stripeEventId && error.meta?.target?.includes('eventId')) {
+        console.warn(`Race condition handled for Stripe event ${data.stripeEventId}. Event already processed.`);
+        // Attempt to fetch current balance to return accurately
+        try {
+            const user = await prisma.user.findUnique({
+                where: { id: data.userId },
+                select: { credits: true },
+            });
+            return {
+                success: true,
+                alreadyProcessed: true,
+                newBalance: user?.credits ?? 0,
+            };
+        } catch (fetchError) {
+            console.error('Failed to fetch user balance after race condition handling:', fetchError);
+            return { success: true, alreadyProcessed: true, newBalance: 0 }; // Fallback
+        }
+      }
       return {
         success: false,
         error: `Failed to record transaction: ${error.message || 'Unknown error'}`,
@@ -202,8 +267,9 @@ export class CreditService {
     description: string,
     relatedEntityType?: RelatedEntityType,
     relatedEntityId?: string,
-    metadata?: Record<string, any>
-  ): Promise<{ success: boolean; newBalance: number; error?: string }> {
+    metadata?: Record<string, any>,
+    stripeEventId?: string,
+  ): Promise<{ success: boolean; newBalance: number; error?: string; alreadyProcessed?: boolean }> {
     try {
       const transactionResult = await this.recordTransaction({
         userId,
@@ -212,39 +278,29 @@ export class CreditService {
         description,
         relatedEntityType,
         relatedEntityId,
-        metadata
+        metadata,
+        stripeEventId,
       });
 
       if (!transactionResult.success) {
         // If recordTransaction handled an error and returned success: false
-        // We don't have the pre-transaction balance readily available here without an extra DB call.
-        // recordTransaction itself doesn't return old balance on failure.
-        // Returning 0 for newBalance or fetching it again are options.
-        // For now, let's be consistent with the generic catch block if recordTransaction fails this way.
         return {
           success: false,
-          // newBalance: 0, // Or fetch current balance if absolutely needed.
-          // Let's try to return the balance that recordTransaction *would* have resulted in if it didn't complete, which is effectively undefined or requires another fetch.
-          // The most straightforward is to mirror the main catch block or provide a specific error.
           newBalance: (await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } }))?.credits || 0,
           error: transactionResult.error || 'Failed to add credits (recordTransaction failed)',
+          alreadyProcessed: transactionResult.alreadyProcessed,
         };
       }
-
-      // If recordTransaction was successful, its newBalance is the most accurate.
-      // The subsequent findUnique is to confirm, but recordTransaction.newBalance should be trusted.
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { credits: true }
-      });
-
-      // It's possible recordTransaction succeeded but the user fetch here fails or user deleted.
-      // The newBalance from recordTransaction is the state after the transaction.
-      return { success: true, newBalance: transactionResult.newBalance! }; // Trust newBalance from successful recordTransaction
+      
+      // If recordTransaction was successful
+      return { 
+        success: true, 
+        newBalance: transactionResult.newBalance!,
+        alreadyProcessed: transactionResult.alreadyProcessed
+      }; 
 
     } catch (error) {
       console.error('Error adding credits:', error);
-      // Attempt to get current balance even in case of an unexpected error, if user exists
       let currentBalance = 0;
       try {
         const userOnError = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true }});

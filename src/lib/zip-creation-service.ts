@@ -97,6 +97,30 @@ export class ZipCreationService {
       // Create ZIP file
       const zipResult = await this.createZipFile(processedImages, zipPath)
       
+      const MAX_FINAL_ZIP_SIZE_BYTES = 750 * 1024 * 1024; // 750MB limit for the final ZIP
+      this.debugger?.log('info', TrainingStage.ZIP_CREATION, 'Checking final ZIP file size', {
+        zipFileSize: zipResult.totalSize,
+        maxAllowedZipFileSize: MAX_FINAL_ZIP_SIZE_BYTES
+      });
+
+      if (zipResult.totalSize > MAX_FINAL_ZIP_SIZE_BYTES) {
+        this.debugger?.logError(
+          TrainingStage.ZIP_CREATION,
+          new Error('Final ZIP size exceeds limit'),
+          'Generated ZIP file is too large to upload',
+          {
+            zipFileSize: zipResult.totalSize,
+            maxAllowedZipFileSize: MAX_FINAL_ZIP_SIZE_BYTES,
+            zipPath: zipPath
+          }
+        );
+        await this.cleanup(tempDir); // Important: cleanup the oversized local ZIP
+        throw new Error(
+          `Generated ZIP file size (${(zipResult.totalSize / 1024 / 1024).toFixed(2)}MB) ` +
+          `exceeds maximum allowed limit of ${(MAX_FINAL_ZIP_SIZE_BYTES / 1024 / 1024).toFixed(2)}MB.`
+        );
+      }
+      
       // Upload to cloud storage with consistent filename
       this.debugger?.log('info', TrainingStage.ZIP_CREATION, 'Uploading ZIP to cloud storage')
       const uploadResult = await this.cloudStorage.uploadZipFile(zipPath, zipFilename, {
