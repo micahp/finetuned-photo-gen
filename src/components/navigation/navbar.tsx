@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { User, LogOut, Settings, CreditCard, Shield } from 'lucide-react'
+import Image from 'next/image'
 
 export function Navbar() {
   const { data: session, status } = useSession()
@@ -28,6 +29,7 @@ export function Navbar() {
           <div className="flex items-center">
             <Link href={session ? "/dashboard" : "/"} className="flex-shrink-0">
               <div className="flex items-center gap-2">
+                <Image src="/favicon-transparent.png" alt="Fine Photo Gen Logo" width={32} height={32} />
                 <h1 className="text-xl font-bold text-gray-900">Fine Photo Gen</h1>
                 <Badge 
                   variant="secondary" 
