@@ -8,6 +8,10 @@ import { Toaster } from "sonner";
 import { CookieConsent } from "@/components/legal/CookieConsent";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import "@/utils/errorMonitor"; // Auto-setup error monitoring
+import { Analytics } from "@vercel/analytics/react"
+import { SpeedInsights } from "@vercel/speed-insights/next"
+import { SessionGate } from '@/components/auth/SessionGate';
+import { NextAuthProvider } from '@/components/providers/NextAuthProvider';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -58,10 +62,17 @@ export default async function RootLayout({
       >
         <AutoReloadErrorBoundary>
           <AuthSessionProvider session={session}>
-            {children}
-            <Toaster position="top-right" />
-            <CookieConsent />
-            {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} />}
+            <NextAuthProvider>
+              <SessionGate />
+              <div className="flex flex-col min-h-screen">
+                <main className="flex-grow">
+                  {children}
+                </main>
+              </div>
+              <Toaster position="top-right" />
+              <CookieConsent />
+              {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} />}
+            </NextAuthProvider>
           </AuthSessionProvider>
         </AutoReloadErrorBoundary>
       </body>

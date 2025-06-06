@@ -6,8 +6,6 @@ import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-// import { Separator } from '@/components/ui/separator'
-// import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PricingCard } from '@/components/billing/pricing-card'
 import { PRICING_PLANS, getCurrentPlan } from '@/lib/stripe/pricing'
 import { toast } from 'sonner'
@@ -17,11 +15,10 @@ import {
   Crown, 
   ExternalLink, 
   CheckCircle, 
-  XCircle,
   Loader2
 } from 'lucide-react'
+import { SessionRefresher } from '@/components/auth/SessionRefresher'
 
-// Helper to check if we're in development mode
 const isDev = process.env.NODE_ENV === 'development'
 
 export default function BillingPage() {
@@ -31,50 +28,39 @@ export default function BillingPage() {
   const [portalLoading, setPortalLoading] = useState(false)
   const [processingSubscription, setProcessingSubscription] = useState(false)
   const [canceledPlanName, setCanceledPlanName] = useState<string | null>(null)
-  
-  // Check for missing webhook secret in development
   const [missingWebhookSecret, setMissingWebhookSecret] = useState(false)
   
   useEffect(() => {
-    // Only check in development mode
     if (isDev) {
-      // Use an API route to check if the secret is set (to avoid exposing env vars to client)
       fetch('/api/config/check-webhook-secret')
         .then(res => res.json())
         .then(data => {
           setMissingWebhookSecret(!data.webhookSecretSet)
         })
         .catch(() => {
-          // If the endpoint doesn't exist, we'll assume the secret is missing
           setMissingWebhookSecret(true)
         })
     }
   }, [])
 
-  // Handle success/cancel from Stripe checkout
   useEffect(() => {
     const sessionId = searchParams.get('session_id')
     const canceled = searchParams.get('canceled')
 
     if (sessionId) {
-      // Show processing indicator immediately 
       setProcessingSubscription(true)
-      
-      // Show initial acknowledgment to the user right away
       toast.info('Payment received! Setting up your subscription...', {
-        id: 'subscription-processing' // Add an ID to prevent duplicates
+        id: 'subscription-processing'
       })
       
-      // Add a polling mechanism to wait for subscription to be processed by webhook
       let attempts = 0;
-      const maxAttempts = 20; // Maximum number of attempts (60 seconds total)
+      const maxAttempts = 20;
       let hasShownSuccessMessage = false;
       
       const checkSubscriptionStatus = async () => {
         attempts++;
         
         try {
-          // New: Poll lightweight API endpoint
           const response = await fetch('/api/user/subscription-status');
           const data = await response.json();
 
@@ -88,21 +74,17 @@ export default function BillingPage() {
             
             setProcessingSubscription(false);
             
-            // Final session update to sync the whole app
-            update({ force: true });
-
             const url = new URL(window.location.href);
             url.searchParams.delete('session_id');
             window.history.replaceState({}, document.title, url.toString());
-            return; // Stop polling
+            return;
           }
         } catch (error) {
           console.error("Failed to check subscription status", error);
-          // Decide if we should stop or continue on error
         }
         
         if (attempts >= maxAttempts) {
-          toast.info('Your subscription is still processing. The page will update automatically when ready, or you can refresh in a few moments.', {
+          toast.info('Your subscription is still processing. The page will update automatically when ready.', {
             id: 'subscription-pending'
           });
           
@@ -110,36 +92,30 @@ export default function BillingPage() {
           url.searchParams.delete('session_id');
           window.history.replaceState({}, document.title, url.toString());
           
-          // Fallback to less frequent session updates after timeout
-          setTimeout(() => update({ force: true }), 10000);
           return;
         }
         
         setTimeout(checkSubscriptionStatus, 3000);
       }
       
-      // Start checking
       checkSubscriptionStatus();
     } else if (canceled) {
-      // Store the plan name *before* updating the session
       const planBeforeUpdate = getCurrentPlan(session?.user?.subscriptionPlan)
       if (planBeforeUpdate && planBeforeUpdate.name !== 'Free') {
         setCanceledPlanName(planBeforeUpdate.name)
       }
 
-      // Update session to reflect latest state
-      update() // Use GET request to avoid CSRF issues
+      update()
       
       toast.info('Subscription canceled. You can try again anytime.', {
-        id: 'subscription-canceled' // Add an ID to prevent duplicates
+        id: 'subscription-canceled'
       })
       
-      // Clean up the URL
       const url = new URL(window.location.href)
       url.searchParams.delete('canceled')
       window.history.replaceState({}, document.title, url.toString())
     }
-  }, [searchParams, update])
+  }, [searchParams, update, session?.user?.subscriptionPlan])
 
   const handleSubscribe = async (planId: string) => {
     if (!session?.user) {
@@ -155,9 +131,9 @@ export default function BillingPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          priceId: planId, // Using the plan ID, which the API will resolve to a price ID
+          priceId: planId,
           mode: 'subscription',
-          quantity: 1
+          returnUrl: window.location.href // Pass the current URL as the return URL
         }),
       })
 
@@ -171,7 +147,6 @@ export default function BillingPage() {
         throw new Error('No checkout URL returned')
       }
 
-      // Redirect to Stripe Checkout (use replace to avoid browser history issues)
       window.location.replace(data.url)
     } catch (error) {
       console.error('Subscription error:', error)
@@ -202,7 +177,6 @@ export default function BillingPage() {
         throw new Error(data.error || 'Failed to access customer portal')
       }
 
-      // Redirect to Stripe Customer Portal
       window.location.href = data.url
     } catch (error) {
       console.error('Portal error:', error)
@@ -235,15 +209,15 @@ export default function BillingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+       <SessionRefresher />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Developer Warning for Missing Webhook Secret */}
         {isDev && missingWebhookSecret && (
           <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
             <div className="flex items-start">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
+                 <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                   <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                 </svg>
               </div>
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-yellow-800">
@@ -282,7 +256,6 @@ export default function BillingPage() {
           )}
         </div>
 
-        {/* Current Subscription Status */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -364,7 +337,6 @@ export default function BillingPage() {
           </CardContent>
         </Card>
 
-        {/* Pricing Plans */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Choose Your Plan</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -379,8 +351,7 @@ export default function BillingPage() {
             ))}
           </div>
         </div>
-
-        {/* Additional Information */}
+        
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -422,4 +393,4 @@ export default function BillingPage() {
       </div>
     </div>
   )
-} 
+}

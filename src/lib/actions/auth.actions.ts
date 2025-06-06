@@ -29,13 +29,11 @@ export async function refreshJwt(token: JWT): Promise<JWT> {
             new Date(token.sessionInvalidatedAt as string))
       ) {
         console.log(`ℹ️ Server-side session invalidation for user ${token.sub}. Forcing re-login.`)
-        // By returning a token with a 'force-refresh' flag, we can trigger a client-side redirect.
         return {
           ...token,
           error: "SessionInvalidated",
         }
       }
-
       // Update token with fresh data
       token.credits = refreshedUser.credits
       token.subscriptionStatus = refreshedUser.subscriptionStatus

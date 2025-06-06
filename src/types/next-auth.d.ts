@@ -11,6 +11,7 @@ declare module 'next-auth' {
       credits: number
       createdAt: string
     } & DefaultSession['user']
+    error?: 'SessionInvalidated' | 'RefreshError'
   }
 
   interface User extends DefaultUser {

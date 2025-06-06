@@ -3,6 +3,7 @@ import { stripe } from '../../../../lib/stripe'; // Adjusted path
 import { prisma } from '@/lib/db'; // Use shared Prisma instance
 import Stripe from 'stripe'; // Added import for Stripe type
 import { CreditService } from '@/lib/credit-service'
+import { PLANS } from '@/config/stripe';
 
 // This is a basic placeholder. In a real scenario, you would:
 // 1. Verify the Stripe webhook signature using `stripe.webhooks.constructEvent`
@@ -101,6 +102,17 @@ export async function POST(req: NextRequest) {
             const creditsFromPlanString = product.metadata?.credits || '0';
             const creditsToAllocate = parseInt(creditsFromPlanString, 10);
 
+            // Find the plan in our configuration (case-insensitive)
+            const appPlan = Object.values(PLANS).find(p => p.name.toLowerCase() === planName.toLowerCase());
+
+            if (appPlan) {
+              if (appPlan.credits !== creditsToAllocate) {
+                console.warn(`⚠️ Stripe plan credit mismatch for "${planName}". App config: ${appPlan.credits}, Stripe: ${creditsToAllocate}. Using Stripe's value.`);
+              }
+            } else {
+              console.warn(`⚠️ Plan "${planName}" from Stripe not found in app configuration. Cannot verify credit amount.`);
+            }
+
             if (isNaN(creditsToAllocate)) {
               console.error('🔴 Error: Invalid credits value in product metadata.', { productId: product.id, metadataValue: creditsFromPlanString });
               return NextResponse.json({ received: true, error: 'Invalid credits in product metadata' }, { status: 200 });
@@ -110,7 +122,8 @@ export async function POST(req: NextRequest) {
               const userData = {
                 stripeCustomerId: stripeCustomerId,
                 subscriptionStatus: stripeSubscription.status,
-                subscriptionPlan: planName,
+                // Use the canonical plan name from our app's config to ensure consistency
+                subscriptionPlan: appPlan ? appPlan.name : planName, 
               };
               console.log(`[DIAGNOSTIC] Updating user in checkout.session.completed`, { userId, data: userData });
               await tx.user.update({
@@ -131,7 +144,8 @@ export async function POST(req: NextRequest) {
                 create: {
                   userId: userId,
                   stripeSubscriptionId: subId,
-                  planName: planName,
+                  // Use the canonical plan name from our app's config
+                  planName: appPlan ? appPlan.name : planName,
                   status: subStatus,
                   currentPeriodStart: currentPeriodStart,
                   currentPeriodEnd: currentPeriodEnd,
@@ -139,7 +153,8 @@ export async function POST(req: NextRequest) {
                 },
                 update: {
                   status: subStatus,
-                  planName: planName,
+                  // Use the canonical plan name from our app's config
+                  planName: appPlan ? appPlan.name : planName,
                   currentPeriodStart: currentPeriodStart,
                   currentPeriodEnd: currentPeriodEnd,
                   monthlyCredits: creditsToAllocate,
@@ -342,8 +357,7 @@ export async function POST(req: NextRequest) {
                     subscriptionPlan: null, // Revert to free plan
                     subscriptionStatus: 'free', // Use a clear 'free' status
                     stripeSubscriptionStatus: deletedSubscription.status, // e.g., 'canceled'
-                    // Mark the session as invalidated so the client knows to refresh
-                    sessionInvalidatedAt: new Date()
+                    sessionInvalidatedAt: new Date() // Mark the session as invalid
                 };
                 console.log(`[DIAGNOSTIC] Updating user in customer.subscription.deleted`, { userId: user.id, data: userData });
                 await tx.user.update({

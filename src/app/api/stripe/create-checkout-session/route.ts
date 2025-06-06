@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const successUrl = `${baseUrl}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}`;
+    const successUrl = `${baseUrl}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}&refresh=true`;
     const cancelUrl = `${baseUrl}/dashboard/billing`;
 
     // TODO: Implement logic to get or create a Stripe Customer ID for the user

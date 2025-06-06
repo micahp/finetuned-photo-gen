@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     const stripeCustomerId = dbUser.stripeCustomerId;
     let stripeSession;
 
-    const success_url = `${returnUrl}?session_id={CHECKOUT_SESSION_ID}`;
+    const success_url = `${returnUrl}?session_id={CHECKOUT_SESSION_ID}&refresh=true`;
     const cancel_url = `${returnUrl}?canceled=true`;
 
     const checkoutSessionParams: any = {
