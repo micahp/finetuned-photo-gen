@@ -60,7 +60,9 @@ export default function BillingPage() {
       setProcessingSubscription(true)
       
       // Show initial acknowledgment to the user right away
-      toast.info('Payment received! Setting up your subscription...')
+      toast.info('Payment received! Setting up your subscription...', {
+        id: 'subscription-processing' // Add an ID to prevent duplicates
+      })
       
       // Refresh session to get updated subscription data
       update({ force: true })
@@ -77,7 +79,9 @@ export default function BillingPage() {
         if (session?.user?.subscriptionStatus === 'active') {
           // Only show success message once
           if (!hasShownSuccessMessage) {
-            toast.success('Subscription activated! Your account has been updated.')
+            toast.success('Subscription activated! Your account has been updated.', {
+              id: 'subscription-success' // Add an ID to prevent duplicates
+            })
             hasShownSuccessMessage = true;
           }
           
@@ -93,7 +97,9 @@ export default function BillingPage() {
         
         // If max attempts reached, show a pending message but keep the indicator
         if (attempts >= maxAttempts) {
-          toast.info('Your subscription is still processing. The page will update automatically when ready, or you can refresh in a few moments.')
+          toast.info('Your subscription is still processing. The page will update automatically when ready, or you can refresh in a few moments.', {
+            id: 'subscription-pending' // Add an ID to prevent duplicates
+          })
           
           // Clean up the URL to prevent repeated notifications
           const url = new URL(window.location.href)
@@ -120,7 +126,9 @@ export default function BillingPage() {
       // Update session to reflect latest state
       update({ force: true })
       
-      toast.info('Subscription canceled. You can try again anytime.')
+      toast.info('Subscription canceled. You can try again anytime.', {
+        id: 'subscription-canceled' // Add an ID to prevent duplicates
+      })
       
       // Clean up the URL
       const url = new URL(window.location.href)

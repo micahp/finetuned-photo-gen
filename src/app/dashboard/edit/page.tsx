@@ -71,7 +71,9 @@ export default function EditPage() {
           localStorage.removeItem('checkout_return_time')
           
           // Show success message
-          toast.success('Subscription successful! Your account has been updated.')
+          toast.success('Subscription successful! Your account has been updated.', {
+            id: 'subscription-success'
+          })
           
           // Update session to reflect new subscription status
           update({ force: true })

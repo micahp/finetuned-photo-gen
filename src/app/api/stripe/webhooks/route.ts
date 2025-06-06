@@ -234,6 +234,21 @@ export async function POST(req: NextRequest) {
         const subStripeCustomerId = subscription.customer as string;
         const subId = subscription.id;
 
+        // Check if we've already processed this event
+        try {
+          const existingEvent = await prisma.processedStripeEvent.findUnique({
+            where: { eventId: event.id }
+          });
+          
+          if (existingEvent) {
+            console.log(`ℹ️ Skipping already processed subscription event: ${event.id} for subscription ${subId}`);
+            return NextResponse.json({ received: true, eventId: event.id, message: 'Event already processed' }, { status: 200 });
+          }
+        } catch (checkError) {
+          console.warn(`⚠️ Error checking for processed event: ${event.id}`, checkError);
+          // Continue processing as normal
+        }
+
         // console.log(`[DEBUG] Processing ${event.type} for subscription ${subId}, customer ${subStripeCustomerId}`);
 
         if (!subStripeCustomerId) {
@@ -388,6 +403,19 @@ export async function POST(req: NextRequest) {
             console.log(`ℹ️ No credits added for user ${userId} via ${event.type}. Status: ${subscription.status}, Credits: ${creditsToAllocate}.`);
           }
           console.log(`✅ ${event.type} for ${subId} processed for user ${userId}.`);
+
+          // Mark event as processed to prevent duplicate processing
+          try {
+            await prisma.processedStripeEvent.create({
+              data: {
+                eventId: event.id,
+                createdAt: new Date()
+              }
+            });
+          } catch (markError) {
+            console.warn(`⚠️ Failed to mark event ${event.id} as processed:`, markError);
+            // Continue as this is not critical
+          }
 
         } catch (err: any) {
           console.error(`🔴 Error processing ${event.type} for subscription ${subId}:`, err.message, err.stack);
