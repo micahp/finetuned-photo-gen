@@ -312,7 +312,7 @@ export async function POST(req: NextRequest) {
             }
 
             // Update local Subscription record
-            await tx.subscription.update({
+            await tx.subscription.updateMany({
               where: { stripeSubscriptionId: subId },
               data: {
                 status: subscription.status,
@@ -328,6 +328,42 @@ export async function POST(req: NextRequest) {
               data: { eventId: event.id }
             });
           });
+
+          // Add credits for subscription creation or activation
+          if (creditsFromPlan > 0) {
+            try {
+              const previousSubStatus = (event.data.object as any).previous_attributes?.status;
+              const creditEventType = event.type === 'customer.subscription.created' ? 'subscription_initial' :
+                                    (previousSubStatus && previousSubStatus !== 'active' && subscription.status === 'active') ? 'subscription_renewal' :
+                                    'subscription_renewal';
+              
+              const creditDescription = event.type === 'customer.subscription.created' ? 
+                `Credits for new ${planName} subscription` :
+                (previousSubStatus && previousSubStatus !== 'active' && subscription.status === 'active') ?
+                `Credits for activated ${planName} subscription` :
+                `Credits for updated ${planName} subscription`;
+
+              await CreditService.addCredits(
+                userId,
+                creditsFromPlan,
+                creditEventType,
+                creditDescription,
+                'subscription',
+                subId,
+                {
+                  planName,
+                  stripeSubscriptionId: subId,
+                  status: subscription.status
+                },
+                event.id
+              );
+              
+              console.log(`✅ ${creditsFromPlan} credits added for user ${userId} from ${event.type}. Plan: ${planName}.`);
+            } catch (creditError: any) {
+              console.error(`Failed to add credits for user ${userId} during ${event.type}:`, creditError);
+              // Don't fail the webhook - credits can be allocated manually if needed
+            }
+          }
 
           console.log(`✅ ${event.type} for ${subId} processed for user ${userId}. Subscription status synchronized.`);
 
@@ -357,7 +393,6 @@ export async function POST(req: NextRequest) {
                     subscriptionPlan: null, // Revert to free plan
                     subscriptionStatus: 'free', // Use a clear 'free' status
                     stripeSubscriptionStatus: deletedSubscription.status, // e.g., 'canceled'
-                    sessionInvalidatedAt: new Date() // Mark the session as invalid
                 };
                 console.log(`[DIAGNOSTIC] Updating user in customer.subscription.deleted`, { userId: user.id, data: userData });
                 await tx.user.update({
@@ -370,7 +405,7 @@ export async function POST(req: NextRequest) {
                 });
             });
             
-            console.log(`✅ Subscription ${deletedSubId} status updated to ${deletedSubscription.status} for user ${user.id}. Session flagged for invalidation.`);
+            console.log(`✅ Subscription ${deletedSubId} status updated to ${deletedSubscription.status} for user ${user.id}.`);
             
         } catch (err: any) {
             console.error(`🔴 Error processing customer.subscription.deleted for ${deletedSubId}:`, err.message);
@@ -486,7 +521,7 @@ export async function POST(req: NextRequest) {
               data: userData,
             });
 
-            await tx.subscription.update({
+            await tx.subscription.updateMany({
               where: { stripeSubscriptionId: invSubscriptionId },
               data: {
                 status: stripeSubscription.status,

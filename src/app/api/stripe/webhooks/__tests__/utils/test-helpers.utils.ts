@@ -40,6 +40,7 @@ export interface MockServices {
   mockStripeSubscriptionsRetrieve: jest.Mock;
   mockStripeProductsRetrieve: jest.Mock;
   mockCreditServiceAddCredits: jest.Mock;
+  mockProcessedStripeEventCreate: jest.Mock;
 }
 
 export const createMockServices = (): MockServices => ({
@@ -54,6 +55,7 @@ export const createMockServices = (): MockServices => ({
   mockStripeSubscriptionsRetrieve: jest.fn(),
   mockStripeProductsRetrieve: jest.fn(),
   mockCreditServiceAddCredits: jest.fn(),
+  mockProcessedStripeEventCreate: jest.fn(),
 });
 
 export const setupMocks = (mocks: MockServices) => {
@@ -66,32 +68,33 @@ export const setupMocks = (mocks: MockServices) => {
     },
   }));
 
+  // This is the main mock for the prisma client.
+  // It will be used for both top-level queries and for the transaction client (`tx`).
+  const mockPrismaClient = {
+    user: {
+      update: mocks.mockUserUpdate,
+      findUnique: mocks.mockUserFindUnique,
+      findFirst: mocks.mockUserFindFirst,
+    },
+    subscription: {
+      create: mocks.mockSubscriptionCreate,
+      update: mocks.mockSubscriptionUpdate,
+      upsert: mocks.mockSubscriptionUpsert,
+      updateMany: mocks.mockSubscriptionUpdateMany,
+    },
+    processedStripeEvent: {
+      create: mocks.mockProcessedStripeEventCreate,
+      findUnique: jest.fn().mockResolvedValue(null), // Default to not finding an event
+    },
+    $transaction: jest.fn(), // Defined late to allow self-reference
+  };
+
+  // The transaction callback will receive the same mock client, ensuring `tx` has the same shape.
+  mockPrismaClient.$transaction.mockImplementation(async (callback) => callback(mockPrismaClient));
+
   // Mock Prisma
   jest.doMock('@/lib/db', () => ({
-    prisma: {
-      user: {
-        update: mocks.mockUserUpdate,
-        findUnique: mocks.mockUserFindUnique,
-        findFirst: mocks.mockUserFindFirst,
-      },
-      subscription: {
-        create: mocks.mockSubscriptionCreate,
-        update: mocks.mockSubscriptionUpdate,
-        upsert: mocks.mockSubscriptionUpsert,
-        updateMany: mocks.mockSubscriptionUpdateMany,
-      },
-      $transaction: jest.fn(async (callback) => callback({
-        user: {
-          update: mocks.mockUserUpdate,
-          findUnique: mocks.mockUserFindUnique,
-          findFirst: mocks.mockUserFindFirst,
-        },
-        subscription: {
-          upsert: mocks.mockSubscriptionUpsert,
-          updateMany: mocks.mockSubscriptionUpdateMany,
-        },
-      })),
-    },
+    prisma: mockPrismaClient,
   }));
 
   // Mock Stripe - using relative path as in the route file
@@ -114,7 +117,7 @@ export const setupMocks = (mocks: MockServices) => {
 };
 
 export const resetMocks = (mocks: MockServices) => {
-  Object.values(mocks).forEach(mock => mock.mockReset());
+  Object.values(mocks).forEach((mock: jest.Mock) => mock.mockReset());
 };
 
 export const setupEnvironment = () => {

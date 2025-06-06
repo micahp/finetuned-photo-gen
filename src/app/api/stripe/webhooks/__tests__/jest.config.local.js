@@ -6,7 +6,7 @@ module.exports = {
     '<rootDir>/subscription-events.test.ts',
     '<rootDir>/invoice-events.test.ts',
   ],
-  setupFilesAfterEnv: ['<rootDir>/setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/setup.config.ts'],
   testEnvironment: 'node',
   clearMocks: true,
   resetMocks: true,

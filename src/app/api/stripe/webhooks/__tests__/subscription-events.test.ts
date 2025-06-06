@@ -5,7 +5,6 @@ import {
   resetMocks, 
   setupEnvironment,
   expectSuccessfulResponse,
-  type MockServices 
 } from './utils/test-helpers.utils';
 import { 
   createSubscriptionEvent, 
@@ -16,9 +15,9 @@ import {
 } from './fixtures/webhook-events.fixtures';
 
 describe('Stripe Webhook - Subscription Events', () => {
-  let POST: any;
-  let mocks: MockServices;
-  let restoreEnvironment: () => void;
+  let POST;
+  let mocks;
+  let restoreEnvironment;
 
   beforeEach(() => {
     mocks = createMockServices();
@@ -149,7 +148,7 @@ describe('Stripe Webhook - Subscription Events', () => {
         status: 'active',
       });
       // Add previous_attributes after creation since it's not part of Stripe.Subscription type
-      (mockEvent.data.object as any).previous_attributes = { status: 'trialing' };
+      mockEvent.data.object.previous_attributes = { status: 'trialing' };
       mocks.mockStripeConstructEvent.mockReturnValue(mockEvent);
 
       const rawPayload = JSON.stringify(mockEvent.data.object);
@@ -198,10 +197,10 @@ describe('Stripe Webhook - Subscription Events', () => {
               id: 'price_premium',
             },
           }],
-        } as any,
+        },
       });
       // Add previous_attributes after creation since it's not part of Stripe.Subscription type
-      (mockEvent.data.object as any).previous_attributes = { 
+      mockEvent.data.object.previous_attributes = { 
         items: { 
           data: [{ 
             price: { product: TEST_IDS.productId } 
@@ -289,7 +288,7 @@ describe('Stripe Webhook - Subscription Events', () => {
   });
 
   describe('customer.subscription.deleted', () => {
-    it('should update user/subscription status without adding credits', async () => {
+    it('should update user to free plan and update subscription status', async () => {
       const mockEvent = createSubscriptionEvent('customer.subscription.deleted', {
         status: 'canceled',
       });
@@ -306,23 +305,73 @@ describe('Stripe Webhook - Subscription Events', () => {
 
       await expectSuccessfulResponse(response, mockEvent.id);
       
-      expect(mocks.mockUserFindFirst).toHaveBeenCalledWith({ 
-        where: { stripeCustomerId: TEST_IDS.stripeCustomerId } 
-      });
-      expect(mocks.mockCreditServiceAddCredits).not.toHaveBeenCalled();
-      
       expect(mocks.mockUserUpdate).toHaveBeenCalledWith({
         where: { id: TEST_IDS.userId },
-        data: { subscriptionStatus: 'canceled' },
-      });
-      
-      expect(mocks.mockSubscriptionUpdateMany).toHaveBeenCalledWith({
-        where: { 
-          stripeSubscriptionId: TEST_IDS.subscriptionId, 
-          userId: TEST_IDS.userId 
+        data: { 
+          subscriptionPlan: null, 
+          subscriptionStatus: 'free',
+          stripeSubscriptionStatus: 'canceled',
         },
+      });
+
+      expect(mocks.mockSubscriptionUpdateMany).toHaveBeenCalledWith({
+        where: { stripeSubscriptionId: TEST_IDS.subscriptionId, userId: TEST_IDS.userId },
         data: { status: 'canceled' },
       });
+      
+      expect(mocks.mockCreditServiceAddCredits).not.toHaveBeenCalled();
+    });
+
+    it('should NOT set session_invalidated_at when a subscription is canceled', async () => {
+      const mockEvent = createSubscriptionEvent('customer.subscription.deleted', {
+        status: 'canceled',
+      });
+      mocks.mockStripeConstructEvent.mockReturnValue(mockEvent);
+
+      const rawPayload = JSON.stringify(mockEvent.data.object);
+      const req = createMockRequest(
+        'POST', 
+        mockEvent.data.object, 
+        { 'stripe-signature': 'sig_sub_deleted_session_check' }, 
+        rawPayload
+      );
+      await POST(req);
+
+      const userUpdateCall = mocks.mockUserUpdate.mock.calls[0][0];
+      expect(userUpdateCall.data.session_invalidated_at).toBeUndefined();
+    });
+
+    it('should return warning if user not found for deleted event', async () => {
+      mocks.mockUserFindFirst.mockResolvedValue(null);
+      const mockEvent = createSubscriptionEvent('customer.subscription.deleted');
+      mocks.mockStripeConstructEvent.mockReturnValue(mockEvent);
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const rawPayload = JSON.stringify(mockEvent.data.object);
+      const req = createMockRequest(
+        'POST', 
+        mockEvent.data.object, 
+        { 'stripe-signature': 'sig_sub_deleted' }, 
+        rawPayload
+      );
+      const response = await POST(req);
+      const responseBody = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(responseBody).toEqual(
+        expect.objectContaining({ 
+          warning: expect.stringContaining('User not found') 
+        })
+      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('User not found for stripeCustomerId'), 
+        expect.objectContaining({ subscriptionId: TEST_IDS.subscriptionId })
+      );
+      expect(mocks.mockCreditServiceAddCredits).not.toHaveBeenCalled();
+      expect(mocks.mockUserUpdate).not.toHaveBeenCalled();
+      expect(mocks.mockSubscriptionUpdateMany).not.toHaveBeenCalled();
+      
+      consoleErrorSpy.mockRestore();
     });
   });
 }); 

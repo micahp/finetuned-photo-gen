@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AuthSessionProvider } from "@/components/providers/session-provider";
 import { auth } from "@/lib/next-auth";
 import AutoReloadErrorBoundary from "@/components/AutoReloadErrorBoundary";
 import { Toaster } from "sonner";
@@ -61,19 +60,19 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AutoReloadErrorBoundary>
-          <AuthSessionProvider session={session}>
-            <NextAuthProvider>
-              <SessionGate />
-              <div className="flex flex-col min-h-screen">
-                <main className="flex-grow">
-                  {children}
-                </main>
-              </div>
-              <Toaster position="top-right" />
-              <CookieConsent />
-              {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} />}
-            </NextAuthProvider>
-          </AuthSessionProvider>
+          <NextAuthProvider session={session}>
+            <SessionGate />
+            <div className="flex flex-col min-h-screen">
+              <main className="flex-grow">
+                {children}
+              </main>
+            </div>
+            <Toaster position="top-right" />
+            <CookieConsent />
+            {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} />}
+            <Analytics />
+            <SpeedInsights />
+          </NextAuthProvider>
         </AutoReloadErrorBoundary>
       </body>
     </html>
