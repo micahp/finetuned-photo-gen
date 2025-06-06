@@ -6,6 +6,7 @@ export type CreditTransactionType =
   | 'spent' 
   | 'purchased' 
   | 'subscription_renewal' 
+  | 'subscription_initial'
   | 'refund'
   | 'admin_adjustment'
 

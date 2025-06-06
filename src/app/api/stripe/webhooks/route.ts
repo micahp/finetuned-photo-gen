@@ -151,7 +151,22 @@ export async function POST(req: NextRequest) {
               });
             });
 
-            console.log(`✅ User ${userId} subscription checkout for ${planName} processed. Credit allocation will be handled by invoice payment.`);
+            // Allocate initial credits for the new subscription
+            if (creditsToAllocate > 0) {
+              await CreditService.addCredits(
+                userId,
+                creditsToAllocate,
+                'subscription_initial',
+                `Initial credits for ${planName} plan`,
+                'subscription',
+                subscriptionId,
+                { planName: planName, stripeSubscriptionId: subscriptionId },
+                event.id // Use the checkout session event ID for idempotency
+              );
+              console.log(`✅ User ${userId} allocated ${creditsToAllocate} initial credits for ${planName}.`);
+            } else {
+              console.log(`ℹ️ Subscription for ${planName} started for user ${userId}, no initial credits to allocate.`);
+            }
 
           } else if (session.mode === 'payment') {
             const creditsPurchasedStr = session.metadata?.credits_purchased;
@@ -369,12 +384,16 @@ export async function POST(req: NextRequest) {
         }
 
         // For subscription payments, amount_paid > 0. For trials, it's 0.
-        // We only allocate credits for paid invoices.
-        if (invoice.amount_paid <= 0) {
-          console.log(`ℹ️ Invoice ${invoice.id} for $0, no credits to process. Billing reason: ${invoice.billing_reason}`);
+        // We only allocate credits for paid invoices that are for subscription renewals.
+        if (invoice.amount_paid <= 0 || invoice.billing_reason === 'subscription_create') {
+          if (invoice.billing_reason === 'subscription_create') {
+            console.log(`ℹ️ Invoice ${invoice.id} is for a new subscription. Credits were already allocated at checkout. Skipping.`);
+          } else {
+            console.log(`ℹ️ Invoice ${invoice.id} for $0, no credits to process. Billing reason: ${invoice.billing_reason}`);
+          }
           // We still mark as processed to avoid re-checking.
           await prisma.processedStripeEvent.create({ data: { eventId: event.id } });
-          return NextResponse.json({ received: true, message: '$0 invoice, no credits processed.' });
+          return NextResponse.json({ received: true, message: 'Invoice not for renewal or $0, no credits processed.' });
         }
 
         const subscriptionFromInvoice = (invoice as any).subscription;
