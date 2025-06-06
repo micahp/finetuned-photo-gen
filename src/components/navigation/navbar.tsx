@@ -14,9 +14,18 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { User, LogOut, Settings, CreditCard, Shield } from 'lucide-react'
 import Image from 'next/image'
+import { useEffect } from 'react'
 
 export function Navbar() {
   const { data: session, status } = useSession()
+
+  useEffect(() => {
+    // Check if the session has been invalidated by the server
+    if ((session as any)?.error === 'SessionInvalidated') {
+      console.log('Session invalidated, signing out...')
+      signOut({ callbackUrl: '/login?error=session-expired' })
+    }
+  }, [session])
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: '/' })

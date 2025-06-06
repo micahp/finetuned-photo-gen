@@ -1,12 +1,11 @@
 'use server'
 
 import { JWT } from 'next-auth/jwt'
-import { getPrismaClient } from './db'
+import { prisma } from '@/lib/db' // Adjusted path for new location
 
 export async function refreshJwt(token: JWT): Promise<JWT> {
   try {
-    const prisma = getPrismaClient()
-
+    // No need for getPrismaClient(), direct import is fine in server actions
     const refreshedUser = await prisma.user.findUnique({
       where: { id: token.sub },
       select: {
@@ -20,20 +19,22 @@ export async function refreshJwt(token: JWT): Promise<JWT> {
     })
 
     if (refreshedUser) {
+      // Check if the session has been marked as invalid on the server
       if (
         refreshedUser.sessionInvalidatedAt &&
         (!token.sessionInvalidatedAt ||
           new Date(refreshedUser.sessionInvalidatedAt) >
             new Date(token.sessionInvalidatedAt as string))
       ) {
-        console.log('Session was invalidated, forcing revalidation')
-        token.sessionInvalidatedAt = refreshedUser.sessionInvalidatedAt.toISOString()
+        console.log(`ℹ️ Server-side session invalidation for user ${token.sub}. Forcing re-login.`)
+        // By returning a token with a 'force-refresh' flag, we can trigger a client-side redirect.
         return {
           ...token,
-          exp: Math.floor(Date.now() / 1000) + 60, // Expire in 1 minute
+          error: "SessionInvalidated",
         }
       }
 
+      // Update token with fresh data
       token.credits = refreshedUser.credits
       token.subscriptionStatus = refreshedUser.subscriptionStatus
       token.subscriptionPlan = refreshedUser.subscriptionPlan
@@ -42,7 +43,9 @@ export async function refreshJwt(token: JWT): Promise<JWT> {
       token.sessionValidUntil = Date.now() + 1000 * 60 * 5 // Re-validate in 5 minutes
     }
   } catch (error) {
-    console.error('Failed to refresh user data in JWT callback:', error)
+    console.error('🔴 Failed to refresh user data in JWT callback:', error)
+    // We can add an error to the token to handle it gracefully on the client
+    token.error = "RefreshError"
   }
 
   return token

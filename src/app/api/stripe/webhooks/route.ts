@@ -121,8 +121,8 @@ export async function POST(req: NextRequest) {
               const subPeriodStart = (stripeSubscription as any).current_period_start;
               const subPeriodEnd = (stripeSubscription as any).current_period_end;
               
-              const currentPeriodStart = new Date(subPeriodStart * 1000);
-              const currentPeriodEnd = new Date(subPeriodEnd * 1000);
+              const currentPeriodStart = new Date(subPeriodStart ? subPeriodStart * 1000 : Date.now());
+              const currentPeriodEnd = new Date(subPeriodEnd ? subPeriodEnd * 1000 : Date.now());
 
               await tx.subscription.upsert({
                 where: { stripeSubscriptionId: subId },
@@ -281,8 +281,8 @@ export async function POST(req: NextRequest) {
               data: {
                 status: subscription.status,
                 planName: planName,
-                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+                currentPeriodStart: new Date((subscription as any).current_period_start ? (subscription as any).current_period_start * 1000 : Date.now()),
+                currentPeriodEnd: new Date((subscription as any).current_period_end ? (subscription as any).current_period_end * 1000 : Date.now()),
                 monthlyCredits: creditsFromPlan,
               },
             });
@@ -388,26 +388,41 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ received: true, message: '$0 invoice, no credits processed.' });
         }
 
-        const invSubscriptionId = (invoice as any).subscription as string;
+        const subscriptionFromInvoice = (invoice as any).subscription;
+        let invSubscriptionId: string | null = null;
+        if (typeof subscriptionFromInvoice === 'string') {
+          invSubscriptionId = subscriptionFromInvoice;
+        } else if (subscriptionFromInvoice && typeof subscriptionFromInvoice === 'object' && subscriptionFromInvoice.id) {
+          invSubscriptionId = subscriptionFromInvoice.id;
+        }
+
         if (!invSubscriptionId) {
           console.warn(`⚠️ Invoice ${invoice.id} paid, but no subscription ID found. Not a subscription renewal.`);
           return NextResponse.json({ received: true, warning: 'No subscription ID on invoice, not a renewal.' }, { status: 200 });
         }
 
         try {
-          const user = await prisma.user.findFirst({
-            where: { stripeCustomerId: invStripeCustomerId }
-          });
-
-          if (!user) {
-            console.error(`🔴 Error: User not found for stripeCustomerId ${invStripeCustomerId} from invoice ${invoice.id}.`);
-            return NextResponse.json({ received: true, warning: `User not found for customer ${invStripeCustomerId}.` }, { status: 200 });
-          }
-          const userId = user.id;
-
           const stripeSubscription = await stripe.subscriptions.retrieve(invSubscriptionId, {
             expand: ['items.data.price.product'],
           });
+
+          let user;
+          if (stripeSubscription.metadata.userId) {
+            user = await prisma.user.findUnique({ where: { id: stripeSubscription.metadata.userId }});
+          }
+          
+          if (!user) {
+            // Fallback for older subscriptions or if metadata is missing
+            user = await prisma.user.findFirst({
+              where: { stripeCustomerId: invStripeCustomerId }
+            });
+          }
+
+          if (!user) {
+            console.error(`🔴 Error: User not found for invoice ${invoice.id}. Neither via subscription metadata nor customer ID.`);
+            return NextResponse.json({ received: true, warning: `User not found for customer ${invStripeCustomerId}.` }, { status: 200 });
+          }
+          const userId = user.id;
 
           if (!stripeSubscription?.items?.data.length) {
             console.error(`🔴 Error: Subscription ${invSubscriptionId} from invoice ${invoice.id} not found or has no items.`);

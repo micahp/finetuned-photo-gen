@@ -78,6 +78,14 @@ export async function POST(req: NextRequest) {
       },
     };
 
+    if (mode === 'subscription') {
+      checkoutSessionCreateParams.subscription_data = {
+        metadata: {
+          userId: userId,
+        },
+      };
+    }
+
     const stripeSession = await stripe.checkout.sessions.create(checkoutSessionCreateParams);
 
     if (!stripeSession.url) {
