@@ -190,6 +190,8 @@ enum CreditTransactionType {
   subscription_renewal
   refund
   admin_adjustment
+  subscription_created
+  manual_adjustment
 }
 
 enum RelatedEntityType {
