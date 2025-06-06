@@ -11,6 +11,16 @@ export interface PricingPlan {
   buttonText: string
 }
 
+// Validate environment variables are set for paid plans
+const getRequiredEnvVar = (name: string): string => {
+  const value = process.env[name];
+  if (!value && process.env.NODE_ENV === 'production') {
+    console.error(`Missing required environment variable: ${name}`);
+    throw new Error(`Configuration error: ${name} is not set`);
+  }
+  return value || '';
+};
+
 export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'free',
@@ -35,7 +45,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Creator',
     description: 'For content creators and social media',
     price: 20,
-    priceId: process.env.STRIPE_CREATOR_PLAN_PRICE_ID || 'price_1RTGE7Q8DfMDErUlV3adHlLg',
+    priceId: getRequiredEnvVar('STRIPE_CREATOR_PLAN_PRICE_ID'),
     credits: 200,
     maxModels: 3,
     features: [
@@ -55,7 +65,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Pro',
     description: 'For professionals and businesses',
     price: 40,
-    priceId: process.env.STRIPE_PRO_PLAN_PRICE_ID || 'price_1RTGEaQ8DfMDErUlV3adHlLg',
+    priceId: getRequiredEnvVar('STRIPE_PRO_PLAN_PRICE_ID'),
     credits: 1000,
     maxModels: 10,
     features: [
@@ -76,7 +86,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Ultra',
     description: 'For teams and high-volume users',
     price: 99,
-    priceId: process.env.STRIPE_ULTRA_PLAN_PRICE_ID || 'price_1RTGEcQ8DfMDErUlV3adHlLg',
+    priceId: getRequiredEnvVar('STRIPE_ULTRA_PLAN_PRICE_ID'),
     credits: 5000,
     maxModels: 25,
     features: [

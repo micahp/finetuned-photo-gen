@@ -4,10 +4,11 @@ import { auth } from '@/lib/next-auth';
 import { stripe } from '@/lib/stripe'; // Reverted to alias for now, as relative didn't solve
 import Stripe from 'stripe';
 import { z } from 'zod';
+import { getPlanById } from '@/lib/stripe/pricing';
 
 // Define a schema for input validation
 const createCheckoutSessionSchema = z.object({
-  priceId: z.string().min(1, { message: 'Price ID is required' }),
+  priceId: z.string().min(1, { message: 'Price ID or Plan ID is required' }),
   mode: z.enum(['payment', 'subscription', 'setup'], { message: 'Mode is required (e.g., subscription, payment)' }),
   quantity: z.number().int().min(1).optional().default(1),
   // You might add other parameters like metadata, customerId, etc.
@@ -36,7 +37,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
     
-    const { priceId, mode, quantity } = validation.data;
+    let { priceId, mode, quantity } = validation.data;
+
+    // Check if priceId is actually a plan ID and resolve it to a price ID
+    const plan = getPlanById(priceId);
+    if (plan) {
+      if (!plan.priceId) {
+        return NextResponse.json({ error: `No price ID available for plan: ${priceId}` }, { status: 400 });
+      }
+      priceId = plan.priceId;
+    }
+
+    // Safety check - make sure we have a non-empty price ID
+    if (!priceId || priceId.trim() === '') {
+      return NextResponse.json({ error: 'Invalid or missing price ID' }, { status: 400 });
+    }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const successUrl = `${baseUrl}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}`;

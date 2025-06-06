@@ -41,7 +41,7 @@ export default function BillingPage() {
     }
   }, [searchParams, update])
 
-  const handleSubscribe = async (priceId: string) => {
+  const handleSubscribe = async (planId: string) => {
     if (!session?.user) {
       toast.error('Please sign in to subscribe')
       return
@@ -49,14 +49,15 @@ export default function BillingPage() {
 
     setLoading(true)
     try {
-      const response = await fetch('/api/stripe/create-subscription-checkout', {
+      const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          priceId,
-          returnUrl: `${window.location.origin}/dashboard/billing`,
+          priceId: planId, // Using the plan ID, which the API will resolve to a price ID
+          mode: 'subscription',
+          quantity: 1
         }),
       })
 
@@ -66,8 +67,12 @@ export default function BillingPage() {
         throw new Error(data.error || 'Failed to create checkout session')
       }
 
-      // Redirect to Stripe Checkout
-      window.location.href = data.url
+      if (!data.url) {
+        throw new Error('No checkout URL returned')
+      }
+
+      // Redirect to Stripe Checkout (use replace to avoid browser history issues)
+      window.location.replace(data.url)
     } catch (error) {
       console.error('Subscription error:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to start subscription process')

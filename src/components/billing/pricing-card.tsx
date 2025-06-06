@@ -43,7 +43,7 @@ export function PricingCard({ plan, currentPlan, onSubscribe, loading = false }:
 
     setIsLoading(true)
     try {
-      await onSubscribe?.(plan.priceId)
+      await onSubscribe?.(plan.id)
     } catch (error) {
       console.error('Subscription error:', error)
       toast.error('Failed to start subscription process')
