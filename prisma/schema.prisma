@@ -30,6 +30,7 @@ model User {
   // Relations
   userModels          UserModel[]
   generatedImages     GeneratedImage[]
+  editedImages        EditedImage[]
   subscriptions       Subscription[]
   jobQueue            JobQueue[]
   creditTransactions  CreditTransaction[]
@@ -135,6 +136,29 @@ model GeneratedImage {
   @@map("generated_images")
 }
 
+model EditedImage {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  prompt            String
+  url               String
+  temporaryUrl      String?   @map("temporary_url")
+  width             Int?
+  height            Int?
+  fileSize          Int?      @map("file_size")
+  cloudflareImageId String?   @map("cloudflare_image_id")
+  seed              Int?
+  processingTimeMs  Int?      @map("processing_time_ms")
+  creditsUsed       Int       @default(1) @map("credits_used")
+  transactionId     String?   @map("transaction_id")
+  metadata          Json?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("edited_images")
+}
+
 model JobQueue {
   id              String    @id @default(cuid())
   userId          String?   @map("user_id")
@@ -179,6 +203,7 @@ model CreditTransaction {
   description           String
   relatedEntityType     String?   @map("related_entity_type") // 'image_generation', 'model_training', 'subscription', etc.
   relatedEntityId       String?   @map("related_entity_id") // ID of the related entity
+  relatedEditedImageId  String?   @map("related_edited_image_id") // ID of related edited image
   balanceAfter          Int       @map("balance_after") // User's credit balance after this transaction
   metadata              Json?     // Additional transaction metadata
   createdAt             DateTime  @default(now()) @map("created_at")
@@ -200,6 +225,7 @@ enum CreditTransactionType {
 
 enum RelatedEntityType {
   image_generation
+  image_edit
   model_training
   subscription
   admin_action

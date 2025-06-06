@@ -11,6 +11,7 @@ export type CreditTransactionType =
 
 export type RelatedEntityType = 
   | 'image_generation' 
+  | 'image_edit'
   | 'model_training' 
   | 'subscription' 
   | 'admin_action'

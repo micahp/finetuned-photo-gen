@@ -760,4 +760,110 @@ export class ReplicateService {
       }
     ]
   }
+
+  /**
+   * Edit an image using Flux.1 Kontext Pro
+   */
+  async editImageWithKontext(params: {
+    input_image: string
+    prompt: string
+    width?: number
+    height?: number
+    seed?: number
+  }): Promise<ReplicateGenerationResponse> {
+    try {
+      console.log('🖌️ Editing image with Flux.1 Kontext Pro...', {
+        prompt: params.prompt,
+        has_image: !!params.input_image
+      })
+
+      // Run the Flux.1 Kontext Pro model
+      const prediction = await this.client.predictions.create({
+        version: "black-forest-labs/flux-kontext-pro:0f1178f5a27e9aa2d2d39c8a43c110f7fa7cbf64062ff04a04cd40899e546065", 
+        input: {
+          prompt: params.prompt,
+          input_image: params.input_image,
+          width: params.width || 768,
+          height: params.height || 768,
+          seed: params.seed
+        }
+      })
+
+      // Check for immediate errors
+      if (prediction.error) {
+        console.error('❌ Immediate error with Kontext edit:', prediction.error)
+        return {
+          id: String(prediction.id),
+          status: 'failed',
+          error: String(prediction.error)
+        }
+      }
+
+      // Wait for the prediction to complete - use get with polling instead of wait
+      let result = prediction;
+      let status = result.status;
+      
+      // Poll until the prediction is complete
+      while (status === 'starting' || status === 'processing') {
+        // Wait a bit before checking again
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Get the updated prediction
+        result = await this.client.predictions.get(String(prediction.id));
+        status = result.status;
+      }
+      
+      console.log('✅ Kontext edit completed:', {
+        id: result.id,
+        status: result.status,
+        output: result.output ? 'Present' : 'Not present',
+        error: result.error
+      })
+
+      // Handle the completed result
+      if (result.status === 'succeeded' && result.output) {
+        // The output is the edited image URL
+        const outputUrl = Array.isArray(result.output) 
+          ? result.output[0] 
+          : typeof result.output === 'string' 
+            ? result.output 
+            : result.output && typeof result.output === 'object' && ('image' in result.output || 'url' in result.output)
+              ? (result.output.image || result.output.url) as string
+              : null;
+
+        if (!outputUrl) {
+          console.error('❌ No output URL found in Kontext result:', result)
+          return {
+            id: String(result.id),
+            status: 'failed',
+            error: 'No output URL found in result'
+          }
+        }
+
+        return {
+          id: String(result.id),
+          status: 'completed',
+          images: [{
+            url: outputUrl,
+            width: params.width || 768,
+            height: params.height || 768
+          }]
+        }
+      } else {
+        console.error('❌ Kontext edit failed:', result.error || 'Unknown error')
+        return {
+          id: String(result.id),
+          status: 'failed',
+          error: result.error ? String(result.error) : 'Editing failed with unknown error'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Exception during Kontext edit:', error)
+      return {
+        id: `error_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
+    }
+  }
 } 
