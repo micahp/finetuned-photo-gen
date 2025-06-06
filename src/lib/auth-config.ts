@@ -49,33 +49,18 @@ export const authConfig: NextAuthConfig = {
         token.stripeCustomerId = user.stripeCustomerId
         token.credits = user.credits
         token.createdAt = user.createdAt
+        token.sessionValidUntil = Date.now() + 1000 * 60 * 5 // Check for invalidation every 5 minutes
       }
       
-      // If session is being updated, refresh user data from database
-      if (trigger === 'update' && token.sub) {
-        try {
-          const { prisma } = await import('@/lib/db')
-          const refreshedUser = await prisma.user.findUnique({
-            where: { id: token.sub },
-            select: {
-              credits: true,
-              subscriptionStatus: true,
-              subscriptionPlan: true,
-              stripeCustomerId: true,
-              isAdmin: true
-            }
-          })
-          
-          if (refreshedUser) {
-            token.credits = refreshedUser.credits
-            token.subscriptionStatus = refreshedUser.subscriptionStatus
-            token.subscriptionPlan = refreshedUser.subscriptionPlan
-            token.stripeCustomerId = refreshedUser.stripeCustomerId
-            token.isAdmin = refreshedUser.isAdmin
-          }
-        } catch (error) {
-          console.error('Failed to refresh user data in JWT callback:', error)
-        }
+      // Check if token needs validation due to time expiry or explicit refresh
+      const shouldValidate = !token.sessionValidUntil || 
+                            Date.now() > (token.sessionValidUntil as number) ||
+                            trigger === 'update';
+                            
+      // Only run this on the server in a Node.js environment
+      if (shouldValidate && token.sub && typeof process !== 'undefined') {
+        const { refreshJwt } = await import('./auth-server');
+        return refreshJwt(token);
       }
       
       return token
@@ -91,7 +76,7 @@ export const authConfig: NextAuthConfig = {
         session.user.createdAt = token.createdAt as string
       }
       return session
-    },
+    }
   },
   providers: [
     CredentialsProvider({

@@ -409,17 +409,45 @@ export async function POST(req: NextRequest) {
                 console.error('🔴 Error: User not found for customer.subscription.deleted', { stripeCustomerId: deletedSubStripeCustomerId });
                 return NextResponse.json({ received: true, eventId: event.id, warning: 'User not found.' }, { status: 200 });
             }
+            // Update the user and subscription records in a transaction
             await prisma.$transaction(async (tx) => {
                 await tx.user.update({
                     where: { id: user.id },
-                    data: { subscriptionStatus: deletedSubscription.status }, // e.g., 'canceled'
+                    data: { 
+                        subscriptionStatus: deletedSubscription.status, // e.g., 'canceled'
+                        // Mark the session as invalidated so the client knows to refresh
+                        sessionInvalidatedAt: new Date()
+                    },
                 });
                 await tx.subscription.updateMany({
                     where: { stripeSubscriptionId: deletedSubId, userId: user.id },
                     data: { status: deletedSubscription.status }, // e.g., 'canceled'
                 });
             });
+            
             console.log(`✅ Subscription ${deletedSubId} status updated to ${deletedSubscription.status} for user ${user.id}.`);
+            
+            // Also notify our session invalidation API to ensure immediate effect
+            try {
+                // Call our internal API to trigger additional session invalidation mechanisms
+                const response = await fetch(new URL('/api/auth/invalidate-session', process.env.NEXTAUTH_URL).toString(), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': process.env.INTERNAL_API_KEY || '',
+                    },
+                    body: JSON.stringify({ userId: user.id }),
+                });
+                
+                if (!response.ok) {
+                    console.warn(`⚠️ Failed to invalidate session for user ${user.id} after subscription cancellation`);
+                } else {
+                    console.log(`✅ Successfully triggered session invalidation for user ${user.id}`);
+                }
+            } catch (invalidateError) {
+                console.error(`🔴 Error calling session invalidation API:`, invalidateError);
+                // Continue with webhook processing even if this fails
+            }
         } catch (err: any) {
             console.error(`🔴 Error processing customer.subscription.deleted for ${deletedSubId}:`, err.message);
             return NextResponse.json({ received: true, eventId: event.id, error: 'Failed to process subscription deletion.', details: err.message }, { status: 200 });

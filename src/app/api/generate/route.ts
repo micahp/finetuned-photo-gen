@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     const { prompt, modelId, style, aspectRatio, steps, seed, userModelId } = validation.data
 
-    // Check if user has enough credits
+    // Check if user has enough credits and active subscription
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { 
@@ -56,10 +56,32 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    if (!user || user.credits < 1) {
+    // Ensure user exists
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check if user has enough credits
+    if (user.credits < 1) {
       return NextResponse.json(
         { error: 'Insufficient credits' },
         { status: 400 }
+      )
+    }
+
+    // Check if subscription has been canceled but user trying to use premium features
+    if (user.subscriptionStatus === 'canceled' && user.subscriptionPlan) {
+      // If they had a paid plan but it was canceled, force them to see the billing page
+      return NextResponse.json(
+        { 
+          error: 'Your subscription has been canceled. Please renew your subscription to continue.',
+          subscriptionCanceled: true,
+          redirectToBilling: true 
+        },
+        { status: 403 }
       )
     }
 

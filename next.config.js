@@ -10,6 +10,9 @@ const nextConfig = {
   // Enable standalone output for Docker
   output: 'standalone',
   
+  // Server configuration - Only keep server-side packages that don't conflict
+  serverExternalPackages: ['bcryptjs'],
+  
   // Development optimizations to prevent CSS issues
   experimental: {
     turbo: {
@@ -55,6 +58,16 @@ const nextConfig = {
         util: false,
         buffer: false,
       },
+    }
+
+    // Add server-side only packages to externals
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        // Exclude server-only modules from client bundles
+        '@prisma/client': false,
+        'bcryptjs': false,
+      };
     }
 
     return config
