@@ -1,6 +1,9 @@
 import NextAuth from 'next-auth'
 import { baseAuthConfig } from './auth-config'
 import { refreshJwt } from '@/lib/actions/auth.actions'
+import { prisma } from '@/lib/db'
+
+const SESSION_MAX_AGE_SECONDS = parseInt(process.env.SESSION_MAX_AGE_SECONDS || (60 * 60 * 24 * 30).toString()); // Default: 30 days
 
 export const { 
   handlers: { GET, POST }, 
@@ -10,6 +13,18 @@ export const {
 } = NextAuth({
   ...baseAuthConfig,
   secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
+  events: {
+    async signIn({ user }) {
+      if (user.id) {
+        // A new sign-in is a fresh start. Clear any previous server-side invalidation flags.
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { sessionInvalidatedAt: null },
+        });
+        console.log(`ℹ️ Cleared session invalidation flag for user ${user.id} on new sign-in.`);
+      }
+    }
+  },
   callbacks: {
     // The authorized callback is client-safe, so we can define it here.
     authorized({ auth, request: { nextUrl } }) {
@@ -38,7 +53,7 @@ export const {
         token.stripeCustomerId = user.stripeCustomerId
         token.credits = user.credits
         token.createdAt = user.createdAt
-        token.sessionValidUntil = Date.now() + 1000 * 60 * 5 // 5 minutes
+        token.sessionValidUntil = Date.now() + SESSION_MAX_AGE_SECONDS * 1000
       }
       
       const shouldValidate = !token.sessionValidUntil || 

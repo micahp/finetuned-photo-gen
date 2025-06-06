@@ -3,6 +3,8 @@
 import { JWT } from 'next-auth/jwt'
 import { prisma } from '@/lib/db' // Adjusted path for new location
 
+const SESSION_MAX_AGE_SECONDS = parseInt(process.env.SESSION_MAX_AGE_SECONDS || (60 * 60 * 24 * 30).toString()); // Default: 30 days
+
 export async function refreshJwt(token: JWT): Promise<JWT> {
   try {
     // No need for getPrismaClient(), direct import is fine in server actions
@@ -40,7 +42,7 @@ export async function refreshJwt(token: JWT): Promise<JWT> {
       token.subscriptionPlan = refreshedUser.subscriptionPlan
       token.stripeCustomerId = refreshedUser.stripeCustomerId
       token.isAdmin = refreshedUser.isAdmin
-      token.sessionValidUntil = Date.now() + 1000 * 60 * 5 // Re-validate in 5 minutes
+      token.sessionValidUntil = Date.now() + SESSION_MAX_AGE_SECONDS * 1000 // Re-validate in 30 days
     }
   } catch (error) {
     console.error('🔴 Failed to refresh user data in JWT callback:', error)
