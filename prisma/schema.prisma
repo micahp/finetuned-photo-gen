@@ -23,7 +23,7 @@ model User {
   subscriptionStatus  String    @default("free") @map("subscription_status")
   subscriptionPlan    String?   @map("subscription_plan")
   stripeCustomerId    String?   @map("stripe_customer_id")
-  credits             Int       @default(3)
+  credits             Int       @default(10)
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
   
