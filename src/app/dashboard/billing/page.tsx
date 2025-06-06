@@ -30,6 +30,7 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(false)
   const [portalLoading, setPortalLoading] = useState(false)
   const [processingSubscription, setProcessingSubscription] = useState(false)
+  const [canceledPlanName, setCanceledPlanName] = useState<string | null>(null)
   
   // Check for missing webhook secret in development
   const [missingWebhookSecret, setMissingWebhookSecret] = useState(false)
@@ -123,8 +124,14 @@ export default function BillingPage() {
       // Start checking subscription status
       checkSubscriptionStatus()
     } else if (canceled) {
+      // Store the plan name *before* updating the session
+      const planBeforeUpdate = getCurrentPlan(session?.user?.subscriptionPlan)
+      if (planBeforeUpdate && planBeforeUpdate.name !== 'Free') {
+        setCanceledPlanName(planBeforeUpdate.name)
+      }
+
       // Update session to reflect latest state
-      update({ force: true })
+      update() // Use GET request to avoid CSRF issues
       
       toast.info('Subscription canceled. You can try again anytime.', {
         id: 'subscription-canceled' // Add an ID to prevent duplicates
@@ -290,6 +297,20 @@ export default function BillingPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {canceledPlanName && (
+              <div className="mb-4 bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <CheckCircle className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-blue-700">
+                      Your <span className="font-semibold">{canceledPlanName}</span> subscription has been canceled. You are now on the Free plan.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold">{currentPlan.name} Plan</h3>

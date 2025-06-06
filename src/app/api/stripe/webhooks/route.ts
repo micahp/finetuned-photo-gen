@@ -249,44 +249,41 @@ export async function POST(req: NextRequest) {
           const stripeProduct = await stripe.products.retrieve(productId);
 
           const planName = stripeProduct.name;
-          const creditsFromPlanString = stripeProduct.metadata?.credits || '0';
-          const creditsToAllocate = parseInt(creditsFromPlanString, 10);
-
-          if (isNaN(creditsToAllocate)) {
-            console.error(`🔴 Error: Invalid credits value in product metadata for ${productId}.`, { userId, metadataValue: creditsFromPlanString });
-            return NextResponse.json({ received: true, error: 'Invalid credits in product metadata' }, { status: 200 });
-          }
+          const creditsFromPlan = parseInt(stripeProduct.metadata?.credits || '0', 10);
 
           await prisma.$transaction(async (tx) => {
-            await tx.user.update({
-              where: { id: userId },
-              data: {
-                stripeCustomerId: subStripeCustomerId,
-                subscriptionStatus: subscription.status,
-                subscriptionPlan: planName,
-              },
-            });
+            // Special handling for canceled subscriptions
+            if (subscription.status === 'canceled') {
+              await tx.user.update({
+                where: { id: userId },
+                data: {
+                  subscriptionPlan: null, // Revert to free plan
+                  subscriptionStatus: 'free', // Use a clear 'free' status
+                  stripeSubscriptionStatus: 'canceled', // Keep the Stripe status for reference
+                },
+              });
+              console.log(`✅ User ${userId} subscription plan set to free due to cancellation.`);
+            } else {
+              // Standard update for other status changes (e.g., active, past_due)
+              await tx.user.update({
+                where: { id: userId },
+                data: {
+                  subscriptionStatus: subscription.status,
+                  subscriptionPlan: planName,
+                  stripeSubscriptionStatus: subscription.status,
+                },
+              });
+            }
 
-            const periodStart = new Date((subscription as any).current_period_start * 1000);
-            const periodEnd = new Date((subscription as any).current_period_end * 1000);
-
-            await tx.subscription.upsert({
+            // Update local Subscription record
+            await tx.subscription.update({
               where: { stripeSubscriptionId: subId },
-              create: {
-                userId: userId,
-                stripeSubscriptionId: subId,
-                planName: planName,
+              data: {
                 status: subscription.status,
-                currentPeriodStart: periodStart,
-                currentPeriodEnd: periodEnd,
-                monthlyCredits: creditsToAllocate, 
-              },
-              update: {
                 planName: planName,
-                status: subscription.status,
-                currentPeriodStart: periodStart,
-                currentPeriodEnd: periodEnd,
-                monthlyCredits: creditsToAllocate,
+                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+                monthlyCredits: creditsFromPlan,
               },
             });
 
