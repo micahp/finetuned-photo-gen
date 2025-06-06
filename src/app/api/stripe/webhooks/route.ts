@@ -107,13 +107,15 @@ export async function POST(req: NextRequest) {
             }
 
             await prisma.$transaction(async (tx) => {
+              const userData = {
+                stripeCustomerId: stripeCustomerId,
+                subscriptionStatus: stripeSubscription.status,
+                subscriptionPlan: planName,
+              };
+              console.log(`[DIAGNOSTIC] Updating user in checkout.session.completed`, { userId, data: userData });
               await tx.user.update({
                 where: { id: userId },
-                data: {
-                  stripeCustomerId: stripeCustomerId,
-                  subscriptionStatus: stripeSubscription.status,
-                  subscriptionPlan: planName,
-                },
+                data: userData,
               });
 
               const subId = stripeSubscription.id;
@@ -254,24 +256,28 @@ export async function POST(req: NextRequest) {
           await prisma.$transaction(async (tx) => {
             // Special handling for canceled subscriptions
             if (subscription.status === 'canceled') {
+              const userData = {
+                subscriptionPlan: null, // Revert to free plan
+                subscriptionStatus: 'free', // Use a clear 'free' status
+                stripeSubscriptionStatus: 'canceled', // Keep the Stripe status for reference
+              };
+              console.log(`[DIAGNOSTIC] Updating user in customer.subscription.updated (canceled)`, { userId, data: userData });
               await tx.user.update({
                 where: { id: userId },
-                data: {
-                  subscriptionPlan: null, // Revert to free plan
-                  subscriptionStatus: 'free', // Use a clear 'free' status
-                  stripeSubscriptionStatus: 'canceled', // Keep the Stripe status for reference
-                },
+                data: userData,
               });
               console.log(`✅ User ${userId} subscription plan set to free due to cancellation.`);
             } else {
               // Standard update for other status changes (e.g., active, past_due)
+              const userData = {
+                subscriptionStatus: subscription.status,
+                subscriptionPlan: planName,
+                stripeSubscriptionStatus: subscription.status,
+              };
+              console.log(`[DIAGNOSTIC] Updating user in customer.subscription.updated (active)`, { userId, data: userData });
               await tx.user.update({
                 where: { id: userId },
-                data: {
-                  subscriptionStatus: subscription.status,
-                  subscriptionPlan: planName,
-                  stripeSubscriptionStatus: subscription.status,
-                },
+                data: userData,
               });
             }
 
@@ -317,13 +323,17 @@ export async function POST(req: NextRequest) {
             }
             // Update the user and subscription records in a transaction
             await prisma.$transaction(async (tx) => {
+                const userData = { 
+                    subscriptionPlan: null, // Revert to free plan
+                    subscriptionStatus: 'free', // Use a clear 'free' status
+                    stripeSubscriptionStatus: deletedSubscription.status, // e.g., 'canceled'
+                    // Mark the session as invalidated so the client knows to refresh
+                    sessionInvalidatedAt: new Date()
+                };
+                console.log(`[DIAGNOSTIC] Updating user in customer.subscription.deleted`, { userId: user.id, data: userData });
                 await tx.user.update({
                     where: { id: user.id },
-                    data: { 
-                        subscriptionStatus: deletedSubscription.status, // e.g., 'canceled'
-                        // Mark the session as invalidated so the client knows to refresh
-                        sessionInvalidatedAt: new Date()
-                    },
+                    data: userData,
                 });
                 await tx.subscription.updateMany({
                     where: { stripeSubscriptionId: deletedSubId, userId: user.id },
@@ -331,29 +341,8 @@ export async function POST(req: NextRequest) {
                 });
             });
             
-            console.log(`✅ Subscription ${deletedSubId} status updated to ${deletedSubscription.status} for user ${user.id}.`);
+            console.log(`✅ Subscription ${deletedSubId} status updated to ${deletedSubscription.status} for user ${user.id}. Session flagged for invalidation.`);
             
-            // Also notify our session invalidation API to ensure immediate effect
-            try {
-                // Call our internal API to trigger additional session invalidation mechanisms
-                const response = await fetch(new URL('/api/auth/invalidate-session', process.env.NEXTAUTH_URL).toString(), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': process.env.INTERNAL_API_KEY || '',
-                    },
-                    body: JSON.stringify({ userId: user.id }),
-                });
-                
-                if (!response.ok) {
-                    console.warn(`⚠️ Failed to invalidate session for user ${user.id} after subscription cancellation`);
-                } else {
-                    console.log(`✅ Successfully triggered session invalidation for user ${user.id}`);
-                }
-            } catch (invalidateError) {
-                console.error(`🔴 Error calling session invalidation API:`, invalidateError);
-                // Continue with webhook processing even if this fails
-            }
         } catch (err: any) {
             console.error(`🔴 Error processing customer.subscription.deleted for ${deletedSubId}:`, err.message);
             return NextResponse.json({ received: true, eventId: event.id, error: 'Failed to process subscription deletion.', details: err.message }, { status: 200 });
@@ -454,12 +443,14 @@ export async function POST(req: NextRequest) {
           const invoicePeriodEnd = new Date(invoiceLineItem.period.end * 1000);
 
           await prisma.$transaction(async (tx) => {
+            const userData = {
+              subscriptionStatus: stripeSubscription.status,
+              subscriptionPlan: planName,
+            };
+            console.log(`[DIAGNOSTIC] Updating user in invoice.payment_succeeded`, { userId, data: userData });
             await tx.user.update({
               where: { id: userId },
-              data: {
-                subscriptionStatus: stripeSubscription.status,
-                subscriptionPlan: planName,
-              },
+              data: userData,
             });
 
             await tx.subscription.update({
