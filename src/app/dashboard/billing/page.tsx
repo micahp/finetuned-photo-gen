@@ -65,64 +65,61 @@ export default function BillingPage() {
         id: 'subscription-processing' // Add an ID to prevent duplicates
       })
       
-      // Refresh session to get updated subscription data
-      update({ force: true })
-      
       // Add a polling mechanism to wait for subscription to be processed by webhook
       let attempts = 0;
       const maxAttempts = 20; // Maximum number of attempts (60 seconds total)
       let hasShownSuccessMessage = false;
       
-      const checkSubscriptionStatus = () => {
+      const checkSubscriptionStatus = async () => {
         attempts++;
         
-        // First check: Is subscription already active?
-        if (session?.user?.subscriptionStatus === 'active') {
-          // Only show success message once
-          if (!hasShownSuccessMessage) {
-            toast.success('Subscription activated! Your account has been updated.', {
-              id: 'subscription-success' // Add an ID to prevent duplicates
-            })
-            hasShownSuccessMessage = true;
+        try {
+          // New: Poll lightweight API endpoint
+          const response = await fetch('/api/user/subscription-status');
+          const data = await response.json();
+
+          if (data.subscriptionStatus === 'active') {
+            if (!hasShownSuccessMessage) {
+              toast.success('Subscription activated! Your account has been updated.', {
+                id: 'subscription-success'
+              });
+              hasShownSuccessMessage = true;
+            }
+            
+            setProcessingSubscription(false);
+            
+            // Final session update to sync the whole app
+            update({ force: true });
+
+            const url = new URL(window.location.href);
+            url.searchParams.delete('session_id');
+            window.history.replaceState({}, document.title, url.toString());
+            return; // Stop polling
           }
-          
-          // Hide processing indicator
-          setProcessingSubscription(false)
-          
-          // Clean up the URL to prevent repeated notifications
-          const url = new URL(window.location.href)
-          url.searchParams.delete('session_id')
-          window.history.replaceState({}, document.title, url.toString())
-          return
+        } catch (error) {
+          console.error("Failed to check subscription status", error);
+          // Decide if we should stop or continue on error
         }
         
-        // If max attempts reached, show a pending message but keep the indicator
         if (attempts >= maxAttempts) {
           toast.info('Your subscription is still processing. The page will update automatically when ready, or you can refresh in a few moments.', {
-            id: 'subscription-pending' // Add an ID to prevent duplicates
-          })
+            id: 'subscription-pending'
+          });
           
-          // Clean up the URL to prevent repeated notifications
-          const url = new URL(window.location.href)
-          url.searchParams.delete('session_id')
-          window.history.replaceState({}, document.title, url.toString())
+          const url = new URL(window.location.href);
+          url.searchParams.delete('session_id');
+          window.history.replaceState({}, document.title, url.toString());
           
-          // Keep polling in the background but less frequently
-          setTimeout(() => {
-            update({ force: true })
-          }, 10000) // Every 10 seconds after timeout
-          return
+          // Fallback to less frequent session updates after timeout
+          setTimeout(() => update({ force: true }), 10000);
+          return;
         }
         
-        // If not active yet, try again after a delay
-        setTimeout(() => {
-          update({ force: true }) // Refresh session data
-          checkSubscriptionStatus() // Check again
-        }, 3000) // Check every 3 seconds (less aggressive polling)
+        setTimeout(checkSubscriptionStatus, 3000);
       }
       
-      // Start checking subscription status
-      checkSubscriptionStatus()
+      // Start checking
+      checkSubscriptionStatus();
     } else if (canceled) {
       // Store the plan name *before* updating the session
       const planBeforeUpdate = getCurrentPlan(session?.user?.subscriptionPlan)
@@ -142,7 +139,7 @@ export default function BillingPage() {
       url.searchParams.delete('canceled')
       window.history.replaceState({}, document.title, url.toString())
     }
-  }, [searchParams, update, session?.user?.subscriptionStatus])
+  }, [searchParams, update])
 
   const handleSubscribe = async (planId: string) => {
     if (!session?.user) {

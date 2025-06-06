@@ -14,8 +14,8 @@ export function SubscriptionStatusChecker() {
 
   // Check user's subscription status periodically on protected pages
   useEffect(() => {
-    // Only check on dashboard pages
-    if (!pathname?.startsWith('/dashboard')) {
+    // Only check on dashboard pages, but exclude the billing page which has its own logic
+    if (!pathname?.startsWith('/dashboard') || pathname === '/dashboard/billing') {
       return
     }
 
