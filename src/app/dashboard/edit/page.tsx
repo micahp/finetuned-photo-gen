@@ -185,6 +185,18 @@ export default function EditPage() {
     }
   }
 
+  const handleEditThisImage = () => {
+    if (!editedImage) return;
+
+    setSourceImage(editedImage.url);
+    setEditedImage(null);
+
+    // Scroll to top to make the change obvious
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    toast.info('Image loaded for further editing.');
+  };
+
   const onSubmit = async (data: EditFormData) => {
     if (!sourceImage) {
       setError('Please upload an image to edit')
@@ -612,6 +624,10 @@ export default function EditPage() {
                       <Button onClick={downloadImage} className="w-full">
                         <Download className="h-4 w-4 mr-2" />
                         Download Image
+                      </Button>
+                      <Button onClick={handleEditThisImage} className="w-full" variant="outline">
+                        <Wand2 className="h-4 w-4 mr-2" />
+                        Edit This Image
                       </Button>
                     </div>
                   </div>
