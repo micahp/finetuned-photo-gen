@@ -12,6 +12,15 @@ jest.mock('next/navigation', () => ({
   }),
 }))
 
+// Mock sonner toast
+jest.mock('sonner', () => ({
+  toast: {
+    success: jest.fn(),
+    error: jest.fn(),
+    info: jest.fn(),
+  },
+}))
+
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>
 
 // Mock fetch
@@ -21,7 +30,25 @@ global.fetch = jest.fn()
 global.URL.createObjectURL = jest.fn(() => 'mock-url')
 global.URL.revokeObjectURL = jest.fn()
 
-describe('Edit Page - Credit Management', () => {
+// Mock FileReader
+class MockFileReader {
+  onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => any) | null = null
+  onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => any) | null = null
+  result: string | ArrayBuffer | null = null
+
+  readAsDataURL(file: File) {
+    setTimeout(() => {
+      this.result = `data:image/jpeg;base64,mock-base64-data`
+      if (this.onload) {
+        this.onload.call(this, { target: this } as any)
+      }
+    }, 100)
+  }
+}
+
+global.FileReader = MockFileReader as any
+
+describe('Edit Page - Comprehensive Tests', () => {
   const createMockSession = (overrides = {}) => ({
     user: {
       id: 'user-123',
@@ -39,221 +66,26 @@ describe('Edit Page - Credit Management', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    localStorage.clear()
     
     // Mock default fetch responses
     const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({}),
+      blob: async () => new Blob(['fake image data']),
     } as Response)
-  })
-
-  it('should display correct credit count after webhook processing', async () => {
-    const mockSession = createMockSession({
-      subscriptionStatus: 'active',
-      subscriptionPlan: 'creator',
-      credits: 500, // Credits added by webhook
-    })
-
-    mockUseSession.mockReturnValue({
-      data: mockSession,
-      status: 'authenticated',
-      update: jest.fn(),
-    })
-
-    render(<EditPage />)
     
-    // Wait for page to load and verify credit display
-    await waitFor(() => {
-      expect(screen.getByText(/Credits: 500/i)).toBeInTheDocument()
-    })
+    // Reset DOM between tests
+    document.body.innerHTML = ''
   })
 
-  it('should disable edit button when credits are insufficient', async () => {
-    const mockSession = createMockSession({
-      subscriptionStatus: 'free',
-      subscriptionPlan: null,
-      credits: 0, // No credits remaining
-    })
-
-    mockUseSession.mockReturnValue({
-      data: mockSession,
-      status: 'authenticated',
-      update: jest.fn(),
-    })
-
-    render(<EditPage />)
-    
-    // Wait for page to load
-    await waitFor(() => {
-      expect(screen.getByText(/Credits: 0/i)).toBeInTheDocument()
-    })
-
-    // Verify edit button is disabled (when image is selected)
-    // First need to simulate image upload to enable the button check
-    const fileInput = screen.getByLabelText(/upload image/i) || screen.getByText(/choose image/i)
-    if (fileInput) {
-      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
-      fireEvent.change(fileInput, { target: { files: [file] } })
-    }
-
-    // Look for edit/apply button and check if it's disabled
-    await waitFor(() => {
-      const editButton = screen.queryByRole('button', { name: /edit|apply/i })
-      if (editButton) {
-        expect(editButton).toBeDisabled()
-      }
-    })
-  })
-
-  it('should update credit count after successful edit', async () => {
-    const mockUpdate = jest.fn()
-    const mockSession = createMockSession({
-      subscriptionStatus: 'active',
-      subscriptionPlan: 'creator',
-      credits: 100,
-    })
-
-    mockUseSession.mockReturnValue({
-      data: mockSession,
-      status: 'authenticated',
-      update: mockUpdate,
-    })
-
-    // Mock successful edit response
-    const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        success: true,
-        editedImage: '/edited-image.jpg',
-        remainingCredits: 99, // One credit deducted
-      }),
-    } as Response)
-
-    render(<EditPage />)
-    
-    // Wait for page to load and check initial credits
-    await waitFor(() => {
-      expect(screen.getByText(/Credits: 100/i)).toBeInTheDocument()
-    })
-
-    // Simulate image upload
-    const fileInput = screen.getByLabelText(/upload image/i) || screen.getByText(/choose image/i)
-    if (fileInput) {
-      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
-      fireEvent.change(fileInput, { target: { files: [file] } })
-    }
-
-    // Wait for image to load and then attempt edit
-    await waitFor(() => {
-      const editButton = screen.queryByRole('button', { name: /edit|apply/i })
-      if (editButton && !editButton.hasAttribute('disabled')) {
-        fireEvent.click(editButton)
-      }
-    })
-
-    // Wait for edit to complete and verify credit update
-    await waitFor(() => {
-      expect(screen.getByText(/Credits: 99/i)).toBeInTheDocument()
-    }, { timeout: 5000 })
-
-    // Verify session was updated
-    expect(mockUpdate).toHaveBeenCalledWith({ credits: 99 })
-  })
-
-  it('should show error when attempting to edit with insufficient credits', async () => {
-    const mockSession = createMockSession({
-      subscriptionStatus: 'free',
-      subscriptionPlan: null,
-      credits: 0,
-    })
-
-    mockUseSession.mockReturnValue({
-      data: mockSession,
-      status: 'authenticated',
-      update: jest.fn(),
-    })
-
-    render(<EditPage />)
-    
-    // Wait for page to load
-    await waitFor(() => {
-      expect(screen.getByText(/Credits: 0/i)).toBeInTheDocument()
-    })
-
-    // Simulate image upload
-    const fileInput = screen.getByLabelText(/upload image/i) || screen.getByText(/choose image/i)
-    if (fileInput) {
-      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
-      fireEvent.change(fileInput, { target: { files: [file] } })
-    }
-
-    // Edit button should be disabled due to insufficient credits
-    await waitFor(() => {
-      const editButton = screen.queryByRole('button', { name: /edit|apply/i })
-      if (editButton) {
-        expect(editButton).toBeDisabled()
-      }
-    })
-  })
-
-  it('should update credit display when session is refreshed after webhook', async () => {
-    const mockUpdate = jest.fn()
-    const initialSession = createMockSession({
-      subscriptionStatus: 'free',
-      subscriptionPlan: null,
-      credits: 3,
-    })
-
-    mockUseSession.mockReturnValue({
-      data: initialSession,
-      status: 'authenticated',
-      update: mockUpdate,
-    })
-
-    const { rerender } = render(<EditPage />)
-    
-    // Wait for initial load
-    await waitFor(() => {
-      expect(screen.getByText(/Credits: 3/i)).toBeInTheDocument()
-    })
-
-    // Simulate session update after webhook processing
-    const updatedSession = createMockSession({
-      subscriptionStatus: 'active',
-      subscriptionPlan: 'creator',
-      credits: 500, // Credits added by webhook
-    })
-
-    mockUseSession.mockReturnValue({
-      data: updatedSession,
-      status: 'authenticated',
-      update: mockUpdate,
-    })
-
-    rerender(<EditPage />)
-
-    // Should show updated credits and enable editing
-    await waitFor(() => {
-      expect(screen.getByText(/Credits: 500/i)).toBeInTheDocument()
-    })
-  })
-
-  it('should handle different subscription plans and credit allocations', async () => {
-    const testCases = [
-      { plan: 'free', credits: 3, shouldEnableEdit: true },
-      { plan: 'starter', credits: 100, shouldEnableEdit: true },
-      { plan: 'creator', credits: 500, shouldEnableEdit: true },
-      { plan: 'pro', credits: 2000, shouldEnableEdit: true },
-      { plan: 'free', credits: 0, shouldEnableEdit: false },
-    ]
-
-    for (const testCase of testCases) {
+  describe('Credit Management', () => {
+    it('should display correct credit count after webhook processing', async () => {
       const mockSession = createMockSession({
-        subscriptionStatus: testCase.plan === 'free' && testCase.credits > 0 ? 'free' : 'active',
-        subscriptionPlan: testCase.plan,
-        credits: testCase.credits,
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 500, // Credits added by webhook
       })
 
       mockUseSession.mockReturnValue({
@@ -262,122 +94,475 @@ describe('Edit Page - Credit Management', () => {
         update: jest.fn(),
       })
 
-      const { unmount } = render(<EditPage />)
+      render(<EditPage />)
+      
+      // Wait for page to load and verify credit display
+      await waitFor(() => {
+        expect(screen.getByText('Credits:')).toBeInTheDocument()
+        expect(screen.getByText('500')).toBeInTheDocument()
+      })
+    })
+
+    it('should disable edit button when credits are insufficient', async () => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'free',
+        subscriptionPlan: null,
+        credits: 0, // No credits remaining
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+
+      render(<EditPage />)
       
       // Wait for page to load
       await waitFor(() => {
-        expect(screen.getByText(new RegExp(`Credits: ${testCase.credits}`, 'i'))).toBeInTheDocument()
+        expect(screen.getByText('Credits:')).toBeInTheDocument()
+        expect(screen.getByText('0')).toBeInTheDocument()
       })
 
-      // Simulate image upload to enable edit functionality check
-      const fileInput = screen.getByLabelText(/upload image/i) || screen.getByText(/choose image/i)
+      // Upload an image first to enable the edit functionality check
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      const fileInput = screen.getByRole('button', { hidden: true }) || uploadArea
+      
       if (fileInput) {
         const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
         fireEvent.change(fileInput, { target: { files: [file] } })
-      }
-
-      // Check edit button state after image is uploaded
-      await waitFor(() => {
-        const editButton = screen.queryByRole('button', { name: /edit|apply/i })
-        if (editButton) {
-          if (testCase.shouldEnableEdit) {
-            expect(editButton).not.toBeDisabled()
-          } else {
+        
+        await waitFor(() => {
+          const editButton = screen.queryByRole('button', { name: /edit image/i })
+          if (editButton) {
             expect(editButton).toBeDisabled()
           }
-        }
-      })
-      
-      unmount()
-    }
-  })
-
-  it('should show upgrade prompt for users with no credits', async () => {
-    const mockSession = createMockSession({
-      subscriptionStatus: 'free',
-      subscriptionPlan: null,
-      credits: 0,
-    })
-
-    mockUseSession.mockReturnValue({
-      data: mockSession,
-      status: 'authenticated',
-      update: jest.fn(),
-    })
-
-    render(<EditPage />)
-    
-    // Wait for page to load
-    await waitFor(() => {
-      expect(screen.getByText(/Credits: 0/i)).toBeInTheDocument()
-    })
-
-    // Should show indication that editing is not available due to insufficient credits
-    // The exact implementation may vary, but the edit functionality should be disabled
-  })
-
-  it('should handle edit API failure gracefully', async () => {
-    const mockSession = createMockSession({
-      subscriptionStatus: 'active',
-      subscriptionPlan: 'creator',
-      credits: 100,
-    })
-
-    mockUseSession.mockReturnValue({
-      data: mockSession,
-      status: 'authenticated',
-      update: jest.fn(),
-    })
-
-    // Mock edit API failure
-    const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
-    mockFetch.mockResolvedValue({
-      ok: false,
-      json: async () => ({
-        error: 'Edit failed',
-      }),
-    } as Response)
-
-    render(<EditPage />)
-    
-    // Wait for page to load
-    await waitFor(() => {
-      expect(screen.getByText(/Credits: 100/i)).toBeInTheDocument()
-    })
-
-    // Simulate image upload
-    const fileInput = screen.getByLabelText(/upload image/i) || screen.getByText(/choose image/i)
-    if (fileInput) {
-      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
-      fireEvent.change(fileInput, { target: { files: [file] } })
-    }
-
-    // Attempt edit
-    await waitFor(() => {
-      const editButton = screen.queryByRole('button', { name: /edit|apply/i })
-      if (editButton && !editButton.hasAttribute('disabled')) {
-        fireEvent.click(editButton)
+        })
       }
     })
 
-    // Should still show original credit count (no deduction on failure)
-    await waitFor(() => {
-      expect(screen.getByText(/Credits: 100/i)).toBeInTheDocument()
+    it('should update credit count after successful edit', async () => {
+      const mockUpdate = jest.fn()
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 100,
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: mockUpdate,
+      })
+
+      // Mock successful edit response
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          id: 'edit-123',
+          url: '/edited-image.jpg',
+          prompt: 'Test edit',
+          remainingCredits: 99, // One credit deducted
+        }),
+      } as Response)
+
+      render(<EditPage />)
+      
+      // Wait for page to load and check initial credits
+      await waitFor(() => {
+        expect(screen.getByText('Credits:')).toBeInTheDocument()
+        expect(screen.getByText('100')).toBeInTheDocument()
+      })
+
+      // Simulate image upload
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      if (uploadArea) {
+        fireEvent.click(uploadArea)
+        
+        // Simulate file selection
+        const fileInput = document.querySelector('input[type="file"]')
+        if (fileInput) {
+          const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+          fireEvent.change(fileInput, { target: { files: [file] } })
+        }
+        
+        // Wait for image to upload and fill in prompt
+        await waitFor(() => {
+          const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+          fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+        })
+
+        // Click edit button
+        const editButton = screen.getByRole('button', { name: /edit image/i })
+        fireEvent.click(editButton)
+
+        // Wait for edit to complete and verify credit update
+        await waitFor(() => {
+          expect(screen.getByText('Credits:')).toBeInTheDocument()
+          expect(screen.getByText('99')).toBeInTheDocument()
+        }, { timeout: 5000 })
+
+        // Verify session was updated
+        expect(mockUpdate).toHaveBeenCalledWith({ credits: 99 })
+      }
     })
   })
 
-  it('should display different editing options based on subscription tier', async () => {
-    const testCases = [
-      { plan: 'free', credits: 3, expectedOptions: ['basic'] },
-      { plan: 'creator', credits: 500, expectedOptions: ['basic', 'advanced'] },
-      { plan: 'pro', credits: 2000, expectedOptions: ['basic', 'advanced', 'premium'] },
-    ]
-
-    for (const testCase of testCases) {
+  describe('Image Upload Functionality', () => {
+    beforeEach(() => {
       const mockSession = createMockSession({
-        subscriptionStatus: testCase.plan === 'free' ? 'free' : 'active',
-        subscriptionPlan: testCase.plan,
-        credits: testCase.credits,
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 100,
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+    })
+
+    it('should handle valid image upload', async () => {
+      render(<EditPage />)
+
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+
+      // Wait for image to be processed
+      await waitFor(() => {
+        expect(screen.getByText(/Change Image/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should reject non-image files', async () => {
+      render(<EditPage />)
+
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      const file = new File(['test'], 'test.txt', { type: 'text/plain' })
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+
+      await waitFor(() => {
+        expect(screen.getByText(/Please upload an image file/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should reject files larger than 10MB', async () => {
+      render(<EditPage />)
+
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      // Create a large file (11MB)
+      const file = new File(['x'.repeat(11 * 1024 * 1024)], 'large.jpg', { type: 'image/jpeg' })
+      Object.defineProperty(file, 'size', { value: 11 * 1024 * 1024 })
+      
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+
+      await waitFor(() => {
+        expect(screen.getByText(/Image size should be less than 10MB/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should allow changing uploaded image', async () => {
+      render(<EditPage />)
+
+      // Upload first image
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      const file1 = new File(['test1'], 'test1.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file1] } })
+
+      await waitFor(() => {
+        expect(screen.getByText(/Change Image/i)).toBeInTheDocument()
+      })
+
+      // Change to second image
+      const changeButton = screen.getByText(/Change Image/i)
+      fireEvent.click(changeButton)
+
+      const file2 = new File(['test2'], 'test2.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file2] } })
+
+      // Should still show change button
+      await waitFor(() => {
+        expect(screen.getByText(/Change Image/i)).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Preset Prompts Functionality', () => {
+    beforeEach(() => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 100,
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+    })
+
+    it('should display preset prompt buttons', async () => {
+      render(<EditPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/Quick Edit Presets/i)).toBeInTheDocument()
+        expect(screen.getByText(/Change Background/i)).toBeInTheDocument()
+        expect(screen.getByText(/Enhance Portrait/i)).toBeInTheDocument()
+        expect(screen.getByText(/Business Attire/i)).toBeInTheDocument()
+        expect(screen.getByText(/Artistic Style/i)).toBeInTheDocument()
+        expect(screen.getByText(/Vintage Look/i)).toBeInTheDocument()
+        expect(screen.getByText(/Remove Background/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should populate prompt textarea when preset is clicked', async () => {
+      render(<EditPage />)
+
+      await waitFor(() => {
+        const enhancePortraitButton = screen.getByText(/Enhance Portrait/i)
+        fireEvent.click(enhancePortraitButton)
+
+        const promptTextarea = screen.getByDisplayValue(/Enhance portrait quality with professional lighting/i)
+        expect(promptTextarea).toBeInTheDocument()
+      })
+    })
+
+    it('should allow custom prompt input', async () => {
+      render(<EditPage />)
+
+      await waitFor(() => {
+        const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+        fireEvent.change(promptTextarea, { target: { value: 'Custom edit prompt' } })
+        expect(promptTextarea).toHaveValue('Custom edit prompt')
+      })
+    })
+  })
+
+  describe('Seed Generation Functionality', () => {
+    beforeEach(() => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 100,
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+    })
+
+    it('should generate random seed when button is clicked', async () => {
+      render(<EditPage />)
+
+      await waitFor(() => {
+        // Look for the refresh button instead of text
+        const generateSeedButton = screen.getByRole('button', { name: '' }) // Button with RefreshCw icon
+        fireEvent.click(generateSeedButton)
+
+        const seedInput = screen.getByPlaceholderText(/Random seed/i)
+        expect(seedInput).toBeInTheDocument()
+      })
+    })
+
+    it('should allow manual seed input', async () => {
+      render(<EditPage />)
+
+      await waitFor(() => {
+        const seedInput = screen.getByPlaceholderText(/Random seed/i)
+        fireEvent.change(seedInput, { target: { value: '12345' } })
+        expect(seedInput).toHaveValue('12345')
+      })
+    })
+  })
+
+  describe('Download Functionality', () => {
+    beforeEach(() => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 100,
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+    })
+
+    it('should enable download after successful edit', async () => {
+      // Mock successful edit response
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          id: 'edit-123',
+          url: 'https://example.com/edited-image.jpg',
+          prompt: 'Test edit',
+          remainingCredits: 99,
+        }),
+        blob: async () => new Blob(['fake image data']),
+      } as Response)
+
+      render(<EditPage />)
+
+      // Upload image and fill prompt
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+
+      await waitFor(() => {
+        const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+        fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+      })
+
+      // Click edit button
+      const editButton = screen.getByRole('button', { name: /edit image/i })
+      fireEvent.click(editButton)
+
+      // Wait for edit to complete and check download button
+      await waitFor(() => {
+        const downloadButton = screen.getByText(/Download Image/i)
+        expect(downloadButton).toBeInTheDocument()
+      }, { timeout: 5000 })
+    })
+
+    it('should trigger download when download button is clicked', async () => {
+      // Mock successful edit response
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          id: 'edit-123',
+          url: 'https://example.com/edited-image.jpg',
+          prompt: 'Test edit',
+          remainingCredits: 99,
+        }),
+        blob: async () => new Blob(['fake image data']),
+      } as Response)
+
+      // Mock document methods
+      const mockLink = {
+        click: jest.fn(),
+        href: '',
+        download: '',
+      }
+      const createElementSpy = jest.spyOn(document, 'createElement').mockReturnValue(mockLink as any)
+      const appendChildSpy = jest.spyOn(document.body, 'appendChild').mockImplementation()
+      const removeChildSpy = jest.spyOn(document.body, 'removeChild').mockImplementation()
+
+      render(<EditPage />)
+
+      // Simulate having an edited image
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+
+      await waitFor(() => {
+        const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+        fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+      })
+
+      const editButton = screen.getByRole('button', { name: /edit image/i })
+      fireEvent.click(editButton)
+
+      await waitFor(() => {
+        const downloadButton = screen.getByText(/Download Image/i)
+        fireEvent.click(downloadButton)
+
+        expect(createElementSpy).toHaveBeenCalledWith('a')
+        expect(mockLink.click).toHaveBeenCalled()
+      }, { timeout: 5000 })
+
+      createElementSpy.mockRestore()
+      appendChildSpy.mockRestore()
+      removeChildSpy.mockRestore()
+    })
+  })
+
+  describe('Edit This Image Functionality', () => {
+    beforeEach(() => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 100,
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+    })
+
+    it('should show "Edit This Image" button after successful edit', async () => {
+      // Mock successful edit response
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          id: 'edit-123',
+          url: 'https://example.com/edited-image.jpg',
+          prompt: 'Test edit',
+          remainingCredits: 99,
+        }),
+      } as Response)
+
+      render(<EditPage />)
+
+      // Upload image and edit
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+
+      await waitFor(() => {
+        const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+        fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+      })
+
+      const editButton = screen.getByRole('button', { name: /edit image/i })
+      fireEvent.click(editButton)
+
+      await waitFor(() => {
+        const editThisImageButton = screen.getByText(/Edit This Image/i)
+        expect(editThisImageButton).toBeInTheDocument()
+      }, { timeout: 5000 })
+    })
+  })
+
+  describe('Premium Feature Gating', () => {
+    it('should show premium upgrade prompt for free users', async () => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'free',
+        subscriptionPlan: null,
+        credits: 3,
       })
 
       mockUseSession.mockReturnValue({
@@ -386,17 +571,258 @@ describe('Edit Page - Credit Management', () => {
         update: jest.fn(),
       })
 
-      const { unmount } = render(<EditPage />)
-      
-      // Wait for page to load and verify credits
+      render(<EditPage />)
+
       await waitFor(() => {
-        expect(screen.getByText(new RegExp(`Credits: ${testCase.credits}`, 'i'))).toBeInTheDocument()
+        expect(screen.getByText(/Premium/i)).toBeInTheDocument()
+        expect(screen.getByText(/Creator Plan/i)).toBeInTheDocument()
+        expect(screen.getByText(/Advanced image editing with Flux Kontext Pro/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should show edit controls for premium users', async () => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 100,
       })
 
-      // The edit page should show different options based on the subscription tier
-      // This test documents the expected behavior, actual implementation may vary
-      
-      unmount()
-    }
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+
+      render(<EditPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/Edit Controls/i)).toBeInTheDocument()
+        expect(screen.getByText(/Quick Edit Presets/i)).toBeInTheDocument()
+        expect(screen.getByPlaceholderText(/Describe how you want to edit/i)).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Error Handling', () => {
+    beforeEach(() => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 100,
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+    })
+
+    it('should handle edit API failure gracefully', async () => {
+      // Mock edit API failure
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
+      mockFetch.mockResolvedValue({
+        ok: false,
+        json: async () => ({
+          error: 'Edit failed',
+        }),
+      } as Response)
+
+      render(<EditPage />)
+
+      // Upload image and attempt edit
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+
+      await waitFor(() => {
+        const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+        fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+      })
+
+      const editButton = screen.getByRole('button', { name: /edit image/i })
+      fireEvent.click(editButton)
+
+      await waitFor(() => {
+        expect(screen.getByText(/Edit failed/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should show error when trying to edit without image', async () => {
+      render(<EditPage />)
+
+      await waitFor(() => {
+        const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+        fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+      })
+
+      const editButton = screen.getByRole('button', { name: /edit image/i })
+      fireEvent.click(editButton)
+
+      await waitFor(() => {
+        expect(screen.getByText(/Please upload an image to edit/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should show error when trying to edit with insufficient credits', async () => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 0, // No credits
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+
+      render(<EditPage />)
+
+      // Upload image
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+
+      await waitFor(() => {
+        const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+        fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+      })
+
+      const editButton = screen.getByRole('button', { name: /edit image/i })
+      fireEvent.click(editButton)
+
+      await waitFor(() => {
+        expect(screen.getByText(/Insufficient credits/i)).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Subscription Integration', () => {
+    it('should handle Stripe checkout return flow', async () => {
+      // Set up localStorage to simulate returning from Stripe
+      localStorage.setItem('stripe_checkout_session', 'cs_test_123')
+      localStorage.setItem('checkout_return_time', Date.now().toString())
+
+      const mockUpdate = jest.fn()
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 500,
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: mockUpdate,
+      })
+
+      // Mock toast
+      const { toast } = require('sonner')
+
+      render(<EditPage />)
+
+      // Wait for the effect to process the return
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith(
+          'Subscription successful! Your account has been updated.',
+          { id: 'subscription-success' }
+        )
+        expect(mockUpdate).toHaveBeenCalled()
+      })
+
+      // Should clean up localStorage
+      expect(localStorage.getItem('stripe_checkout_session')).toBeNull()
+      expect(localStorage.getItem('checkout_return_time')).toBeNull()
+    })
+
+    it('should clean up old localStorage data', async () => {
+      // Set up old localStorage data (older than 5 minutes)
+      const oldTime = Date.now() - (6 * 60 * 1000) // 6 minutes ago
+      localStorage.setItem('stripe_checkout_session', 'cs_test_123')
+      localStorage.setItem('checkout_return_time', oldTime.toString())
+
+      const mockSession = createMockSession()
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+
+      render(<EditPage />)
+
+      // Wait for cleanup
+      await waitFor(() => {
+        expect(localStorage.getItem('stripe_checkout_session')).toBeNull()
+        expect(localStorage.getItem('checkout_return_time')).toBeNull()
+      })
+    })
+  })
+
+  describe('Form Validation', () => {
+    beforeEach(() => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 100,
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+    })
+
+    it('should validate prompt is required', async () => {
+      render(<EditPage />)
+
+      // Upload image but leave prompt empty
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+
+      await waitFor(() => {
+        const editButton = screen.getByRole('button', { name: /edit image/i })
+        fireEvent.click(editButton)
+
+        // Should show validation error for empty prompt
+        expect(screen.getByText(/Prompt is required/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should validate prompt length limit', async () => {
+      render(<EditPage />)
+
+      // Upload image and enter very long prompt
+      const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
+      fireEvent.click(uploadArea!)
+
+      const fileInput = document.querySelector('input[type="file"]')
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+
+      await waitFor(() => {
+        const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+        const longPrompt = 'a'.repeat(501) // Over 500 character limit
+        fireEvent.change(promptTextarea, { target: { value: longPrompt } })
+      })
+
+      const editButton = screen.getByRole('button', { name: /edit image/i })
+      fireEvent.click(editButton)
+
+      await waitFor(() => {
+        expect(screen.getByText(/Prompt too long/i)).toBeInTheDocument()
+      })
+    })
   })
 }) 
