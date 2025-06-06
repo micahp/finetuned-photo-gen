@@ -68,7 +68,7 @@ describe('Stripe Webhook - Subscription Events', () => {
       expect(mocks.mockCreditServiceAddCredits).toHaveBeenCalledWith(
         TEST_IDS.userId,
         TEST_PLANS.standard.credits,
-        'subscription_created',
+        'subscription_initial',
         `Credits for new ${TEST_PLANS.standard.name} subscription`,
         'subscription',
         TEST_IDS.subscriptionId,
@@ -76,35 +76,28 @@ describe('Stripe Webhook - Subscription Events', () => {
           planName: TEST_PLANS.standard.name,
           stripeSubscriptionId: TEST_IDS.subscriptionId,
           status: 'active'
-        })
+        }),
+        expect.any(String) // Event ID
       );
       
       expect(mocks.mockUserUpdate).toHaveBeenCalledWith({
         where: { id: TEST_IDS.userId },
         data: { 
-          stripeCustomerId: TEST_IDS.stripeCustomerId,
           subscriptionStatus: 'active', 
-          subscriptionPlan: TEST_PLANS.standard.name 
+          subscriptionPlan: TEST_PLANS.standard.name,
+          stripeSubscriptionStatus: 'active'
         },
       });
       
-      expect(mocks.mockSubscriptionUpsert).toHaveBeenCalledWith({
+      expect(mocks.mockSubscriptionUpdateMany).toHaveBeenCalledWith({
         where: { stripeSubscriptionId: TEST_IDS.subscriptionId },
-        create: expect.objectContaining({ 
-          userId: TEST_IDS.userId, 
-          planName: TEST_PLANS.standard.name, 
+        data: {
           status: 'active',
-          monthlyCredits: TEST_PLANS.standard.credits,
+          planName: TEST_PLANS.standard.name,
           currentPeriodStart: expect.any(Date),
-          currentPeriodEnd: expect.any(Date)
-        }),
-        update: expect.objectContaining({ 
-          planName: TEST_PLANS.standard.name, 
-          status: 'active',
+          currentPeriodEnd: expect.any(Date),
           monthlyCredits: TEST_PLANS.standard.credits,
-          currentPeriodStart: expect.any(Date),
-          currentPeriodEnd: expect.any(Date)
-        }),
+        },
       });
     });
 
@@ -112,7 +105,7 @@ describe('Stripe Webhook - Subscription Events', () => {
       mocks.mockUserFindFirst.mockResolvedValue(null);
       const mockEvent = createSubscriptionEvent('customer.subscription.created');
       mocks.mockStripeConstructEvent.mockReturnValue(mockEvent);
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       const rawPayload = JSON.stringify(mockEvent.data.object);
       const req = createMockRequest(
@@ -130,15 +123,14 @@ describe('Stripe Webhook - Subscription Events', () => {
           warning: expect.stringContaining('User not found') 
         })
       );
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('User not found for stripeCustomerId'), 
-        expect.objectContaining({ subscriptionId: TEST_IDS.subscriptionId })
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('User not found for stripeCustomerId')
       );
       expect(mocks.mockCreditServiceAddCredits).not.toHaveBeenCalled();
       expect(mocks.mockUserUpdate).not.toHaveBeenCalled();
-      expect(mocks.mockSubscriptionUpsert).not.toHaveBeenCalled();
+      expect(mocks.mockSubscriptionUpdateMany).not.toHaveBeenCalled();
       
-      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
     });
   });
 
@@ -165,7 +157,7 @@ describe('Stripe Webhook - Subscription Events', () => {
       expect(mocks.mockCreditServiceAddCredits).toHaveBeenCalledWith(
         TEST_IDS.userId,
         TEST_PLANS.standard.credits,
-        'subscription_activated',
+        'subscription_renewal',
         `Credits for activated ${TEST_PLANS.standard.name} subscription`,
         'subscription',
         TEST_IDS.subscriptionId,
@@ -173,15 +165,16 @@ describe('Stripe Webhook - Subscription Events', () => {
           planName: TEST_PLANS.standard.name,
           stripeSubscriptionId: TEST_IDS.subscriptionId,
           status: 'active'
-        })
+        }),
+        expect.any(String) // Event ID
       );
       
       expect(mocks.mockUserUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ 
           data: expect.objectContaining({ 
-            stripeCustomerId: TEST_IDS.stripeCustomerId,
             subscriptionStatus: 'active', 
-            subscriptionPlan: TEST_PLANS.standard.name 
+            subscriptionPlan: TEST_PLANS.standard.name,
+            stripeSubscriptionStatus: 'active'
           }) 
         })
       );
@@ -229,23 +222,24 @@ describe('Stripe Webhook - Subscription Events', () => {
       expect(mocks.mockCreditServiceAddCredits).toHaveBeenCalledWith(
         TEST_IDS.userId,
         TEST_PLANS.premium.credits,
-        'subscription_activated',
-        `Credits for activated ${TEST_PLANS.premium.name} subscription`,
+        'subscription_renewal',
+        `Credits for updated ${TEST_PLANS.premium.name} subscription`,
         'subscription',
         TEST_IDS.subscriptionId,
         expect.objectContaining({
           planName: TEST_PLANS.premium.name,
           stripeSubscriptionId: TEST_IDS.subscriptionId,
           status: 'active'
-        })
+        }),
+        expect.any(String) // Event ID
       );
       
       expect(mocks.mockUserUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ 
           data: expect.objectContaining({ 
-            stripeCustomerId: TEST_IDS.stripeCustomerId,
             subscriptionPlan: TEST_PLANS.premium.name,
-            subscriptionStatus: 'active'
+            subscriptionStatus: 'active',
+            stripeSubscriptionStatus: 'active'
           }) 
         })
       );
@@ -270,17 +264,14 @@ describe('Stripe Webhook - Subscription Events', () => {
       const responseBody = await response.json();
       
       expect(response.status).toBe(200);
-      expect(responseBody).toEqual(
-        expect.objectContaining({ 
-          error: 'Failed to process customer.subscription.updated. View logs.',
-          details: creditServiceError.message 
-        })
-      );
+      expect(responseBody).toEqual({
+        received: true,
+        eventId: mockEvent.id,
+      });
       expect(mocks.mockCreditServiceAddCredits).toHaveBeenCalled();
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Error processing customer.subscription.updated for subscription'), 
-        expect.any(String), 
-        expect.any(String)
+        expect.stringContaining('Failed to add credits for user'), 
+        creditServiceError
       );
       
       consoleErrorSpy.mockRestore();
@@ -364,8 +355,8 @@ describe('Stripe Webhook - Subscription Events', () => {
         })
       );
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('User not found for stripeCustomerId'), 
-        expect.objectContaining({ subscriptionId: TEST_IDS.subscriptionId })
+        expect.stringContaining('User not found for customer.subscription.deleted'), 
+        expect.objectContaining({ stripeCustomerId: TEST_IDS.stripeCustomerId })
       );
       expect(mocks.mockCreditServiceAddCredits).not.toHaveBeenCalled();
       expect(mocks.mockUserUpdate).not.toHaveBeenCalled();

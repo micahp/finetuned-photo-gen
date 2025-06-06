@@ -75,8 +75,7 @@ describe('Stripe Webhook - invoice.payment_succeeded', () => {
       await expectSuccessfulResponse(response, mockEvent.id);
       
       expect(mocks.mockUserFindFirst).toHaveBeenCalledWith({ 
-        where: { stripeCustomerId: TEST_IDS.stripeCustomerId }, 
-        include: { subscriptions: true } 
+        where: { stripeCustomerId: TEST_IDS.stripeCustomerId }
       });
       expect(mocks.mockStripeSubscriptionsRetrieve).toHaveBeenCalledWith(
         TEST_IDS.subscriptionId, 
@@ -87,15 +86,16 @@ describe('Stripe Webhook - invoice.payment_succeeded', () => {
       expect(mocks.mockCreditServiceAddCredits).toHaveBeenCalledWith(
         TEST_IDS.userId,
         TEST_PLANS.standard.credits,
-        'invoice_payment_subscription_renewal',
-        `Credits for ${TEST_PLANS.standard.name} renewal (Invoice: ${TEST_IDS.invoiceId.substring(0, 10)}...)`,
-        'invoice',
-        TEST_IDS.invoiceId,
+        'subscription_renewal',
+        `Credits for ${TEST_PLANS.standard.name} renewal`,
+        'subscription',
+        TEST_IDS.subscriptionId,
         expect.objectContaining({
           planName: TEST_PLANS.standard.name,
           stripeSubscriptionId: TEST_IDS.subscriptionId,
           invoiceId: TEST_IDS.invoiceId
-        })
+        }),
+        expect.any(String) // Event ID
       );
       
       expect(mocks.mockUserUpdate).toHaveBeenCalledWith(
@@ -107,18 +107,15 @@ describe('Stripe Webhook - invoice.payment_succeeded', () => {
         })
       );
       
-      expect(mocks.mockSubscriptionUpsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { stripeSubscriptionId: TEST_IDS.subscriptionId },
-          create: expect.anything(),
-          update: expect.objectContaining({
-            status: 'active',
-            planName: TEST_PLANS.standard.name,
-            currentPeriodStart: expect.any(Date),
-            currentPeriodEnd: expect.any(Date),
-          }),
-        })
-      );
+      expect(mocks.mockSubscriptionUpdateMany).toHaveBeenCalledWith({
+        where: { stripeSubscriptionId: TEST_IDS.subscriptionId },
+        data: {
+          status: 'active',
+          currentPeriodStart: expect.any(Date),
+          currentPeriodEnd: expect.any(Date),
+          monthlyCredits: TEST_PLANS.standard.credits,
+        },
+      });
     });
 
     it('should NOT add credits if invoice amount_paid is 0', async () => {
@@ -140,8 +137,7 @@ describe('Stripe Webhook - invoice.payment_succeeded', () => {
       expect(response.status).toBe(200);
       expect(responseBody).toEqual({
         received: true,
-        eventId: mockEvent.id,
-        message: '$0 invoice, no credits processed.',
+        message: 'Invoice not for renewal or $0, no credits processed.',
       });
       
       expect(mocks.mockCreditServiceAddCredits).not.toHaveBeenCalled();
@@ -169,13 +165,12 @@ describe('Stripe Webhook - invoice.payment_succeeded', () => {
       expect(response.status).toBe(200);
       expect(responseBody).toEqual({
         received: true,
-        eventId: mockEvent.id,
-        warning: 'No subscription ID on invoice, credits not processed.',
+        warning: 'No subscription ID on invoice, not a renewal.',
       });
       
       expect(mocks.mockCreditServiceAddCredits).not.toHaveBeenCalled();
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining(`Invoice ${TEST_IDS.invoiceId} payment succeeded but no subscription ID found`)
+        expect.stringContaining(`Invoice ${TEST_IDS.invoiceId} paid, but no subscription ID found`)
       );
       
       consoleWarnSpy.mockRestore();
@@ -204,7 +199,7 @@ describe('Stripe Webhook - invoice.payment_succeeded', () => {
         })
       );
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('User not found for stripeCustomerId')
+        expect.stringContaining(`User not found for invoice ${TEST_IDS.invoiceId}`)
       );
       expect(mocks.mockCreditServiceAddCredits).not.toHaveBeenCalled();
       
@@ -231,8 +226,7 @@ describe('Stripe Webhook - invoice.payment_succeeded', () => {
 
       expect(response.status).toBe(200);
       expect(responseBody).toEqual({ 
-        received: true, 
-        eventId: mockEvent.id, 
+        received: true,
         error: 'Failed to process invoice. View logs.', 
         details: creditServiceError.message 
       });

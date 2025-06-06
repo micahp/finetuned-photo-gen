@@ -84,14 +84,15 @@ describe('Stripe Webhook - checkout.session.completed', () => {
       expect(mocks.mockCreditServiceAddCredits).toHaveBeenCalledWith(
         TEST_IDS.userId,
         TEST_PLANS.basic.credits,
-        'subscription_renewal',
-        `Subscription renewal: ${TEST_PLANS.basic.name}`,
+        'subscription_initial',
+        `Initial credits for ${TEST_PLANS.basic.name} plan`,
         'subscription',
         TEST_IDS.subscriptionId,
         expect.objectContaining({
           planName: TEST_PLANS.basic.name,
           stripeSubscriptionId: TEST_IDS.subscriptionId,
-        })
+        }),
+        expect.any(String) // Event ID
       );
       
       expect(mocks.mockUserUpdate).toHaveBeenCalledWith({
@@ -231,7 +232,8 @@ describe('Stripe Webhook - checkout.session.completed', () => {
           sessionId: TEST_IDS.sessionId,
           stripeCustomerId: TEST_IDS.stripeCustomerId,
           paymentMode: 'payment'
-        })
+        }),
+        expect.any(String) // Event ID
       );
       
       expect(mocks.mockUserUpdate).toHaveBeenCalledWith({
