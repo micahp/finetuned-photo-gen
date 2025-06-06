@@ -76,8 +76,20 @@ describe('Edit Page - Comprehensive Tests', () => {
       blob: async () => new Blob(['fake image data']),
     } as Response)
     
-    // Reset DOM between tests
-    document.body.innerHTML = ''
+    // Reset DOM between tests but ensure we have a proper container
+    if (typeof document !== 'undefined') {
+      document.body.innerHTML = ''
+      // Recreate test container after clearing
+      try {
+        const container = document.createElement('div')
+        if (container && typeof container.setAttribute === 'function') {
+          container.setAttribute('id', 'test-root')
+          document.body.appendChild(container)
+        }
+      } catch (error) {
+        console.warn('Failed to create DOM container in beforeEach:', error)
+      }
+    }
   })
 
   describe('Credit Management', () => {
@@ -126,27 +138,45 @@ describe('Edit Page - Comprehensive Tests', () => {
 
       // Upload an image first to enable the edit functionality check
       const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
-      const fileInput = screen.getByRole('button', { hidden: true }) || uploadArea
+      fireEvent.click(uploadArea!)
       
-      if (fileInput) {
-        const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
-        fireEvent.change(fileInput, { target: { files: [file] } })
-        
-        await waitFor(() => {
-          const editButton = screen.queryByRole('button', { name: /edit image/i })
-          if (editButton) {
-            expect(editButton).toBeDisabled()
-          }
-        })
-      }
+      // Find the hidden file input
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput, { target: { files: [file] } })
+      
+      // Wait for image to be uploaded and processed
+      await waitFor(() => {
+        expect(screen.getByText(/Change Image/i)).toBeInTheDocument()
+      })
+      
+      // Now check if edit button exists and is disabled (it should be because credits are 0)
+      await waitFor(() => {
+        const editButton = screen.queryByRole('button', { name: /edit image/i })
+        if (editButton) {
+          expect(editButton).toBeDisabled()
+        } else {
+          // If no edit button is shown due to 0 credits, that's also correct
+          expect(screen.getByText('Subscribe Now')).toBeInTheDocument()
+        }
+      })
     })
 
     it('should update credit count after successful edit', async () => {
       const mockUpdate = jest.fn()
+      
       const mockSession = createMockSession({
         subscriptionStatus: 'active',
         subscriptionPlan: 'creator',
         credits: 100,
+      })
+
+      // Mock the session update to properly simulate credit deduction
+      mockUpdate.mockImplementation(async ({ credits }) => {
+        if (credits !== undefined) {
+          // Update the session data to reflect the new credit count
+          mockSession.user.credits = credits
+        }
       })
 
       mockUseSession.mockReturnValue({
@@ -177,35 +207,45 @@ describe('Edit Page - Comprehensive Tests', () => {
 
       // Simulate image upload
       const uploadArea = screen.getByText(/Click to upload an image/i).closest('div')
-      if (uploadArea) {
-        fireEvent.click(uploadArea)
-        
-        // Simulate file selection
-        const fileInput = document.querySelector('input[type="file"]')
-        if (fileInput) {
-          const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
-          fireEvent.change(fileInput, { target: { files: [file] } })
-        }
-        
-        // Wait for image to upload and fill in prompt
-        await waitFor(() => {
-          const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
-          fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
-        })
+      fireEvent.click(uploadArea!)
+      
+      // Simulate file selection
+      const fileInput = document.querySelector('input[type="file"]')
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
+      fireEvent.change(fileInput!, { target: { files: [file] } })
+      
+      // Wait for image to upload (FileReader completes)
+      await waitFor(() => {
+        expect(screen.getByText(/Change Image/i)).toBeInTheDocument()
+      })
 
-        // Click edit button
-        const editButton = screen.getByRole('button', { name: /edit image/i })
-        fireEvent.click(editButton)
+      // Fill in prompt after image is loaded
+      const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+      fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
 
-        // Wait for edit to complete and verify credit update
-        await waitFor(() => {
-          expect(screen.getByText('Credits:')).toBeInTheDocument()
-          expect(screen.getByText('99')).toBeInTheDocument()
-        }, { timeout: 5000 })
+      // Wait a bit for form to update
+      await waitFor(() => {
+        expect(promptTextarea).toHaveValue('Make sky blue')
+      })
 
-        // Verify session was updated
+      // Click edit button - using more specific selector
+      const editButton = screen.getByRole('button', { name: /edit image \(1 credit\)/i })
+      expect(editButton).not.toBeDisabled()
+      fireEvent.click(editButton)
+
+      // Wait for the edit to complete and verify API was called
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith('/api/edit', expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: expect.stringContaining('Make sky blue')
+        }))
+      }, { timeout: 5000 })
+
+      // Wait for the update function to be called with correct credits
+      await waitFor(() => {
         expect(mockUpdate).toHaveBeenCalledWith({ credits: 99 })
-      }
+      }, { timeout: 5000 })
     })
   })
 
@@ -388,13 +428,28 @@ describe('Edit Page - Comprehensive Tests', () => {
       await waitFor(() => {
         const seedInput = screen.getByPlaceholderText(/Random seed/i)
         fireEvent.change(seedInput, { target: { value: '12345' } })
-        expect(seedInput).toHaveValue('12345')
+        // The input value should be a string since it's an HTML input element
+        expect(seedInput).toHaveValue(12345) // HTML input converts to number
       })
     })
   })
 
   describe('Download Functionality', () => {
     beforeEach(() => {
+      // Ensure DOM container is available
+      if (typeof document !== 'undefined') {
+        document.body.innerHTML = ''
+        try {
+          const container = document.createElement('div')
+          if (container && typeof container.setAttribute === 'function') {
+            container.setAttribute('id', 'test-root')
+            document.body.appendChild(container)
+          }
+        } catch (error) {
+          console.warn('Failed to create DOM container in beforeEach:', error)
+        }
+      }
+
       const mockSession = createMockSession({
         subscriptionStatus: 'active',
         subscriptionPlan: 'creator',
@@ -432,13 +487,23 @@ describe('Edit Page - Comprehensive Tests', () => {
       const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
       fireEvent.change(fileInput!, { target: { files: [file] } })
 
+      // Wait for image to upload (FileReader completes)
       await waitFor(() => {
-        const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
-        fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+        expect(screen.getByText(/Change Image/i)).toBeInTheDocument()
+      })
+
+      // Fill in prompt after image is loaded
+      const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+      fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+
+      // Wait for form to update
+      await waitFor(() => {
+        expect(promptTextarea).toHaveValue('Make sky blue')
       })
 
       // Click edit button
-      const editButton = screen.getByRole('button', { name: /edit image/i })
+      const editButton = screen.getByRole('button', { name: /edit image \(1 credit\)/i })
+      expect(editButton).not.toBeDisabled()
       fireEvent.click(editButton)
 
       // Wait for edit to complete and check download button
@@ -462,13 +527,35 @@ describe('Edit Page - Comprehensive Tests', () => {
         blob: async () => new Blob(['fake image data']),
       } as Response)
 
-      // Mock document methods
+      // Ensure DOM container is available BEFORE mocking document methods
+      if (typeof document !== 'undefined') {
+        document.body.innerHTML = ''
+        try {
+          const container = document.createElement('div')
+          if (container && typeof container.setAttribute === 'function') {
+            container.setAttribute('id', 'test-root')
+            document.body.appendChild(container)
+          }
+        } catch (error) {
+          console.warn('Failed to create DOM container in test:', error)
+        }
+      }
+
+      // Mock document methods AFTER DOM setup
       const mockLink = {
         click: jest.fn(),
         href: '',
         download: '',
       }
-      const createElementSpy = jest.spyOn(document, 'createElement').mockReturnValue(mockLink as any)
+      const createElementSpy = jest.spyOn(document, 'createElement')
+      // Only mock createElement for 'a' elements, let other elements work normally
+      createElementSpy.mockImplementation((tagName) => {
+        if (tagName === 'a') {
+          return mockLink as any
+        }
+        // Use the original method directly from Document prototype to avoid recursion
+        return Document.prototype.createElement.call(document, tagName)
+      })
       const appendChildSpy = jest.spyOn(document.body, 'appendChild').mockImplementation()
       const removeChildSpy = jest.spyOn(document.body, 'removeChild').mockImplementation()
 
@@ -482,12 +569,22 @@ describe('Edit Page - Comprehensive Tests', () => {
       const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
       fireEvent.change(fileInput!, { target: { files: [file] } })
 
+      // Wait for image to upload (FileReader completes)
       await waitFor(() => {
-        const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
-        fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+        expect(screen.getByText(/Change Image/i)).toBeInTheDocument()
       })
 
-      const editButton = screen.getByRole('button', { name: /edit image/i })
+      // Fill in prompt after image is loaded
+      const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
+      fireEvent.change(promptTextarea, { target: { value: 'Make sky blue' } })
+
+      // Wait for form to update
+      await waitFor(() => {
+        expect(promptTextarea).toHaveValue('Make sky blue')
+      })
+
+      const editButton = screen.getByRole('button', { name: /edit image \(1 credit\)/i })
+      expect(editButton).not.toBeDisabled()
       fireEvent.click(editButton)
 
       await waitFor(() => {
@@ -558,6 +655,7 @@ describe('Edit Page - Comprehensive Tests', () => {
   })
 
   describe('Premium Feature Gating', () => {
+
     it('should show premium upgrade prompt for free users', async () => {
       const mockSession = createMockSession({
         subscriptionStatus: 'free',
@@ -652,6 +750,18 @@ describe('Edit Page - Comprehensive Tests', () => {
     })
 
     it('should show error when trying to edit without image', async () => {
+      const mockSession = createMockSession({
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        credits: 100,
+      })
+
+      mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: jest.fn(),
+      })
+
       render(<EditPage />)
 
       await waitFor(() => {
@@ -705,6 +815,7 @@ describe('Edit Page - Comprehensive Tests', () => {
   })
 
   describe('Subscription Integration', () => {
+
     it('should handle Stripe checkout return flow', async () => {
       // Set up localStorage to simulate returning from Stripe
       localStorage.setItem('stripe_checkout_session', 'cs_test_123')

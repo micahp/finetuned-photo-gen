@@ -62,10 +62,12 @@ jest.mock('@/lib/replicate-service', () => ({
 // Mock TogetherAI service
 const mockGenerateImage = jest.fn()
 const mockGetStylePresets = jest.fn()
+const mockGetAvailableModels = jest.fn()
 jest.mock('@/lib/together-ai', () => ({
   TogetherAIService: jest.fn().mockImplementation(() => ({
     generateImage: mockGenerateImage,
     getStylePresets: mockGetStylePresets,
+    getAvailableModels: mockGetAvailableModels,
   })),
 }))
 
@@ -87,6 +89,25 @@ describe('/api/generate', () => {
       { id: 'realistic', prompt: 'photorealistic, high quality' },
       { id: 'artistic', prompt: 'artistic style, creative' },
       { id: 'none', prompt: '' },
+    ])
+    
+    // Default available models mock
+    mockGetAvailableModels.mockReturnValue([
+      {
+        id: 'black-forest-labs/FLUX.1-schnell-Free',
+        name: 'FLUX.1 Schnell (Free)',
+        provider: 'together'
+      },
+      {
+        id: 'black-forest-labs/FLUX.1-schnell',
+        name: 'FLUX.1 Schnell',
+        provider: 'together'
+      },
+      {
+        id: 'black-forest-labs/FLUX.1-pro',
+        name: 'FLUX.1 Pro',
+        provider: 'replicate'
+      }
     ])
     
     // Default Cloudflare Images mock

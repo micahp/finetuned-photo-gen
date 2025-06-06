@@ -37,44 +37,50 @@ describe('Dashboard Page - Credit Display', () => {
     expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   } as any)
 
-  const createMockStats = (credits: number, totalCreditsUsed: number = 0) => ({
-    user: {
-      credits: credits,
-      subscriptionStatus: 'active',
-      subscriptionPlan: 'creator',
-    },
-    stats: {
-      totalCreditsUsed: totalCreditsUsed,
-      totalImagesGenerated: 25,
-      totalModelsCreated: 3,
-    },
-    activity: [
-      {
-        id: '1',
-        type: 'image_generation',
-        createdAt: new Date().toISOString(),
-        creditsUsed: 1,
-        modelName: 'Test Model',
+  // Updated to match actual API response structure
+  const createMockApiResponse = (credits: number, totalCreditsUsed: number = 0) => ({
+    success: true,
+    data: {
+      user: {
+        credits: credits,
+        subscriptionStatus: 'active',
+        subscriptionPlan: 'creator',
+        memberSince: new Date().toISOString(),
       },
-      {
-        id: '2',
-        type: 'model_training',
-        createdAt: new Date().toISOString(),
-        creditsUsed: 10,
-        modelName: 'New Model',
+      stats: {
+        totalCreditsUsed: totalCreditsUsed,
+        imagesGenerated: 25,
+        modelsCount: 3,
       },
-    ],
+      recentActivity: [
+        {
+          id: '1',
+          type: 'image_generated',
+          prompt: 'Test Model',
+          imageUrl: 'https://example.com/image1.jpg',
+          createdAt: new Date().toISOString(),
+          creditsUsed: 1,
+          model: 'Test Model',
+        },
+        {
+          id: '2',
+          type: 'image_generated',
+          prompt: 'New Model',
+          imageUrl: 'https://example.com/image2.jpg',
+          createdAt: new Date().toISOString(),
+          creditsUsed: 10,
+          model: 'New Model',
+        },
+      ],
+    }
   })
 
   beforeEach(() => {
     jest.clearAllMocks()
     
-    // Mock successful stats API response
+    // Reset fetch mock without default implementation
     const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => createMockStats(500, 150),
-    } as Response)
+    mockFetch.mockReset()
   })
 
   it('should display correct credit information after webhook processing', async () => {
@@ -135,7 +141,7 @@ describe('Dashboard Page - Credit Display', () => {
       const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => createMockStats(testCase.credits, 50),
+        json: async () => createMockApiResponse(testCase.credits, 50),
       } as Response)
 
       mockUseSession.mockReturnValue({
@@ -168,7 +174,7 @@ describe('Dashboard Page - Credit Display', () => {
     const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
     mockFetch.mockResolvedValue({
       ok: true,
-      json: async () => createMockStats(350, 150), // 150 credits used
+      json: async () => createMockApiResponse(350, 150), // 150 credits used
     } as Response)
 
     mockUseSession.mockReturnValue({
@@ -211,14 +217,14 @@ describe('Dashboard Page - Credit Display', () => {
 
     render(<DashboardPage />)
     
-    // Should still show basic dashboard without stats
-    expect(screen.getByText('Dashboard')).toBeInTheDocument()
-    
-    // Should show loading or error state
+    // Should show error state
     await waitFor(() => {
-      // The component should handle the error gracefully
-      expect(screen.queryByText('Credits Remaining')).toBeInTheDocument()
+      expect(screen.getByText('Error loading dashboard')).toBeInTheDocument()
+      expect(screen.getByText('Failed to load dashboard data')).toBeInTheDocument()
     })
+    
+    // Should show retry button
+    expect(screen.getByText('Try Again')).toBeInTheDocument()
   })
 
   it('should show activity feed with credit usage information', async () => {
@@ -232,32 +238,40 @@ describe('Dashboard Page - Credit Display', () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
-        user: {
-          credits: 490,
-          subscriptionStatus: 'active',
-          subscriptionPlan: 'creator',
-        },
-        stats: {
-          totalCreditsUsed: 10,
-          totalImagesGenerated: 5,
-          totalModelsCreated: 1,
-        },
-        activity: [
-          {
-            id: '1',
-            type: 'image_generation',
-            createdAt: new Date().toISOString(),
-            creditsUsed: 1,
-            modelName: 'Portrait Model',
+        success: true,
+        data: {
+          user: {
+            credits: 490,
+            subscriptionStatus: 'active',
+            subscriptionPlan: 'creator',
+            memberSince: new Date().toISOString(),
           },
-          {
-            id: '2',
-            type: 'model_training',
-            createdAt: new Date().toISOString(),
-            creditsUsed: 10,
-            modelName: 'Custom Model',
+          stats: {
+            totalCreditsUsed: 10,
+            imagesGenerated: 5,
+            modelsCount: 1,
           },
-        ],
+          recentActivity: [
+            {
+              id: '1',
+              type: 'image_generated',
+              prompt: 'Portrait Model',
+              imageUrl: 'https://example.com/image1.jpg',
+              createdAt: new Date().toISOString(),
+              creditsUsed: 1,
+              model: 'Portrait Model',
+            },
+            {
+              id: '2',
+              type: 'image_generated',
+              prompt: 'Custom Model',
+              imageUrl: 'https://example.com/image2.jpg',
+              createdAt: new Date().toISOString(),
+              creditsUsed: 10,
+              model: 'Custom Model',
+            },
+          ],
+        }
       }),
     } as Response)
 
@@ -287,11 +301,10 @@ describe('Dashboard Page - Credit Display', () => {
       credits: 3,
     })
 
-    // Mock initial stats
     const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
-    mockFetch.mockResolvedValueOnce({
+    mockFetch.mockResolvedValue({
       ok: true,
-      json: async () => createMockStats(3, 0),
+      json: async () => createMockApiResponse(3, 0),
     } as Response)
 
     mockUseSession.mockReturnValue({
@@ -300,24 +313,23 @@ describe('Dashboard Page - Credit Display', () => {
       update: mockUpdate,
     })
 
-    const { rerender } = render(<DashboardPage />)
+    render(<DashboardPage />)
     
     // Wait for initial load
     await waitFor(() => {
       expect(screen.getByText('3')).toBeInTheDocument()
     })
 
-    // Simulate session update after webhook processing
+    // Simulate session update (e.g., after subscription purchase)
     const updatedSession = createMockSession({
       subscriptionStatus: 'active',
       subscriptionPlan: 'creator',
-      credits: 500, // Credits added by webhook
+      credits: 500,
     })
 
-    // Mock updated stats
-    mockFetch.mockResolvedValueOnce({
+    mockFetch.mockResolvedValue({
       ok: true,
-      json: async () => createMockStats(500, 0),
+      json: async () => createMockApiResponse(500, 0),
     } as Response)
 
     mockUseSession.mockReturnValue({
@@ -326,9 +338,10 @@ describe('Dashboard Page - Credit Display', () => {
       update: mockUpdate,
     })
 
-    rerender(<DashboardPage />)
+    // Re-render with updated session
+    render(<DashboardPage />)
 
-    // Should show updated credits
+    // Wait for updated credits to show
     await waitFor(() => {
       expect(screen.getByText('500')).toBeInTheDocument()
     })

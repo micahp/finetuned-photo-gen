@@ -30,7 +30,8 @@ describe('Image Generation', () => {
         id: 'black-forest-labs/FLUX.1-schnell-Free',
         name: 'FLUX.1 Schnell (Free)',
         description: 'Fast, free FLUX model - perfect for testing',
-        free: true
+        free: true,
+        provider: 'together'
       })
     })
 

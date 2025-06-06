@@ -10,6 +10,9 @@ jest.mock('next/navigation', () => ({
     push: jest.fn(),
     refresh: jest.fn(),
   }),
+  useSearchParams: () => ({
+    get: jest.fn(() => null),
+  }),
 }))
 
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>
@@ -81,7 +84,7 @@ describe('Generate Page - Credit Management', () => {
     })
 
     // Verify generate button is enabled with sufficient credits
-    const generateButton = screen.getByRole('button', { name: /generate/i })
+    const generateButton = screen.getByRole('button', { name: /generate image/i })
     expect(generateButton).not.toBeDisabled()
   })
 
@@ -106,7 +109,7 @@ describe('Generate Page - Credit Management', () => {
     })
 
     // Verify generate button is disabled
-    const generateButton = screen.getByRole('button', { name: /generate/i })
+    const generateButton = screen.getByRole('button', { name: /generate image/i })
     expect(generateButton).toBeDisabled()
   })
 
@@ -146,7 +149,15 @@ describe('Generate Page - Credit Management', () => {
           ok: true,
           json: async () => ({
             success: true,
-            images: ['/generated-image.jpg'],
+            image: {
+              id: 'img-123',
+              url: '/generated-image.jpg',
+              prompt: 'A beautiful landscape',
+              aspectRatio: '1:1',
+              width: 1024,
+              height: 1024,
+              createdAt: new Date().toISOString()
+            },
             creditsRemaining: 99, // One credit deducted
           }),
         } as Response)
@@ -165,10 +176,10 @@ describe('Generate Page - Credit Management', () => {
     })
 
     // Fill in required fields and generate
-    const promptInput = screen.getByPlaceholderText(/describe the image/i)
+    const promptInput = screen.getByPlaceholderText(/describe what you want to generate/i)
     fireEvent.change(promptInput, { target: { value: 'A beautiful landscape' } })
 
-    const generateButton = screen.getByRole('button', { name: /generate/i })
+    const generateButton = screen.getByRole('button', { name: /generate image/i })
     fireEvent.click(generateButton)
 
     // Wait for generation to complete and verify credit update
@@ -176,8 +187,8 @@ describe('Generate Page - Credit Management', () => {
       expect(screen.getByText(/99 credits/i)).toBeInTheDocument()
     }, { timeout: 5000 })
 
-    // Verify session was updated
-    expect(mockUpdate).toHaveBeenCalledWith({ credits: 99 })
+    // Verify session was updated (called without parameters to refresh from server)
+    expect(mockUpdate).toHaveBeenCalledWith()
   })
 
   it('should show error message when attempting to generate with insufficient credits', async () => {
@@ -201,10 +212,10 @@ describe('Generate Page - Credit Management', () => {
     })
 
     // Try to fill form and generate (button should be disabled)
-    const promptInput = screen.getByPlaceholderText(/describe the image/i)
+    const promptInput = screen.getByPlaceholderText(/describe what you want to generate/i)
     fireEvent.change(promptInput, { target: { value: 'A beautiful landscape' } })
 
-    const generateButton = screen.getByRole('button', { name: /generate/i })
+    const generateButton = screen.getByRole('button', { name: /generate image/i })
     expect(generateButton).toBeDisabled()
   })
 
@@ -249,7 +260,7 @@ describe('Generate Page - Credit Management', () => {
       expect(screen.getByText(/500 credits/i)).toBeInTheDocument()
     })
 
-    const generateButton = screen.getByRole('button', { name: /generate/i })
+    const generateButton = screen.getByRole('button', { name: /generate image/i })
     expect(generateButton).not.toBeDisabled()
   })
 
@@ -283,7 +294,7 @@ describe('Generate Page - Credit Management', () => {
       })
 
       // Check generate button state
-      const generateButton = screen.getByRole('button', { name: /generate/i })
+      const generateButton = screen.getByRole('button', { name: /generate image/i })
       if (testCase.shouldEnableGeneration) {
         expect(generateButton).not.toBeDisabled()
       } else {
@@ -316,7 +327,7 @@ describe('Generate Page - Credit Management', () => {
 
     // Should show some indication that user needs to upgrade or get more credits
     // The exact text may vary based on the implementation
-    const generateButton = screen.getByRole('button', { name: /generate/i })
+    const generateButton = screen.getByRole('button', { name: /generate image/i })
     expect(generateButton).toBeDisabled()
   })
 
@@ -372,10 +383,10 @@ describe('Generate Page - Credit Management', () => {
     })
 
     // Fill form and attempt generation
-    const promptInput = screen.getByPlaceholderText(/describe the image/i)
+    const promptInput = screen.getByPlaceholderText(/describe what you want to generate/i)
     fireEvent.change(promptInput, { target: { value: 'A beautiful landscape' } })
 
-    const generateButton = screen.getByRole('button', { name: /generate/i })
+    const generateButton = screen.getByRole('button', { name: /generate image/i })
     fireEvent.click(generateButton)
 
     // Should still show original credit count (no deduction on failure)

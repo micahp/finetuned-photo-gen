@@ -334,17 +334,18 @@ describe('TogetherAIService', () => {
     })
 
     it('should handle partial failures in batch processing', async () => {
-      let callCount = 0
-      mockFetch.mockImplementation(() => {
-        callCount++
-        if (callCount === 2) {
-          // Second call fails
+      // Mock fetch to fail consistently for "prompt 2" regardless of retries
+      mockFetch.mockImplementation((url, options) => {
+        const body = JSON.parse(options.body)
+        if (body.prompt === 'prompt 2') {
+          // Always fail for prompt 2 (even on retries)
           return Promise.resolve({
             ok: false,
             status: 500,
             json: async () => ({ error: { message: 'Server error' } })
           })
         }
+        // Succeed for other prompts
         return Promise.resolve({
           ok: true,
           json: async () => ({

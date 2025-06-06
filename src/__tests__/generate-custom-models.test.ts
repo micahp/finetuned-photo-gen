@@ -32,11 +32,13 @@ jest.mock('@/lib/db', () => ({
 const mockGenerateImageCustom = jest.fn()
 const mockGenerateWithLoRACustom = jest.fn()
 const mockGetStylePresetsCustom = jest.fn()
+const mockGetAvailableModelsCustom = jest.fn()
 jest.mock('@/lib/together-ai', () => ({
   TogetherAIService: jest.fn().mockImplementation(() => ({
     generateImage: mockGenerateImageCustom,
     generateWithLoRA: mockGenerateWithLoRACustom,
     getStylePresets: mockGetStylePresetsCustom,
+    getAvailableModels: mockGetAvailableModelsCustom,
   })),
 }))
 

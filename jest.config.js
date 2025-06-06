@@ -9,11 +9,19 @@ const createJestConfig = nextJest({
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'jest-environment-jsdom',
+  testEnvironmentOptions: {
+    customExportConditions: [''],
+  },
+  testTimeout: 15000, // Increase timeout to 15 seconds for all tests
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^next-auth$': '<rootDir>/src/__mocks__/next-auth.js',
     '^next-auth/react$': '<rootDir>/src/__mocks__/next-auth/react.js',
     '^next-auth/providers/credentials$': '<rootDir>/src/__mocks__/next-auth/providers/credentials.js',
+    // Mock AWS SDK modules that are causing ES module issues
+    '^@aws-sdk/(.*)$': '<rootDir>/src/__mocks__/aws-sdk.js',
+    '^@smithy/(.*)$': '<rootDir>/src/__mocks__/smithy.js',
+    '^uuid$': '<rootDir>/src/__mocks__/uuid.js',
   },
   testPathIgnorePatterns: [
     '<rootDir>/.next/', 

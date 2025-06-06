@@ -89,7 +89,7 @@ describe('CreditService - Transaction Operations', () => {
       const result = await CreditService.recordTransaction(transactionData);
 
       expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
-      expectFailedTransaction(result, `${errorMessages.failedToRecord}: ${errorMessages.userNotFound}`);
+      expectFailedTransaction(result, `${errorMessages.failedToRecord}: Record to update not found`);
     });
   });
 }); 

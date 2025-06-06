@@ -108,7 +108,7 @@ describe('/api/stripe/create-checkout-session', () => {
           },
         ],
         mode: mockMode,
-        success_url: `http://localhost:3000/dashboard/billing?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `http://localhost:3000/dashboard/billing?session_id={CHECKOUT_SESSION_ID}&refresh=true`,
         cancel_url: `http://localhost:3000/dashboard/billing`,
         customer_email: mockUserEmail,
         metadata: {
