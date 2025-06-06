@@ -76,7 +76,7 @@ export default function EditPage() {
           })
           
           // Update session to reflect new subscription status
-          update({ force: true })
+          update()
           
           // Reload the page after a delay
           setTimeout(() => {

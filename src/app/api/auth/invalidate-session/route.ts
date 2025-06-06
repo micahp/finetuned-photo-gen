@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 
 /**
@@ -11,7 +10,7 @@ import { prisma } from '@/lib/db'
  */
 export async function POST(req: NextRequest) {
   // Only allow server-side calls with API key or admin users
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   const isAdmin = session?.user?.isAdmin === true
   
   // API key for server-side calls (e.g., from webhooks)
@@ -54,7 +53,6 @@ export async function POST(req: NextRequest) {
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        // This field would need to be added to your schema
         sessionInvalidatedAt: new Date()
       }
     })
