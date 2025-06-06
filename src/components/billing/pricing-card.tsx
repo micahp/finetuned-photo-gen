@@ -66,17 +66,19 @@ export function PricingCard({ plan, currentPlan, onSubscribe, loading = false }:
   }
 
   return (
-    <Card className={`relative ${plan.popular ? 'border-blue-500 shadow-lg' : ''} ${isCurrentPlan ? 'ring-2 ring-green-500' : ''}`}>
-      {plan.popular && (
+    <Card className={`relative ${plan.popular && !isCurrentPlan ? 'border-blue-500 shadow-lg' : ''} ${isCurrentPlan ? 'ring-2 ring-green-500' : ''}`}>
+      {/* Show "Most Popular" badge only if not the current plan */}
+      {plan.popular && !isCurrentPlan && (
         <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-blue-500">
           Most Popular
         </Badge>
       )}
       
+      {/* "Current" badge takes priority over "Most Popular" */}
       {isCurrentPlan && (
-        <Badge className="absolute -top-2 right-4 bg-green-500">
+        <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-green-500">
           <Crown className="h-3 w-3 mr-1" />
-          Current
+          Current Plan
         </Badge>
       )}
 

@@ -21,11 +21,34 @@ import {
   Loader2
 } from 'lucide-react'
 
+// Helper to check if we're in development mode
+const isDev = process.env.NODE_ENV === 'development'
+
 export default function BillingPage() {
   const { data: session, status, update } = useSession()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [portalLoading, setPortalLoading] = useState(false)
+  const [processingSubscription, setProcessingSubscription] = useState(false)
+  
+  // Check for missing webhook secret in development
+  const [missingWebhookSecret, setMissingWebhookSecret] = useState(false)
+  
+  useEffect(() => {
+    // Only check in development mode
+    if (isDev) {
+      // Use an API route to check if the secret is set (to avoid exposing env vars to client)
+      fetch('/api/config/check-webhook-secret')
+        .then(res => res.json())
+        .then(data => {
+          setMissingWebhookSecret(!data.webhookSecretSet)
+        })
+        .catch(() => {
+          // If the endpoint doesn't exist, we'll assume the secret is missing
+          setMissingWebhookSecret(true)
+        })
+    }
+  }, [])
 
   // Handle success/cancel from Stripe checkout
   useEffect(() => {
@@ -33,13 +56,78 @@ export default function BillingPage() {
     const canceled = searchParams.get('canceled')
 
     if (sessionId) {
-      toast.success('Subscription successful! Your account has been updated.')
+      // Show processing indicator immediately 
+      setProcessingSubscription(true)
+      
+      // Show initial acknowledgment to the user right away
+      toast.info('Payment received! Setting up your subscription...')
+      
       // Refresh session to get updated subscription data
-      update()
+      update({ force: true })
+      
+      // Add a polling mechanism to wait for subscription to be processed by webhook
+      let attempts = 0;
+      const maxAttempts = 20; // Maximum number of attempts (60 seconds total)
+      let hasShownSuccessMessage = false;
+      
+      const checkSubscriptionStatus = () => {
+        attempts++;
+        
+        // First check: Is subscription already active?
+        if (session?.user?.subscriptionStatus === 'active') {
+          // Only show success message once
+          if (!hasShownSuccessMessage) {
+            toast.success('Subscription activated! Your account has been updated.')
+            hasShownSuccessMessage = true;
+          }
+          
+          // Hide processing indicator
+          setProcessingSubscription(false)
+          
+          // Clean up the URL to prevent repeated notifications
+          const url = new URL(window.location.href)
+          url.searchParams.delete('session_id')
+          window.history.replaceState({}, document.title, url.toString())
+          return
+        }
+        
+        // If max attempts reached, show a pending message but keep the indicator
+        if (attempts >= maxAttempts) {
+          toast.info('Your subscription is still processing. The page will update automatically when ready, or you can refresh in a few moments.')
+          
+          // Clean up the URL to prevent repeated notifications
+          const url = new URL(window.location.href)
+          url.searchParams.delete('session_id')
+          window.history.replaceState({}, document.title, url.toString())
+          
+          // Keep polling in the background but less frequently
+          setTimeout(() => {
+            update({ force: true })
+          }, 10000) // Every 10 seconds after timeout
+          return
+        }
+        
+        // If not active yet, try again after a delay
+        setTimeout(() => {
+          update({ force: true }) // Refresh session data
+          checkSubscriptionStatus() // Check again
+        }, 3000) // Check every 3 seconds (less aggressive polling)
+      }
+      
+      // Start checking subscription status
+      checkSubscriptionStatus()
     } else if (canceled) {
+      // Update session to reflect latest state
+      update({ force: true })
+      
       toast.info('Subscription canceled. You can try again anytime.')
+      
+      // Clean up the URL
+      const url = new URL(window.location.href)
+      url.searchParams.delete('canceled')
+      window.history.replaceState({}, document.title, url.toString())
     }
-  }, [searchParams, update])
+  }, [searchParams, update, session?.user?.subscriptionStatus])
 
   const handleSubscribe = async (planId: string) => {
     if (!session?.user) {
@@ -136,11 +224,50 @@ export default function BillingPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Developer Warning for Missing Webhook Secret */}
+        {isDev && missingWebhookSecret && (
+          <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Developer Warning: Stripe Webhook Secret Missing
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p className="mb-1">
+                    Subscriptions will not be processed correctly because the Stripe webhook secret is not configured.
+                  </p>
+                  <p className="mb-1">
+                    To fix this:
+                  </p>
+                  <ol className="list-decimal list-inside ml-2 space-y-1">
+                    <li>Install the <a href="https://stripe.com/docs/stripe-cli" target="_blank" rel="noopener noreferrer" className="underline">Stripe CLI</a></li>
+                    <li>Run: <code className="bg-yellow-100 px-1 py-0.5 rounded">stripe listen --forward-to localhost:3000/api/stripe/webhooks</code></li>
+                    <li>Add the webhook secret to your <code className="bg-yellow-100 px-1 py-0.5 rounded">.env.local</code> file as <code className="bg-yellow-100 px-1 py-0.5 rounded">STRIPE_WEBHOOK_SECRET=whsec_...</code></li>
+                    <li>Restart your development server</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Billing & Subscription</h1>
           <p className="text-gray-600 mt-2">
             Manage your subscription and billing information
           </p>
+          
+          {processingSubscription && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md flex items-center space-x-3">
+              <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+              <span className="text-blue-700">Processing your subscription, please wait...</span>
+            </div>
+          )}
         </div>
 
         {/* Current Subscription Status */}

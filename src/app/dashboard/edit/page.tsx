@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -15,6 +15,7 @@ import { Loader2, Sparkles, Download, RefreshCw, Upload, ImageIcon, Lightbulb, C
 import { SmartImage } from '@/components/ui/smart-image'
 import { isPremiumUser } from '@/lib/subscription-utils'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 const editSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
@@ -33,8 +34,13 @@ interface EditedImage {
 export default function EditPage() {
   const { data: session, update } = useSession()
   
-  // Premium subscription checks
-  const hasPremiumAccess = isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
+  // Premium subscription checks - using state to ensure reactivity
+  const [hasPremiumAccess, setHasPremiumAccess] = useState(false)
+  
+  // Update premium access status whenever session changes
+  useEffect(() => {
+    setHasPremiumAccess(isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus))
+  }, [session?.user?.subscriptionPlan, session?.user?.subscriptionStatus])
   
   const [isEditing, setIsEditing] = useState(false)
   const [sourceImage, setSourceImage] = useState<string | null>(null)
@@ -45,6 +51,45 @@ export default function EditPage() {
   const [isUploading, setIsUploading] = useState(false)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Check for returning from Stripe checkout
+  useEffect(() => {
+    const checkForStripeReturn = async () => {
+      // Get stored session ID and return time
+      const checkoutSessionId = localStorage.getItem('stripe_checkout_session')
+      const returnTimeStr = localStorage.getItem('checkout_return_time')
+      
+      // Only process if we have a session ID and it's a recent return (within last 5 minutes)
+      if (checkoutSessionId && returnTimeStr) {
+        const returnTime = parseInt(returnTimeStr, 10)
+        const now = Date.now()
+        const fiveMinutes = 5 * 60 * 1000
+        
+        if (now - returnTime < fiveMinutes) {
+          // Clear the stored data immediately to prevent double processing
+          localStorage.removeItem('stripe_checkout_session')
+          localStorage.removeItem('checkout_return_time')
+          
+          // Show success message
+          toast.success('Subscription successful! Your account has been updated.')
+          
+          // Update session to reflect new subscription status
+          update({ force: true })
+          
+          // Reload the page after a delay
+          setTimeout(() => {
+            window.location.reload()
+          }, 1500)
+        } else {
+          // Clean up old data
+          localStorage.removeItem('stripe_checkout_session')
+          localStorage.removeItem('checkout_return_time')
+        }
+      }
+    }
+    
+    checkForStripeReturn()
+  }, [update])
 
   // Preset editing prompts
   const presetPrompts = [
@@ -457,8 +502,15 @@ export default function EditPage() {
                                   throw new Error('Failed to create checkout session');
                                 }
                                 
-                                const { url } = await response.json();
+                                const { url, sessionId } = await response.json();
+                                
                                 if (url) {
+                                  // Store session ID in localStorage to handle refresh on return
+                                  if (sessionId) {
+                                    localStorage.setItem('stripe_checkout_session', sessionId);
+                                    localStorage.setItem('checkout_return_time', Date.now().toString());
+                                  }
+                                  
                                   // Use window.location.replace to avoid adding to browser history
                                   window.location.replace(url);
                                 } else {

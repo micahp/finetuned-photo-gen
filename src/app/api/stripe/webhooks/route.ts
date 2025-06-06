@@ -121,6 +121,15 @@ export async function POST(req: NextRequest) {
               // Cast to any for problematic properties to bypass persistent linter issue
               const subPeriodStart = (stripeSubscription as any).current_period_start;
               const subPeriodEnd = (stripeSubscription as any).current_period_end;
+              
+              // Safely convert timestamps to Date objects with validation
+              const currentPeriodStart = typeof subPeriodStart === 'number' && !isNaN(subPeriodStart) 
+                ? new Date(subPeriodStart * 1000) 
+                : new Date();
+              
+              const currentPeriodEnd = typeof subPeriodEnd === 'number' && !isNaN(subPeriodEnd)
+                ? new Date(subPeriodEnd * 1000)
+                : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // Default to 30 days from now
 
               await tx.subscription.upsert({
                 where: { stripeSubscriptionId: subId },
@@ -129,21 +138,30 @@ export async function POST(req: NextRequest) {
                   stripeSubscriptionId: subId,
                   planName: planName,
                   status: subStatus,
-                  currentPeriodStart: new Date(subPeriodStart * 1000),
-                  currentPeriodEnd: new Date(subPeriodEnd * 1000),
+                  currentPeriodStart: currentPeriodStart,
+                  currentPeriodEnd: currentPeriodEnd,
                   monthlyCredits: creditsToAllocate,
                 },
                 update: {
                   status: subStatus,
                   planName: planName,
-                  currentPeriodStart: new Date(subPeriodStart * 1000),
-                  currentPeriodEnd: new Date(subPeriodEnd * 1000),
+                  currentPeriodStart: currentPeriodStart,
+                  currentPeriodEnd: currentPeriodEnd,
                   monthlyCredits: creditsToAllocate,
                 },
               });
             });
 
             // Add credits using CreditService for proper transaction logging
+            // Safely convert timestamps to Date objects for the metadata
+            const creditsPeriodStart = typeof (stripeSubscription as any).current_period_start === 'number' && !isNaN((stripeSubscription as any).current_period_start) 
+              ? new Date((stripeSubscription as any).current_period_start * 1000) 
+              : new Date();
+            
+            const creditsPeriodEnd = typeof (stripeSubscription as any).current_period_end === 'number' && !isNaN((stripeSubscription as any).current_period_end)
+              ? new Date((stripeSubscription as any).current_period_end * 1000)
+              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+              
             await CreditService.addCredits(
               userId,
               creditsToAllocate,
@@ -154,8 +172,8 @@ export async function POST(req: NextRequest) {
               {
                 planName,
                 stripeSubscriptionId: stripeSubscription.id,
-                periodStart: new Date((stripeSubscription as any).current_period_start * 1000),
-                periodEnd: new Date((stripeSubscription as any).current_period_end * 1000)
+                periodStart: creditsPeriodStart,
+                periodEnd: creditsPeriodEnd
               },
               event.id // Pass Stripe event ID for idempotency
             );
@@ -266,6 +284,46 @@ export async function POST(req: NextRequest) {
               },
             });
 
+            // Safely convert timestamps to Date objects with robust validation
+            let periodStart = new Date();
+            let periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // Default to 30 days from now
+            
+            try {
+              if (typeof (subscription as any).current_period_start === 'number' && 
+                  !isNaN((subscription as any).current_period_start) && 
+                  (subscription as any).current_period_start > 0) {
+                // Valid timestamp - convert to date
+                periodStart = new Date((subscription as any).current_period_start * 1000);
+                // Extra validation - ensure date is not invalid
+                if (isNaN(periodStart.getTime())) {
+                  console.warn(`⚠️ Invalid date from subscription period start: ${(subscription as any).current_period_start}, using current date`);
+                  periodStart = new Date();
+                }
+              } else {
+                console.warn(`⚠️ Missing/invalid period start timestamp in subscription ${subId}, using current date`);
+              }
+              
+              if (typeof (subscription as any).current_period_end === 'number' && 
+                  !isNaN((subscription as any).current_period_end) && 
+                  (subscription as any).current_period_end > 0) {
+                // Valid timestamp - convert to date
+                periodEnd = new Date((subscription as any).current_period_end * 1000);
+                // Extra validation - ensure date is not invalid and is after start date
+                if (isNaN(periodEnd.getTime())) {
+                  console.warn(`⚠️ Invalid date from subscription period end: ${(subscription as any).current_period_end}, using fallback`);
+                  periodEnd = new Date(periodStart.getTime() + 30 * 24 * 60 * 60 * 1000);
+                } else if (periodEnd <= periodStart) {
+                  console.warn(`⚠️ Period end (${periodEnd}) not after period start (${periodStart}), using fallback`);
+                  periodEnd = new Date(periodStart.getTime() + 30 * 24 * 60 * 60 * 1000);
+                }
+              } else {
+                console.warn(`⚠️ Missing/invalid period end timestamp in subscription ${subId}, using fallback`);
+              }
+            } catch (dateError) {
+              console.error(`🔴 Error processing subscription period dates for ${subId}:`, dateError);
+              // Keep default dates set above
+            }
+
             await tx.subscription.upsert({
               where: { stripeSubscriptionId: subId },
               create: {
@@ -273,15 +331,15 @@ export async function POST(req: NextRequest) {
                 stripeSubscriptionId: subId,
                 planName: planName,
                 status: subscription.status,
-                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+                currentPeriodStart: periodStart,
+                currentPeriodEnd: periodEnd,
                 monthlyCredits: creditsToAllocate, 
               },
               update: {
                 planName: planName,
                 status: subscription.status,
-                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+                currentPeriodStart: periodStart,
+                currentPeriodEnd: periodEnd,
                 monthlyCredits: creditsToAllocate,
               },
             });
@@ -389,11 +447,53 @@ export async function POST(req: NextRequest) {
                 const planDetails = (firstLineItem as any).plan || ((firstLineItem as any).price as any)?.plan || (((firstLineItem as any).price as any)?.product as any)?.plan;
                 if (firstLineItem.period && planDetails) { 
                     try {
+                        // Safely convert period timestamps with comprehensive validation
+                        let periodStart = new Date();
+                        let periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+                        
+                        try {
+                          // Validate and convert start timestamp
+                          if (typeof firstLineItem.period.start === 'number' && 
+                              !isNaN(firstLineItem.period.start) && 
+                              firstLineItem.period.start > 0) {
+                            const tempStart = new Date(firstLineItem.period.start * 1000);
+                            if (!isNaN(tempStart.getTime())) {
+                              periodStart = tempStart;
+                            } else {
+                              console.warn(`⚠️ Invalid period start for $0 invoice ${invoice.id}, using current date`);
+                            }
+                          } else {
+                            console.warn(`⚠️ Missing/invalid period start for $0 invoice ${invoice.id}, using current date`);
+                          }
+                          
+                          // Validate and convert end timestamp
+                          if (typeof firstLineItem.period.end === 'number' && 
+                              !isNaN(firstLineItem.period.end) && 
+                              firstLineItem.period.end > 0) {
+                            const tempEnd = new Date(firstLineItem.period.end * 1000);
+                            if (!isNaN(tempEnd.getTime())) {
+                              if (tempEnd <= periodStart) {
+                                console.warn(`⚠️ Period end not after start for $0 invoice ${invoice.id}, using fallback`);
+                                periodEnd = new Date(periodStart.getTime() + 30 * 24 * 60 * 60 * 1000);
+                              } else {
+                                periodEnd = tempEnd;
+                              }
+                            } else {
+                              console.warn(`⚠️ Invalid period end for $0 invoice ${invoice.id}, using fallback`);
+                            }
+                          } else {
+                            console.warn(`⚠️ Missing/invalid period end for $0 invoice ${invoice.id}, using fallback`);
+                          }
+                        } catch (dateError) {
+                          console.error(`🔴 Error processing $0 invoice period dates for ${invoice.id}:`, dateError);
+                          // Keep default dates set above
+                        }
+                            
                         await prisma.subscription.updateMany({
                             where: { stripeSubscriptionId: (invoice as any).subscription, userId: userForZeroInvoice.id },
                             data: {
-                                currentPeriodStart: new Date(firstLineItem.period.start * 1000),
-                                currentPeriodEnd: new Date(firstLineItem.period.end * 1000),
+                                currentPeriodStart: periodStart,
+                                currentPeriodEnd: periodEnd,
                                 status: 'active', // Or derive from invoice/subscription object if more accurate
                             },
                         });
@@ -462,6 +562,56 @@ export async function POST(req: NextRequest) {
           // Update user and subscription records (especially period start/end from invoice line item)
           const invoiceLineItem = invoice.lines.data.find(line => (line as any).subscription === invSubscriptionId && (line as any).type === 'subscription') || invoice.lines.data[0];
           
+          // Safely convert period timestamps with robust validation
+          let invoicePeriodStart = new Date();
+          let invoicePeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+          
+          try {
+            if (invoiceLineItem.period) {
+              // Process start date with comprehensive validation
+              if (typeof invoiceLineItem.period.start === 'number' && 
+                  !isNaN(invoiceLineItem.period.start) && 
+                  invoiceLineItem.period.start > 0) {
+                // Convert to date object
+                const tempStart = new Date(invoiceLineItem.period.start * 1000);
+                // Validate date is valid
+                if (!isNaN(tempStart.getTime())) {
+                  invoicePeriodStart = tempStart;
+                } else {
+                  console.warn(`⚠️ Invalid period start date in invoice ${invoice.id} line item, using current date`);
+                }
+              } else {
+                console.warn(`⚠️ Missing/invalid period start in invoice ${invoice.id} line item, using current date`);
+              }
+              
+              // Process end date with comprehensive validation
+              if (typeof invoiceLineItem.period.end === 'number' && 
+                  !isNaN(invoiceLineItem.period.end) && 
+                  invoiceLineItem.period.end > 0) {
+                // Convert to date object
+                const tempEnd = new Date(invoiceLineItem.period.end * 1000);
+                // Validate date is valid and after start date
+                if (!isNaN(tempEnd.getTime())) {
+                  if (tempEnd <= invoicePeriodStart) {
+                    console.warn(`⚠️ Period end (${tempEnd}) not after period start (${invoicePeriodStart}) in invoice ${invoice.id}, using fallback`);
+                    invoicePeriodEnd = new Date(invoicePeriodStart.getTime() + 30 * 24 * 60 * 60 * 1000);
+                  } else {
+                    invoicePeriodEnd = tempEnd;
+                  }
+                } else {
+                  console.warn(`⚠️ Invalid period end date in invoice ${invoice.id} line item, using fallback`);
+                }
+              } else {
+                console.warn(`⚠️ Missing/invalid period end in invoice ${invoice.id} line item, using fallback`);
+              }
+            } else {
+              console.warn(`⚠️ No period found in invoice ${invoice.id} line item, using default dates`);
+            }
+          } catch (dateError) {
+            console.error(`🔴 Error processing invoice period dates for ${invoice.id}:`, dateError);
+            // Keep default dates set above
+          }
+          
           await prisma.$transaction(async (tx) => {
             await tx.user.update({
               where: { id: userId },
@@ -479,15 +629,15 @@ export async function POST(req: NextRequest) {
                 stripeSubscriptionId: invSubscriptionId,
                 planName: planName,
                 status: stripeSubscription.status,
-                currentPeriodStart: new Date(invoiceLineItem.period!.start * 1000),
-                currentPeriodEnd: new Date(invoiceLineItem.period!.end * 1000),
+                currentPeriodStart: invoicePeriodStart,
+                currentPeriodEnd: invoicePeriodEnd,
                 monthlyCredits: (creditsToAllocate >= 0 ? creditsToAllocate : 0),
               },
               update: {
                 planName: planName,
                 status: stripeSubscription.status,
-                currentPeriodStart: new Date(invoiceLineItem.period!.start * 1000),
-                currentPeriodEnd: new Date(invoiceLineItem.period!.end * 1000),
+                currentPeriodStart: invoicePeriodStart,
+                currentPeriodEnd: invoicePeriodEnd,
                 monthlyCredits: (creditsToAllocate >= 0 ? creditsToAllocate : undefined),
               },
             });

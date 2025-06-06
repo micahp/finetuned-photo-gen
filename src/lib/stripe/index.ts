@@ -39,4 +39,22 @@ if (!NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
       ' Please add it to your .env.local file for development.'
     );
   }
+}
+
+// Check for webhook secret
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+if (!STRIPE_WEBHOOK_SECRET) {
+  if (process.env.NODE_ENV === 'production' && !IS_BUILD_TIME) {
+    console.error('🚨 CRITICAL: Missing STRIPE_WEBHOOK_SECRET in environment variables for production.');
+    console.error('Stripe webhooks will not process subscription events! Users can check out but subscriptions will not be saved.');
+  } else if (!IS_BUILD_TIME) {
+    console.warn(
+      '⚠️ IMPORTANT: Missing STRIPE_WEBHOOK_SECRET in environment variables.' +
+      ' Stripe webhooks will not work, and subscriptions will not be processed correctly.' +
+      '\n1. Install Stripe CLI: https://stripe.com/docs/stripe-cli' +
+      '\n2. Run: stripe listen --forward-to localhost:3000/api/stripe/webhooks' +
+      '\n3. Add the webhook secret to your .env.local file' +
+      '\n   STRIPE_WEBHOOK_SECRET=whsec_...'
+    );
+  }
 } 
