@@ -100,7 +100,7 @@ export default function HomePage() {
             >
               {plan.popular && (
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <Badge className="bg-blue-500 text-white">Most Popular</Badge>
+                  <Badge className="bg-brand-blue text-white">Most Popular</Badge>
                 </div>
               )}
               <CardHeader>
@@ -121,7 +121,7 @@ export default function HomePage() {
                 </ul>
                 <Button 
                   asChild 
-                  className={`w-full mt-4 ${plan.popular ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                  className={`w-full mt-4 ${plan.popular ? 'bg-brand-blue hover:bg-blue-700' : ''}`}
                   variant={plan.popular ? 'default' : 'outline'}
                 >
                   <Link href="/register">
@@ -135,7 +135,7 @@ export default function HomePage() {
       </div>
 
       {/* CTA Section */}
-      <div className="bg-gradient-to-r from-blue-800 via-purple-700 to-cyan-500 text-white py-16">
+      <div className="bg-gradient-to-r from-brand-blue via-brand-purple to-brand-cyan text-white py-16">
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold mb-4">
             Ready to Create Personalized AI Images?
