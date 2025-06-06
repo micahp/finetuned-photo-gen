@@ -330,6 +330,25 @@ export default function EditPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
+                    {/* Edit Prompt */}
+                    <FormField
+                      control={form.control}
+                      name="prompt"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Edit Prompt</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Describe how you want to edit the image..."
+                              className="min-h-[100px]"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
                     {/* Preset Editing Prompts */}
                     <div className="space-y-3">
                       <div className="flex items-center">
@@ -351,25 +370,6 @@ export default function EditPage() {
                         ))}
                       </div>
                     </div>
-
-                    {/* Edit Prompt */}
-                    <FormField
-                      control={form.control}
-                      name="prompt"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Edit Prompt</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Describe how you want to edit the image..."
-                              className="min-h-[100px]"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
 
                     {/* Seed */}
                     <div className="flex gap-2">
