@@ -227,6 +227,34 @@ export async function POST(request: NextRequest) {
         }
       })
 
+      // Also create a record in GeneratedImage to unify user's gallery
+      try {
+        if (savedImage) {
+          await prisma.generatedImage.create({
+            data: {
+              userId: savedImage.userId,
+              prompt: savedImage.prompt,
+              imageUrl: savedImage.url,
+              s3Key: null, // Not applicable for this flow
+              cloudflareImageId: savedImage.cloudflareImageId,
+              fileSize: savedImage.fileSize,
+              width: savedImage.width,
+              height: savedImage.height,
+              creditsUsed: savedImage.creditsUsed,
+              generationParams: {
+                ...((savedImage.metadata as object) || {}),
+                seed: savedImage.seed,
+                source: 'edit'
+              }
+            }
+          })
+          console.log('✅ Created corresponding GeneratedImage record for edited image.')
+        }
+      } catch (genImgError) {
+        console.error('❌ Failed to create GeneratedImage record for edited image:', genImgError)
+        // This is not a critical failure, so we don't need to throw an error back to the user
+      }
+
       // Now update the credit transaction with the relatedEntityId
       try {
         if (savedImage && savedImage.id) {
