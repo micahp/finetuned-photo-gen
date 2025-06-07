@@ -166,38 +166,53 @@ export async function POST(req: NextRequest) {
                 },
               });
 
+              // CRITICAL FIX: Credit allocation now happens INSIDE the transaction
+              if (creditsToAllocate > 0) {
+                console.log(`🔄 Allocating ${creditsToAllocate} initial credits for user ${userId}, plan: ${planName}, session: ${session.id}`);
+                
+                // Generate idempotency key for credit transaction
+                const creditIdempotencyKey = `stripe:${event.id}:${userId}:subscription_initial`;
+                
+                // Check if credits already allocated (idempotency)
+                const existingCreditTx = await tx.creditTransaction.findUnique({
+                  where: { idempotencyKey: creditIdempotencyKey }
+                });
+                
+                if (!existingCreditTx) {
+                  // Update user credits atomically
+                  const updatedUser = await tx.user.update({
+                    where: { id: userId },
+                    data: { credits: { increment: creditsToAllocate } },
+                    select: { credits: true },
+                  });
+                  
+                  // Create credit transaction record
+                  await tx.creditTransaction.create({
+                    data: {
+                      userId,
+                      amount: creditsToAllocate,
+                      type: 'subscription_initial',
+                      description: `Initial credits for ${planName} plan`,
+                      relatedEntityType: 'subscription',
+                      relatedEntityId: subscriptionId,
+                      balanceAfter: updatedUser.credits,
+                      metadata: { planName, stripeSubscriptionId: subscriptionId },
+                      idempotencyKey: creditIdempotencyKey,
+                    },
+                  });
+                  
+                  console.log(`✅ User ${userId} allocated ${creditsToAllocate} initial credits for ${planName}. New balance: ${updatedUser.credits}`);
+                } else {
+                  console.log(`🔒 Credits already allocated for user ${userId}, plan: ${planName} (idempotency)`);
+                }
+              } else {
+                console.log(`ℹ️ Subscription for ${planName} started for user ${userId}, no initial credits to allocate.`);
+              }
+
               await tx.processedStripeEvent.create({
                 data: { eventId: event.id }
               });
             });
-
-            // Allocate initial credits for the new subscription
-            if (creditsToAllocate > 0) {
-              try {
-                console.log(`🔄 Attempting to allocate ${creditsToAllocate} initial credits for user ${userId}, plan: ${planName}, session: ${session.id}`);
-                
-                const creditResult = await CreditService.addCredits(
-                  userId,
-                  creditsToAllocate,
-                  'subscription_initial',
-                  `Initial credits for ${planName} plan`,
-                  'subscription',
-                  subscriptionId,
-                  { planName: planName, stripeSubscriptionId: subscriptionId },
-                  event.id // Use the checkout session event ID for idempotency
-                );
-                
-                if (creditResult.success) {
-                  console.log(`✅ User ${userId} allocated ${creditsToAllocate} initial credits for ${planName}. New balance: ${creditResult.newBalance}`);
-                } else {
-                  console.error(`🔴 Failed to allocate credits for user ${userId}: ${creditResult.error}`);
-                }
-              } catch (creditError: any) {
-                console.error(`🔴 Exception during credit allocation for user ${userId}:`, creditError);
-              }
-            } else {
-              console.log(`ℹ️ Subscription for ${planName} started for user ${userId}, no initial credits to allocate.`);
-            }
 
           } else if (session.mode === 'payment') {
             const creditsPurchasedStr = session.metadata?.credits_purchased;
@@ -207,33 +222,68 @@ export async function POST(req: NextRequest) {
             }
 
             if (creditsPurchasedStr && creditsPurchased !== undefined && !isNaN(creditsPurchased) && creditsPurchased > 0) {
-              // Update customer ID if provided
-              if (stripeCustomerId) {
-                await prisma.user.update({
-                  where: { id: userId },
-                  data: { stripeCustomerId },
+              // CRITICAL FIX: Payment processing now happens INSIDE a transaction
+              await prisma.$transaction(async (tx) => {
+                // Generate idempotency key for credit purchase
+                const creditIdempotencyKey = `stripe:${event.id}:${userId}:purchased`;
+                
+                // Check if purchase already processed (idempotency)
+                const existingCreditTx = await tx.creditTransaction.findUnique({
+                  where: { idempotencyKey: creditIdempotencyKey }
                 });
-              }
-
-              // Add credits using CreditService for proper transaction logging
-              await CreditService.addCredits(
-                userId,
-                creditsPurchased,
-                'purchased',
-                `Credit purchase: ${creditsPurchased} credits`,
-                'subscription',
-                session.id,
-                {
-                  sessionId: session.id,
-                  stripeCustomerId,
-                  paymentMode: 'payment'
-                },
-                event.id // Pass Stripe event ID for idempotency
-              );
-              
-              console.log(`✅ User ${userId} credited with ${creditsPurchased} credits.`);
+                
+                if (!existingCreditTx) {
+                  // Update customer ID if provided
+                  const userData: any = {};
+                  if (stripeCustomerId) {
+                    userData.stripeCustomerId = stripeCustomerId;
+                  }
+                  
+                  // Update user credits and customer ID atomically
+                  const updatedUser = await tx.user.update({
+                    where: { id: userId },
+                    data: {
+                      credits: { increment: creditsPurchased },
+                      ...userData
+                    },
+                    select: { credits: true },
+                  });
+                  
+                  // Create credit transaction record
+                  await tx.creditTransaction.create({
+                    data: {
+                      userId,
+                      amount: creditsPurchased,
+                      type: 'purchased',
+                      description: `Credit purchase: ${creditsPurchased} credits`,
+                      relatedEntityType: 'subscription',
+                      relatedEntityId: session.id,
+                      balanceAfter: updatedUser.credits,
+                      metadata: {
+                        sessionId: session.id,
+                        stripeCustomerId,
+                        paymentMode: 'payment'
+                      },
+                      idempotencyKey: creditIdempotencyKey,
+                    },
+                  });
+                  
+                  console.log(`✅ User ${userId} credited with ${creditsPurchased} credits. New balance: ${updatedUser.credits}`);
+                } else {
+                  console.log(`🔒 Credits already purchased for user ${userId} (idempotency)`);
+                }
+                
+                // Mark event as processed
+                await tx.processedStripeEvent.create({
+                  data: { eventId: event.id }
+                });
+              });
             } else if (!creditsPurchasedStr) { // If credits_purchased is missing entirely
               console.warn(`⚠️ checkout.session.completed in payment mode for user ${userId} but no 'credits_purchased' in metadata. Session ID: ${session.id}`);
+              // Still mark as processed to avoid re-checking
+              await prisma.processedStripeEvent.create({
+                data: { eventId: event.id }
+              });
             } else { // Invalid (e.g., NaN after parse) or non-positive credits_purchased
               console.error('🔴 Error: Invalid credits_purchased value.', { sessionId: session.id, val: creditsPurchasedStr });
               return NextResponse.json({ received: true, error: 'Invalid credits_purchased in metadata' }, { status: 200 });
@@ -253,19 +303,7 @@ export async function POST(req: NextRequest) {
         const subStripeCustomerId = subscription.customer as string;
         const subId = subscription.id;
 
-        // Idempotency check
-        try {
-          const existingEvent = await prisma.processedStripeEvent.findUnique({
-            where: { eventId: event.id }
-          });
-          
-          if (existingEvent) {
-            console.log(`ℹ️ Skipping already processed subscription event: ${event.id}`);
-            return NextResponse.json({ received: true, message: 'Event already processed' });
-          }
-        } catch (checkError) {
-          console.warn(`⚠️ Error checking for processed subscription event: ${event.id}`, checkError);
-        }
+        // Note: Idempotency check now happens INSIDE the transaction below
 
         if (!subStripeCustomerId) {
           console.error(`🔴 Error: Missing Stripe customer ID in ${event.type} event.`, { subscriptionId: subId });
@@ -300,6 +338,16 @@ export async function POST(req: NextRequest) {
           const creditsFromPlan = parseInt(stripeProduct.metadata?.credits || '0', 10);
 
           await prisma.$transaction(async (tx) => {
+            // CRITICAL FIX: Idempotency check now happens INSIDE the transaction
+            const existingEvent = await tx.processedStripeEvent.findUnique({
+              where: { eventId: event.id }
+            });
+            
+            if (existingEvent) {
+              console.log(`🔒 Skipping already processed subscription event: ${event.id}`);
+              return; // Exit transaction early
+            }
+
             // Special handling for canceled subscriptions
             if (subscription.status === 'canceled') {
               const userData = {
@@ -344,6 +392,16 @@ export async function POST(req: NextRequest) {
               data: { eventId: event.id }
             });
           });
+
+          // Check if the transaction completed (event could have been already processed)
+          const wasProcessed = await prisma.processedStripeEvent.findUnique({
+            where: { eventId: event.id }
+          });
+          
+          if (!wasProcessed) {
+            console.log(`ℹ️ Subscription event ${event.id} was already processed during transaction.`);
+            return NextResponse.json({ received: true, message: 'Event already processed' });
+          }
 
           // CRITICAL FIX: No credit allocation for subscription.created to prevent duplication
           // Credits are ONLY allocated in checkout.session.completed

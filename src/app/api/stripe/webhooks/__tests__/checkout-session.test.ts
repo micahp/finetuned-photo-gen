@@ -65,6 +65,12 @@ describe('Stripe Webhook - checkout.session.completed', () => {
       });
       mocks.mockStripeSubscriptionsRetrieve.mockResolvedValue(mockSubscriptionDetails);
 
+      // Mock the user.update to return the user with incremented credits
+      mocks.mockUserUpdate.mockResolvedValue({
+        ...createMockUser(),
+        credits: TEST_PLANS.basic.credits
+      });
+
       const rawPayload = JSON.stringify(mockEvent.data.object);
       const req = createMockRequest(
         'POST', 
@@ -81,28 +87,17 @@ describe('Stripe Webhook - checkout.session.completed', () => {
         { expand: ['items.data.price.product'] }
       );
       
-      expect(mocks.mockCreditServiceAddCredits).toHaveBeenCalledWith(
-        TEST_IDS.userId,
-        TEST_PLANS.basic.credits,
-        'subscription_initial',
-        `Initial credits for ${TEST_PLANS.basic.name} plan`,
-        'subscription',
-        TEST_IDS.subscriptionId,
+      // Credit allocation now happens inside transaction, not via CreditService
+      expect(mocks.mockUserUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
-          planName: TEST_PLANS.basic.name,
-          stripeSubscriptionId: TEST_IDS.subscriptionId,
-        }),
-        expect.any(String) // Event ID
+          where: { id: TEST_IDS.userId },
+          data: expect.objectContaining({
+            subscriptionStatus: 'active',
+            subscriptionPlan: TEST_PLANS.basic.name,
+            stripeCustomerId: TEST_IDS.stripeCustomerId,
+          }),
+        })
       );
-      
-      expect(mocks.mockUserUpdate).toHaveBeenCalledWith({
-        where: { id: TEST_IDS.userId },
-        data: {
-          stripeCustomerId: TEST_IDS.stripeCustomerId,
-          subscriptionStatus: 'active',
-          subscriptionPlan: TEST_PLANS.basic.name,
-        },
-      });
       
       expect(mocks.mockSubscriptionUpsert).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -26,6 +26,7 @@ export interface CreditTransactionData {
   relatedEntityId?: string
   metadata?: Record<string, any>
   stripeEventId?: string;
+  idempotencyKey?: string;
 }
 
 export interface UsageAnalytics {
@@ -72,6 +73,7 @@ export interface UsageLimits {
 export class CreditService {
   /**
    * Record a credit transaction with automatic balance calculation
+   * FIXED: Idempotency check now happens INSIDE the transaction to prevent race conditions
    */
   static async recordTransaction(data: CreditTransactionData): Promise<{
     success: boolean;
@@ -85,7 +87,9 @@ export class CreditService {
       let transactionResult: { id: string; balanceAfter: number } | null = null;
       let wasAlreadyProcessed = false;
 
+      // CRITICAL FIX: All idempotency checks and operations now happen within a single transaction
       await prisma.$transaction(async (tx) => {
+        // Check for existing Stripe event processing INSIDE transaction
         if (data.stripeEventId) {
           const existingEvent = await tx.processedStripeEvent.findUnique({
             where: { eventId: data.stripeEventId },
@@ -93,7 +97,7 @@ export class CreditService {
 
           if (existingEvent) {
             console.log(
-              `Stripe event ${data.stripeEventId} already processed. Skipping transaction.`,
+              `🔒 Stripe event ${data.stripeEventId} already processed. Skipping transaction.`,
             );
             wasAlreadyProcessed = true;
             // Fetch current balance to return accurately
@@ -101,13 +105,29 @@ export class CreditService {
               where: { id: data.userId },
               select: { credits: true },
             });
-            finalBalance = user?.credits ?? 0; // Fallback to 0 if user not found, though unlikely here
-            // No transactionResult will be set, so it remains null
-            return; // Exit the transaction block early
+            finalBalance = user?.credits ?? 0;
+            return; // Exit transaction early
           }
         }
 
-        // If not already processed, or no stripeEventId, proceed with transaction
+        // Check for existing transaction with same idempotency key INSIDE transaction
+        if (data.idempotencyKey) {
+          const existingTransaction = await tx.creditTransaction.findUnique({
+            where: { idempotencyKey: data.idempotencyKey },
+          });
+
+          if (existingTransaction) {
+            console.log(
+              `🔒 Transaction with idempotency key ${data.idempotencyKey} already exists. Skipping.`,
+            );
+            wasAlreadyProcessed = true;
+            finalBalance = existingTransaction.balanceAfter;
+            transactionResult = { id: existingTransaction.id, balanceAfter: finalBalance };
+            return; // Exit transaction early
+          }
+        }
+
+        // ATOMIC OPERATION: Update user credits and create transaction record
         const updatedUser = await tx.user.update({
           where: { id: data.userId },
           data: { credits: { increment: data.amount } },
@@ -116,6 +136,7 @@ export class CreditService {
 
         finalBalance = updatedUser.credits;
 
+        // Create credit transaction record with idempotency key
         const createdTx = await tx.creditTransaction.create({
           data: {
             userId: data.userId,
@@ -126,11 +147,12 @@ export class CreditService {
             relatedEntityId: data.relatedEntityId,
             balanceAfter: finalBalance,
             metadata: data.metadata,
-            // stripeEventId is not directly stored on CreditTransaction model, but on ProcessedStripeEvent
+            idempotencyKey: data.idempotencyKey,
           },
           select: { id: true },
         });
 
+        // Mark Stripe event as processed INSIDE the same transaction
         if (data.stripeEventId && !wasAlreadyProcessed) {
           await tx.processedStripeEvent.create({
             data: { eventId: data.stripeEventId },
@@ -144,11 +166,11 @@ export class CreditService {
         return {
           success: true,
           alreadyProcessed: true,
-          newBalance: finalBalance, // Balance after confirming it was a duplicate
+          newBalance: finalBalance,
+          transactionId: transactionResult?.id,
         };
       }
 
-      // If we reach here, transaction should have completed successfully
       if (!transactionResult) {
         return { 
           success: false, 
@@ -159,33 +181,39 @@ export class CreditService {
 
       return {
         success: true,
-        newBalance: (transactionResult as { id: string; balanceAfter: number }).balanceAfter,
-        transactionId: (transactionResult as { id: string; balanceAfter: number }).id,
+        newBalance: transactionResult.balanceAfter,
+        transactionId: transactionResult.id,
       };
     } catch (error: any) {
       console.error('Error in recordTransaction:', error);
-      // If the error is due to a unique constraint violation on ProcessedStripeEvent (e.g., race condition if not handled by above check)
-      // This might be overly specific here, as the check above should prevent it.
-      // However, if a race condition bypasses the initial check and hits the DB constraint on ProcessedStripeEvent,
-      // it would be good to handle it as 'alreadyProcessed'. Prisma specific error code for unique constraint is P2002.
-      if (error.code === 'P2002' && data.stripeEventId && error.meta?.target?.includes('eventId')) {
-        console.warn(`Race condition handled for Stripe event ${data.stripeEventId}. Event already processed.`);
-        // Attempt to fetch current balance to return accurately
+      
+      // Handle database constraint violations (race conditions)
+      if (error.code === 'P2002') {
+        if (error.meta?.target?.includes('eventId')) {
+          console.warn(`🔒 Race condition handled for Stripe event ${data.stripeEventId}. Event already processed.`);
+        } else if (error.meta?.target?.includes('idempotencyKey')) {
+          console.warn(`🔒 Race condition handled for idempotency key ${data.idempotencyKey}. Transaction already exists.`);
+        } else if (error.meta?.target?.includes('prevent_duplicate_subscription_credits')) {
+          console.warn(`🔒 Prevented duplicate subscription credits for user ${data.userId}, entity ${data.relatedEntityId}`);
+        }
+        
+        // Fetch current balance for accurate return
         try {
-            const user = await prisma.user.findUnique({
-                where: { id: data.userId },
-                select: { credits: true },
-            });
-            return {
-                success: true,
-                alreadyProcessed: true,
-                newBalance: user?.credits ?? 0,
-            };
+          const user = await prisma.user.findUnique({
+            where: { id: data.userId },
+            select: { credits: true },
+          });
+          return {
+            success: true,
+            alreadyProcessed: true,
+            newBalance: user?.credits ?? 0,
+          };
         } catch (fetchError) {
-            console.error('Failed to fetch user balance after race condition handling:', fetchError);
-            return { success: true, alreadyProcessed: true, newBalance: 0 }; // Fallback
+          console.error('Failed to fetch user balance after constraint violation:', fetchError);
+          return { success: true, alreadyProcessed: true, newBalance: 0 };
         }
       }
+      
       return {
         success: false,
         error: `Failed to record transaction: ${error.message || 'Unknown error'}`,
@@ -259,7 +287,7 @@ export class CreditService {
   }
 
   /**
-   * Add credits to user account
+   * Add credits to user account with automatic idempotency key generation
    */
   static async addCredits(
     userId: string,
@@ -272,6 +300,22 @@ export class CreditService {
     stripeEventId?: string,
   ): Promise<{ success: boolean; newBalance: number; error?: string; alreadyProcessed?: boolean }> {
     try {
+      // Generate idempotency key for deduplication
+      let idempotencyKey: string | undefined;
+      
+      if (stripeEventId) {
+        // For Stripe events, use event ID + user ID + type for uniqueness
+        idempotencyKey = `stripe:${stripeEventId}:${userId}:${type}`;
+      } else if (relatedEntityId && type === 'subscription_initial') {
+        // For subscription initial credits, use subscription ID + user ID
+        idempotencyKey = `sub_initial:${relatedEntityId}:${userId}`;
+      } else if (relatedEntityId && type === 'subscription_renewal') {
+        // For renewals, include period info if available in metadata
+        const periodStart = metadata?.currentPeriodStart || Date.now();
+        idempotencyKey = `sub_renewal:${relatedEntityId}:${userId}:${periodStart}`;
+      }
+      // For other transaction types (admin_adjustment, etc.), no idempotency key needed
+
       const transactionResult = await this.recordTransaction({
         userId,
         amount,
@@ -281,10 +325,10 @@ export class CreditService {
         relatedEntityId,
         metadata,
         stripeEventId,
+        idempotencyKey,
       });
 
       if (!transactionResult.success) {
-        // If recordTransaction handled an error and returned success: false
         return {
           success: false,
           newBalance: (await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } }))?.credits || 0,
@@ -293,7 +337,6 @@ export class CreditService {
         };
       }
       
-      // If recordTransaction was successful
       return { 
         success: true, 
         newBalance: transactionResult.newBalance!,

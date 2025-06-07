@@ -170,8 +170,11 @@ model CreditTransaction {
   metadata             Json?
   createdAt            DateTime @default(now()) @map("created_at")
   relatedEditedImageId String?  @map("related_edited_image_id")
+  idempotencyKey       String?  @map("idempotency_key")
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([idempotencyKey], name: "unique_idempotency_key")
+  @@unique([userId, relatedEntityId, type], map: "unique_user_entity_type", name: "prevent_duplicate_subscription_credits")
   @@map("credit_transactions")
 }
 

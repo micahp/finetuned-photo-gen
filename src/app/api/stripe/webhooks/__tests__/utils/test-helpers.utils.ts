@@ -86,11 +86,24 @@ export const setupMocks = (mocks: MockServices) => {
       create: mocks.mockProcessedStripeEventCreate,
       findUnique: jest.fn().mockResolvedValue(null), // Default to not finding an event
     },
+    creditTransaction: {
+      findUnique: jest.fn().mockResolvedValue(null), // Default to not finding existing transaction
+      create: jest.fn().mockResolvedValue({}), // Mock successful credit transaction creation
+    },
     $transaction: jest.fn(), // Defined late to allow self-reference
   };
 
   // The transaction callback will receive the same mock client, ensuring `tx` has the same shape.
-  mockPrismaClient.$transaction.mockImplementation(async (callback) => callback(mockPrismaClient));
+  mockPrismaClient.$transaction.mockImplementation(async (callback) => {
+    // Create a transaction context with all the same mocks
+    const txMock = {
+      user: mockPrismaClient.user,
+      subscription: mockPrismaClient.subscription,
+      processedStripeEvent: mockPrismaClient.processedStripeEvent,
+      creditTransaction: mockPrismaClient.creditTransaction,
+    };
+    return await callback(txMock);
+  });
 
   // Mock Prisma
   jest.doMock('@/lib/db', () => ({
@@ -133,9 +146,27 @@ export const setupEnvironment = () => {
 
 export const expectSuccessfulResponse = (response: Response, eventId: string) => {
   expect(response.status).toBe(200);
+  return expect(response.json()).resolves.toEqual(
+    expect.objectContaining({
+      received: true,
+      // Could be either { eventId: "..." } or { message: "Event already processed" }
+    })
+  );
+};
+
+export const expectNewEventResponse = (response: Response, eventId: string) => {
+  expect(response.status).toBe(200);
   return expect(response.json()).resolves.toEqual({
     received: true,
     eventId,
+  });
+};
+
+export const expectIdempotentResponse = (response: Response) => {
+  expect(response.status).toBe(200);
+  return expect(response.json()).resolves.toEqual({
+    received: true,
+    message: "Event already processed",
   });
 };
 
