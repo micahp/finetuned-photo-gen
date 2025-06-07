@@ -14,6 +14,8 @@ export async function GET() {
       where: { id: session.user.id },
       select: {
         subscriptionStatus: true,
+        subscriptionPlan: true,
+        credits: true,
       },
     })
 
@@ -21,7 +23,11 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ subscriptionStatus: user.subscriptionStatus })
+    return NextResponse.json({ 
+      subscriptionStatus: user.subscriptionStatus,
+      subscriptionPlan: user.subscriptionPlan,
+      credits: user.credits
+    })
   } catch (error) {
     console.error('Failed to get subscription status:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

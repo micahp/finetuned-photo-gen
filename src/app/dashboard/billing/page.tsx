@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,6 +29,7 @@ export default function BillingPage() {
   const [processingSubscription, setProcessingSubscription] = useState(false)
   const [canceledPlanName, setCanceledPlanName] = useState<string | null>(null)
   const [missingWebhookSecret, setMissingWebhookSecret] = useState(false)
+  const pollingRef = useRef<boolean>(false)
   
   useEffect(() => {
     if (isDev) {
@@ -47,7 +48,8 @@ export default function BillingPage() {
     const sessionId = searchParams.get('session_id')
     const canceled = searchParams.get('canceled')
 
-    if (sessionId) {
+    if (sessionId && !pollingRef.current) {
+      pollingRef.current = true;
       setProcessingSubscription(true)
       toast.info('Payment received! Setting up your subscription...', {
         id: 'subscription-processing'
@@ -56,6 +58,7 @@ export default function BillingPage() {
       let attempts = 0;
       const maxAttempts = 20;
       let hasShownSuccessMessage = false;
+      let timeoutId: NodeJS.Timeout | null = null;
       
       const checkSubscriptionStatus = async () => {
         attempts++;
@@ -65,14 +68,22 @@ export default function BillingPage() {
           const data = await response.json();
 
           if (data.subscriptionStatus === 'active') {
+            console.log('✅ Subscription activated, showing success message');
+            
             if (!hasShownSuccessMessage) {
-              toast.success('Subscription activated! Your account has been updated.', {
-                id: 'subscription-success'
+              toast.success('Subscription activated! Please log out and log back in to use your new subscription.', {
+                id: 'subscription-success',
+                duration: 10000, // Show for 10 seconds
               });
               hasShownSuccessMessage = true;
             }
             
             setProcessingSubscription(false);
+            pollingRef.current = false;
+            
+            // DON'T trigger session update to avoid infinite reload bug
+            // await update();
+            console.log('⚠️ Skipping session update to avoid infinite reload bug');
             
             const url = new URL(window.location.href);
             url.searchParams.delete('session_id');
@@ -88,6 +99,9 @@ export default function BillingPage() {
             id: 'subscription-pending'
           });
           
+          setProcessingSubscription(false);
+          pollingRef.current = false;
+          
           const url = new URL(window.location.href);
           url.searchParams.delete('session_id');
           window.history.replaceState({}, document.title, url.toString());
@@ -95,10 +109,18 @@ export default function BillingPage() {
           return;
         }
         
-        setTimeout(checkSubscriptionStatus, 3000);
+        timeoutId = setTimeout(checkSubscriptionStatus, 3000);
       }
       
       checkSubscriptionStatus();
+      
+      // Cleanup function to prevent memory leaks
+      return () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        pollingRef.current = false;
+      };
     } else if (canceled) {
       const planBeforeUpdate = getCurrentPlan(session?.user?.subscriptionPlan)
       if (planBeforeUpdate && planBeforeUpdate.name !== 'Free') {
@@ -115,7 +137,7 @@ export default function BillingPage() {
       url.searchParams.delete('canceled')
       window.history.replaceState({}, document.title, url.toString())
     }
-  }, [searchParams, update, session?.user?.subscriptionPlan])
+  }, [searchParams, update])
 
   const handleSubscribe = async (planId: string) => {
     if (!session?.user) {

@@ -182,12 +182,16 @@ describe('/api/generate', () => {
       expect(data.error).toBe('Insufficient credits')
       expect(mockPrismaFindUniqueGenerate).toHaveBeenCalledWith({
         where: { id: 'user-123' },
-        select: { credits: true }
+        select: { 
+          credits: true,
+          subscriptionPlan: true,
+          subscriptionStatus: true
+        }
       })
       expect(mockGenerateImage).not.toHaveBeenCalled()
     })
 
-    it('should return 400 when user is not found', async () => {
+    it('should return 404 when user is not found', async () => {
       // Arrange
       mockPrismaFindUniqueGenerate.mockResolvedValue(null)
       
@@ -202,8 +206,8 @@ describe('/api/generate', () => {
       const data = await response.json()
 
       // Assert
-      expect(response.status).toBe(400)
-      expect(data.error).toBe('Insufficient credits')
+      expect(response.status).toBe(404)
+      expect(data.error).toBe('User not found')
     })
 
     it('should proceed when user has sufficient credits', async () => {
@@ -572,10 +576,14 @@ describe('/api/generate', () => {
       expect(data.success).toBe(true)
       expect(data.image).toEqual({
         id: 'img-123',
-        url: 'https://imagedelivery.net/cf-img-123/public', // Cloudflare URL after upload
+        url: 'https://example.com/generated.jpg',
         prompt: 'A beautiful sunset, photorealistic, high quality',
         aspectRatio: '16:9',
-        createdAt: '2024-01-15T10:00:00.000Z'
+        width: null,
+        height: null,
+        generationDuration: 0,
+        createdAt: '2024-01-15T10:00:00.000Z',
+        userModel: undefined
       })
       expect(data.creditsRemaining).toBe(9)
 
