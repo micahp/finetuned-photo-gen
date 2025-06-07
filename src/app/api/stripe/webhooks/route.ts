@@ -345,48 +345,40 @@ export async function POST(req: NextRequest) {
             });
           });
 
-          // Add credits for subscription creation or activation
-          console.log(`🔍 Credit allocation check: creditsFromPlan=${creditsFromPlan}, subscription.status=${subscription.status}, event.type=${event.type}`);
+          // CRITICAL FIX: No credit allocation for subscription.created to prevent duplication
+          // Credits are ONLY allocated in checkout.session.completed
+          console.log(`🔍 Subscription status update: creditsFromPlan=${creditsFromPlan}, subscription.status=${subscription.status}, event.type=${event.type}`);
           
-          if (creditsFromPlan > 0) {
+          if (event.type === 'customer.subscription.created') {
+            console.log(`ℹ️ Skipping credit allocation for ${event.type} - credits already allocated in checkout.session.completed`);
+          } else if (event.type === 'customer.subscription.updated' && creditsFromPlan > 0) {
             try {
               const previousSubStatus = (event.data.object as any).previous_attributes?.status;
               
-              // For subscription.created, always allocate initial credits regardless of status
-              // For subscription.updated, only allocate if becoming active
-              const shouldAllocateCredits = event.type === 'customer.subscription.created' || 
-                                          (previousSubStatus && previousSubStatus !== 'active' && subscription.status === 'active');
+              // Only allocate if becoming active from another status (reactivation)
+              const shouldAllocateCredits = previousSubStatus && previousSubStatus !== 'active' && subscription.status === 'active';
               
               if (shouldAllocateCredits) {
-                const creditEventType = event.type === 'customer.subscription.created' ? 'subscription_initial' :
-                                      (previousSubStatus && previousSubStatus !== 'active' && subscription.status === 'active') ? 'subscription_renewal' :
-                                      'subscription_renewal';
-                
-                const creditDescription = event.type === 'customer.subscription.created' ? 
-                  `Initial credits for new ${planName} subscription` :
-                  (previousSubStatus && previousSubStatus !== 'active' && subscription.status === 'active') ?
-                  `Credits for activated ${planName} subscription` :
-                  `Credits for updated ${planName} subscription`;
-
-                console.log(`🔄 Allocating ${creditsFromPlan} credits for user ${userId}...`);
+                console.log(`🔄 Allocating ${creditsFromPlan} credits for subscription reactivation...`);
                 
                 await CreditService.addCredits(
                   userId,
                   creditsFromPlan,
-                  creditEventType,
-                  creditDescription,
+                  'subscription_renewal',
+                  `Credits for reactivated ${planName} subscription`,
                   'subscription',
                   subId,
                   {
                     planName,
                     stripeSubscriptionId: subId,
                     status: subscription.status,
-                    eventType: event.type
+                    eventType: event.type,
+                    previousStatus: previousSubStatus
                   },
                   event.id
                 );
                 
-                console.log(`✅ ${creditsFromPlan} credits added for user ${userId} from ${event.type}. Plan: ${planName}.`);
+                console.log(`✅ ${creditsFromPlan} reactivation credits added for user ${userId}. Plan: ${planName}.`);
               } else {
                 console.log(`ℹ️ Skipping credit allocation for ${event.type}: subscription status is ${subscription.status}, previous status was ${previousSubStatus}`);
               }
@@ -395,7 +387,7 @@ export async function POST(req: NextRequest) {
               // Don't fail the webhook - credits can be allocated manually if needed
             }
           } else {
-            console.log(`ℹ️ No credits to allocate: creditsFromPlan=${creditsFromPlan}`);
+            console.log(`ℹ️ No credits to allocate: creditsFromPlan=${creditsFromPlan}, event.type=${event.type}`);
           }
 
           console.log(`✅ ${event.type} for ${subId} processed for user ${userId}. Subscription status synchronized.`);
