@@ -173,17 +173,28 @@ export async function POST(req: NextRequest) {
 
             // Allocate initial credits for the new subscription
             if (creditsToAllocate > 0) {
-              await CreditService.addCredits(
-                userId,
-                creditsToAllocate,
-                'subscription_initial',
-                `Initial credits for ${planName} plan`,
-                'subscription',
-                subscriptionId,
-                { planName: planName, stripeSubscriptionId: subscriptionId },
-                event.id // Use the checkout session event ID for idempotency
-              );
-              console.log(`✅ User ${userId} allocated ${creditsToAllocate} initial credits for ${planName}.`);
+              try {
+                console.log(`🔄 Attempting to allocate ${creditsToAllocate} initial credits for user ${userId}, plan: ${planName}, session: ${session.id}`);
+                
+                const creditResult = await CreditService.addCredits(
+                  userId,
+                  creditsToAllocate,
+                  'subscription_initial',
+                  `Initial credits for ${planName} plan`,
+                  'subscription',
+                  subscriptionId,
+                  { planName: planName, stripeSubscriptionId: subscriptionId },
+                  event.id // Use the checkout session event ID for idempotency
+                );
+                
+                if (creditResult.success) {
+                  console.log(`✅ User ${userId} allocated ${creditsToAllocate} initial credits for ${planName}. New balance: ${creditResult.newBalance}`);
+                } else {
+                  console.error(`🔴 Failed to allocate credits for user ${userId}: ${creditResult.error}`);
+                }
+              } catch (creditError: any) {
+                console.error(`🔴 Exception during credit allocation for user ${userId}:`, creditError);
+              }
             } else {
               console.log(`ℹ️ Subscription for ${planName} started for user ${userId}, no initial credits to allocate.`);
             }
