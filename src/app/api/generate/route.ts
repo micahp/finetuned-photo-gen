@@ -116,6 +116,7 @@ export async function POST(request: NextRequest) {
     // Get user model if specified
     let selectedUserModel = null
     if (userModelId) {
+      // Find the custom model and ensure it belongs to the user and is ready
       selectedUserModel = await prisma.userModel.findFirst({
         where: {
           id: userModelId,
@@ -131,7 +132,18 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      // Validate that the custom model has a Replicate model ID for inference
+      // Currently, we only support Replicate-based custom model inference
+      // Models without replicateModelId cannot be used for generation
+      if (!selectedUserModel.replicateModelId) {
+        return NextResponse.json(
+          { error: 'Custom model is not available for inference. The model needs to be properly configured with Replicate.' },
+          { status: 400 }
+        )
+      }
+
       // Add trigger word to prompt if using custom model
+      // This helps the model recognize when to apply the custom LoRA
       if (selectedUserModel.triggerWord && !fullPrompt.toLowerCase().includes(selectedUserModel.triggerWord.toLowerCase())) {
         fullPrompt = `${selectedUserModel.triggerWord}, ${fullPrompt}`
       }
@@ -141,7 +153,9 @@ export async function POST(request: NextRequest) {
     let result
     let actualProvider = 'together-ai' // Default provider
     
-    if (selectedUserModel && selectedUserModel.replicateModelId) {
+    if (selectedUserModel) {
+      // Custom model generation via Replicate
+      // At this point, we've already validated that selectedUserModel.replicateModelId exists
       console.log('🎯 Generating with custom model via Replicate:', {
         modelId: selectedUserModel.id,
         modelName: selectedUserModel.name,
@@ -153,18 +167,20 @@ export async function POST(request: NextRequest) {
 
       actualProvider = 'replicate'
       
-      // Use Replicate for generation with trained model directly
+      // Use Replicate for generation with trained LoRA model
+      // This calls the specific Replicate model that was trained for this user
       const replicate = new ReplicateService()
       result = await replicate.generateWithTrainedModel({
         prompt: fullPrompt,
-        replicateModelId: selectedUserModel.replicateModelId,
+        replicateModelId: selectedUserModel.replicateModelId!,
         triggerWord: selectedUserModel.triggerWord || undefined,
         aspectRatio,
         steps: steps || 28, // Use more steps for LoRA by default
         seed
       })
     } else {
-      // Check if the base model should use Replicate
+      // Base model generation (no custom model specified)
+      // Check if the base model should use Replicate instead of Together.ai
       const shouldUseReplicate = together.getAvailableModels()
         .find(m => m.id === (modelId || 'black-forest-labs/FLUX.1-schnell-Free'))
         ?.provider === 'replicate'

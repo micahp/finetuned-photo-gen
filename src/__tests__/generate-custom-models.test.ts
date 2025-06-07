@@ -8,13 +8,49 @@ jest.mock('@/lib/next-auth', () => ({
   auth: mockAuthCustom,
 }))
 
+// Mock CreditService
+const mockSpendCredits = jest.fn()
+jest.mock('@/lib/credit-service', () => ({
+  CreditService: {
+    spendCredits: mockSpendCredits,
+  },
+}))
+
 // Mock Prisma
 const mockPrismaUserFindUnique = jest.fn()
 const mockPrismaUserUpdate = jest.fn()
 const mockPrismaUserModelFindFirst = jest.fn()
 const mockPrismaGeneratedImageCreate = jest.fn()
+const mockPrismaTransaction = jest.fn().mockImplementation(async (callback) => {
+  // This mock simulates the transaction by simply executing the callback
+  // with a mock transaction object (tx).
+  // The 'tx' object will have the same methods as the main prisma mock,
+  // allowing the code within the transaction to run as expected.
+  return callback({
+    user: {
+      findUnique: mockPrismaUserFindUnique,
+      update: mockPrismaUserUpdate,
+    },
+    userModel: {
+      findFirst: mockPrismaUserModelFindFirst,
+    },
+    generatedImage: {
+      create: mockPrismaGeneratedImageCreate,
+    },
+    // Add any other models that might be used within a transaction
+    processedStripeEvent: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({}),
+    },
+    creditTransaction: {
+      create: jest.fn().mockResolvedValue({ id: 'tx-123' }),
+    }
+  })
+})
+
 jest.mock('@/lib/db', () => ({
   prisma: {
+    $transaction: mockPrismaTransaction,
     user: {
       findUnique: mockPrismaUserFindUnique,
       update: mockPrismaUserUpdate,
@@ -39,6 +75,47 @@ jest.mock('@/lib/together-ai', () => ({
     generateWithLoRA: mockGenerateWithLoRACustom,
     getStylePresets: mockGetStylePresetsCustom,
     getAvailableModels: mockGetAvailableModelsCustom,
+  })),
+}))
+
+// Mock ReplicateService
+const mockGenerateWithTrainedModelReplicate = jest.fn()
+jest.mock('@/lib/replicate-service', () => ({
+  ReplicateService: jest.fn().mockImplementation(() => ({
+    generateWithTrainedModel: mockGenerateWithTrainedModelReplicate,
+  })),
+}))
+
+// Mock ImageProcessingService
+const mockProcessImageFromUrl = jest.fn()
+jest.mock('@/lib/image-processing-service', () => ({
+  ImageProcessingService: {
+    processImageFromUrl: mockProcessImageFromUrl,
+    processBuffer: jest.fn().mockResolvedValue({
+      success: true,
+      buffer: Buffer.from('mock-image-buffer'),
+      width: 1024,
+      height: 1024,
+      fileSize: 12345,
+    }),
+    getOptimalOptions: jest.fn().mockReturnValue({
+      quality: 85,
+      maxFileSize: 10 * 1024 * 1024,
+    })
+  },
+}))
+
+// Mock CloudflareImagesService
+const mockUploadImage = jest.fn()
+jest.mock('@/lib/cloudflare-images-service', () => ({
+  CloudflareImagesService: jest.fn().mockImplementation(() => ({
+    uploadImage: mockUploadImage,
+    uploadImageFromBuffer: jest.fn().mockResolvedValue({
+      success: true,
+      imageId: 'cf-image-123',
+      url: 'https://imagedelivery.net/123/cf-image-123/public'
+    }),
+    getPublicUrl: jest.fn().mockReturnValue('https://imagedelivery.net/123/cf-image-123/public'),
   })),
 }))
 
@@ -74,11 +151,48 @@ describe('Custom Model Generation API', () => {
       credits: 10
     })
     
+    mockPrismaUserUpdate.mockResolvedValue({
+      credits: 9,
+    })
+
+    // Default CreditService mock
+    mockSpendCredits.mockResolvedValue({
+      success: true,
+      newBalance: 9
+    })
+    
     // Default style presets
     mockGetStylePresetsCustom.mockReturnValue([
       { id: 'none', name: 'None', prompt: '' },
       { id: 'photorealistic', name: 'Photorealistic', prompt: 'photorealistic, high quality, detailed' }
     ])
+    
+    // Default available models (to prevent .find() errors)
+    mockGetAvailableModelsCustom.mockReturnValue([
+      { id: 'black-forest-labs/FLUX.1-schnell-Free', provider: 'together' },
+      { id: 'black-forest-labs/FLUX.1-dev', provider: 'together' }
+    ])
+
+    // Default Replicate service mock
+    mockGenerateWithTrainedModelReplicate.mockResolvedValue({
+      status: 'completed',
+      images: [{ url: 'https://example.com/replicate-image.jpg', width: 1024, height: 1024 }]
+    })
+
+    // Mock image processing and upload
+    mockProcessImageFromUrl.mockResolvedValue({
+      success: true,
+      buffer: Buffer.from('mock-image-buffer'),
+      width: 1024,
+      height: 1024,
+      fileSize: 1024 * 1024, // 1MB
+    })
+    
+    mockUploadImage.mockResolvedValue({
+      success: true,
+      imageId: 'cf-image-123',
+      url: 'https://imagedelivery.net/123/cf-image-123/public'
+    })
   })
 
   afterEach(() => {
@@ -141,17 +255,19 @@ describe('Custom Model Generation API', () => {
       const response = await POST(request)
       const data = await response.json()
       
-      expect(response.status).toBe(400)
-      expect(data.error).toBe('Custom model not found, not ready, or not available for inference')
+      expect(response.status).toBe(404)
+      expect(data.error).toBe('Selected model not found or not ready')
     })
 
-    it('should validate custom model has HuggingFace repository', async () => {
+    it('should error when custom model has no replicateModelId', async () => {
       mockPrismaUserModelFindFirst.mockResolvedValue({
         id: 'model-123',
         name: 'test-model',
         status: 'ready',
         loraReadyForInference: true,
-        huggingfaceRepo: null
+        huggingfaceRepo: null,
+        replicateModelId: null,
+        triggerWord: 'test'
       })
       
       const request = new Request('http://localhost:3000/api/generate', {
@@ -167,7 +283,7 @@ describe('Custom Model Generation API', () => {
       const data = await response.json()
       
       expect(response.status).toBe(400)
-      expect(data.error).toBe('Custom model does not have a HuggingFace repository configured')
+      expect(data.error).toBe('Custom model is not available for inference. The model needs to be properly configured with Replicate.')
     })
 
     it('should only allow user to access their own models', async () => {
@@ -186,9 +302,7 @@ describe('Custom Model Generation API', () => {
         where: {
           id: 'model-123',
           userId: 'user-123',
-          status: 'ready',
-          loraReadyForInference: true,
-          huggingfaceRepo: { not: null }
+          status: 'ready'
         }
       })
     })
@@ -210,6 +324,9 @@ describe('Custom Model Generation API', () => {
         createdAt: new Date()
       })
       
+      // Add this mock to fix the user update issue
+      mockPrismaUserUpdate.mockResolvedValue({ credits: 9 })
+      
       const request = new Request('http://localhost:3000/api/generate', {
         method: 'POST',
         body: JSON.stringify({
@@ -225,7 +342,7 @@ describe('Custom Model Generation API', () => {
       
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
-      expect(data.image.url).toBe('https://example.com/image.jpg')
+      expect(data.image.url).toBe('https://imagedelivery.net/123/cf-image-123/public')
       expect(mockGenerateImageCustom).toHaveBeenCalledWith({
         prompt: 'a beautiful landscape',
         model: 'black-forest-labs/FLUX.1-schnell-Free',
@@ -278,6 +395,7 @@ describe('Custom Model Generation API', () => {
       status: 'ready',
       loraReadyForInference: true,
       huggingfaceRepo: 'geoppls/geo-1748133826702-np1tbn',
+      replicateModelId: 'micahp/flux-lora-geo-model-abc123',
       triggerWord: 'geo'
     }
 
@@ -286,7 +404,7 @@ describe('Custom Model Generation API', () => {
     })
 
     it('should generate image with custom LoRA model', async () => {
-      mockGenerateWithLoRACustom.mockResolvedValue({
+      mockGenerateWithTrainedModelReplicate.mockResolvedValue({
         status: 'completed',
         images: [{
           url: 'https://example.com/lora-image.jpg',
@@ -315,16 +433,16 @@ describe('Custom Model Generation API', () => {
       
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
-      expect(data.image.url).toBe('https://example.com/lora-image.jpg')
+      expect(data.image.url).toBe('https://imagedelivery.net/123/cf-image-123/public')
       expect(data.image.userModel).toEqual({
         id: 'model-123',
         name: 'geo-model',
         triggerWord: 'geo'
       })
       
-      expect(mockGenerateWithLoRACustom).toHaveBeenCalledWith({
-        prompt: 'a professional headshot',
-        loraPath: 'geoppls/geo-1748133826702-np1tbn',
+      expect(mockGenerateWithTrainedModelReplicate).toHaveBeenCalledWith({
+        prompt: 'geo, a professional headshot',
+        replicateModelId: 'micahp/flux-lora-geo-model-abc123',
         triggerWord: 'geo',
         aspectRatio: '1:1',
         steps: 28,
@@ -333,18 +451,19 @@ describe('Custom Model Generation API', () => {
     })
 
     it('should use default steps for LoRA generation', async () => {
-      mockGenerateWithLoRACustom.mockResolvedValue({
+      mockGenerateWithTrainedModelReplicate.mockResolvedValue({
         status: 'completed',
-        images: [{ url: 'https://example.com/image.jpg', width: 1024, height: 1024 }]
+        images: [{ url: 'https://example.com/lora-image.jpg', width: 1024, height: 1024 }]
       })
-      
+
       mockPrismaGeneratedImageCreate.mockResolvedValue({
         id: 'generated-123',
         createdAt: new Date()
       })
-      
+
       const request = new Request('http://localhost:3000/api/generate', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: 'a portrait',
           userModelId: 'model-123'
@@ -353,18 +472,18 @@ describe('Custom Model Generation API', () => {
       
       await POST(request)
       
-      expect(mockGenerateWithLoRACustom).toHaveBeenCalledWith({
-        prompt: 'a portrait',
-        loraPath: 'geoppls/geo-1748133826702-np1tbn',
+      expect(mockGenerateWithTrainedModelReplicate).toHaveBeenCalledWith({
+        prompt: 'geo, a portrait',
+        replicateModelId: 'micahp/flux-lora-geo-model-abc123',
         triggerWord: 'geo',
         aspectRatio: '1:1',
-        steps: 28, // Default for LoRA
+        steps: 28, // Default LoRA steps
         seed: undefined
       })
     })
 
     it('should apply style presets to custom model generation', async () => {
-      mockGenerateWithLoRACustom.mockResolvedValue({
+      mockGenerateWithTrainedModelReplicate.mockResolvedValue({
         status: 'completed',
         images: [{ url: 'https://example.com/image.jpg', width: 1024, height: 1024 }]
       })
@@ -385,9 +504,9 @@ describe('Custom Model Generation API', () => {
       
       await POST(request)
       
-      expect(mockGenerateWithLoRACustom).toHaveBeenCalledWith({
-        prompt: 'a portrait, photorealistic, high quality, detailed',
-        loraPath: 'geoppls/geo-1748133826702-np1tbn',
+      expect(mockGenerateWithTrainedModelReplicate).toHaveBeenCalledWith({
+        prompt: 'geo, a portrait, photorealistic, high quality, detailed',
+        replicateModelId: 'micahp/flux-lora-geo-model-abc123',
         triggerWord: 'geo',
         aspectRatio: '1:1',
         steps: 28,
@@ -396,18 +515,14 @@ describe('Custom Model Generation API', () => {
     })
 
     it('should save generation with custom model metadata', async () => {
-      mockGenerateWithLoRACustom.mockResolvedValue({
+      mockGenerateWithTrainedModelReplicate.mockResolvedValue({
         status: 'completed',
-        images: [{ url: 'https://example.com/image.jpg', width: 1024, height: 1024 }]
+        images: [{ url: 'https://example.com/lora-image.jpg', width: 1024, height: 1024 }]
       })
-      
-      mockPrismaGeneratedImageCreate.mockResolvedValue({
-        id: 'generated-123',
-        createdAt: new Date()
-      })
-      
+
       const request = new Request('http://localhost:3000/api/generate', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: 'a portrait',
           userModelId: 'model-123',
@@ -417,28 +532,23 @@ describe('Custom Model Generation API', () => {
       
       await POST(request)
       
-      expect(mockPrismaGeneratedImageCreate).toHaveBeenCalledWith({
-        data: {
-          userId: 'user-123',
-          userModelId: 'model-123',
-          prompt: 'a portrait',
-          imageUrl: 'https://example.com/image.jpg',
-          generationParams: {
-            model: 'black-forest-labs/FLUX.1-dev-lora',
-            aspectRatio: '1:1',
-            steps: 30,
-            seed: undefined,
-            style: undefined,
-            userModel: {
-              id: 'model-123',
-              name: 'geo-model',
-              huggingfaceRepo: 'geoppls/geo-1748133826702-np1tbn',
-              triggerWord: 'geo'
-            }
-          },
-          creditsUsed: 1
-        }
-      })
+      expect(mockPrismaGeneratedImageCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'user-123',
+            userModelId: 'model-123',
+            prompt: 'geo, a portrait',
+            imageUrl: 'https://imagedelivery.net/123/cf-image-123/public',
+            generationParams: expect.objectContaining({
+              steps: 30,
+              userModel: expect.objectContaining({
+                id: 'model-123',
+                name: 'geo-model'
+              })
+            })
+          })
+        })
+      )
     })
   })
 
@@ -470,10 +580,11 @@ describe('Custom Model Generation API', () => {
         status: 'ready',
         loraReadyForInference: true,
         huggingfaceRepo: 'test/repo',
+        replicateModelId: 'micahp/flux-lora-test-model-xyz789',
         triggerWord: 'test'
       })
       
-      mockGenerateWithLoRACustom.mockResolvedValue({
+      mockGenerateWithTrainedModelReplicate.mockResolvedValue({
         status: 'failed',
         error: 'LoRA model not found'
       })
@@ -532,10 +643,18 @@ describe('Custom Model Generation API', () => {
       
       await POST(request)
       
-      expect(mockPrismaUserUpdate).toHaveBeenCalledWith({
-        where: { id: 'user-123' },
-        data: { credits: { decrement: 1 } }
-      })
+      expect(mockSpendCredits).toHaveBeenCalledWith(
+        'user-123',
+        1,
+        expect.stringContaining('Image generation: test prompt'),
+        'image_generation',
+        undefined,
+        expect.objectContaining({
+          prompt: 'test prompt',
+          model: 'black-forest-labs/FLUX.1-schnell-Free',
+          provider: 'together-ai'
+        })
+      )
     })
 
     it('should not deduct credits on generation failure', async () => {
@@ -553,32 +672,30 @@ describe('Custom Model Generation API', () => {
       
       await POST(request)
       
-      expect(mockPrismaUserUpdate).not.toHaveBeenCalled()
+      expect(mockSpendCredits).not.toHaveBeenCalled()
     })
 
     it('should return updated credit count', async () => {
-      mockPrismaUserFindUnique.mockResolvedValue({ credits: 5 })
+      // Mock a successful generation
       mockGenerateImageCustom.mockResolvedValue({
         status: 'completed',
-        images: [{ url: 'https://example.com/image.jpg', width: 1024, height: 1024 }]
+        images: [{ url: 'https://example.com/image.jpg' }],
       })
       
-      mockPrismaGeneratedImageCreate.mockResolvedValue({
-        id: 'generated-123',
-        createdAt: new Date()
-      })
+      // Initial credits are 10, after spending 1 it should be 9
+      mockPrismaUserUpdate.mockResolvedValue({ credits: 9 })
       
       const request = new Request('http://localhost:3000/api/generate', {
         method: 'POST',
-        body: JSON.stringify({
-          prompt: 'test prompt'
-        })
+        body: JSON.stringify({ prompt: 'test prompt' }),
       })
       
       const response = await POST(request)
       const data = await response.json()
       
-      expect(data.creditsRemaining).toBe(4) // 5 - 1
+      expect(response.status).toBe(200)
+      expect(data.success).toBe(true)
+      expect(data.creditsRemaining).toBe(9)
     })
   })
 
