@@ -69,7 +69,7 @@ describe('Credit Integration Tests - Webhook to UI Updates', () => {
         TEST_IDS.userId,
         TEST_PLANS.standard.credits,
         'subscription_initial',
-        `Credits for new ${TEST_PLANS.standard.name} subscription`,
+        `Initial credits for new ${TEST_PLANS.standard.name} subscription`,
         'subscription',
         TEST_IDS.subscriptionId,
         expect.objectContaining({

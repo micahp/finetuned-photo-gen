@@ -28,10 +28,10 @@ export const PRICING_PLANS: PricingPlan[] = [
     description: 'Perfect for trying out personalized AI',
     price: 0,
     priceId: '', // No Stripe price ID for free plan
-    credits: 5,
+    credits: 10,
     maxModels: 0,
     features: [
-      '5 AI generations per month',
+      '10 AI generations per month',
       '0 personalized model slot',
       'Upload 10-20 training photos',
       'Basic style presets',

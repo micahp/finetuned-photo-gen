@@ -266,7 +266,7 @@ describe('Generate Page - Credit Management', () => {
 
   it('should handle different subscription plans and credit allocations', async () => {
     const testCases = [
-      { plan: 'free', credits: 3, shouldEnableGeneration: true },
+      { plan: 'free', credits: 10, shouldEnableGeneration: true },
       { plan: 'starter', credits: 100, shouldEnableGeneration: true },
       { plan: 'creator', credits: 500, shouldEnableGeneration: true },
       { plan: 'pro', credits: 2000, shouldEnableGeneration: true },

@@ -113,8 +113,8 @@ describe('Dashboard Page - Credit Display', () => {
     const testCases = [
       { 
         plan: 'free', 
-        credits: 3, 
-        expectedDisplay: '3',
+        credits: 10, 
+                  expectedDisplay: '10',
         subscriptionStatus: 'free'
       },
       { 

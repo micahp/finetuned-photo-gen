@@ -277,7 +277,7 @@ describe('BillingPage', () => {
 
   it('should show correct credit display for different subscription plans', () => {
     const testCases = [
-      { plan: 'free', credits: 3, expectedMonthlyCredits: '3' },
+      { plan: 'free', credits: 10, expectedMonthlyCredits: '10' },
       { plan: 'starter', credits: 100, expectedMonthlyCredits: '100' },
       { plan: 'creator', credits: 500, expectedMonthlyCredits: '500' },
       { plan: 'pro', credits: 2000, expectedMonthlyCredits: '2,000' },

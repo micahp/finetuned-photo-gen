@@ -47,6 +47,14 @@ export default function BillingPage() {
   useEffect(() => {
     const sessionId = searchParams.get('session_id')
     const canceled = searchParams.get('canceled')
+    const refresh = searchParams.get('refresh')
+
+    // Clean up refresh parameter without triggering session update to avoid infinite reload
+    if (refresh === 'true') {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('refresh')
+      window.history.replaceState({}, document.title, url.toString())
+    }
 
     if (sessionId && !pollingRef.current) {
       pollingRef.current = true;
@@ -122,7 +130,7 @@ export default function BillingPage() {
         pollingRef.current = false;
       };
     } else if (canceled) {
-      const planBeforeUpdate = getCurrentPlan(session?.user?.subscriptionPlan)
+      const planBeforeUpdate = getCurrentPlan(session?.user?.subscriptionPlan || null)
       if (planBeforeUpdate && planBeforeUpdate.name !== 'Free') {
         setCanceledPlanName(planBeforeUpdate.name)
       }
@@ -231,7 +239,6 @@ export default function BillingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-       <SessionRefresher />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {isDev && missingWebhookSecret && (
           <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">

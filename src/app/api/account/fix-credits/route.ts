@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     const result = await CreditService.addCredits(
       userId,
       creditsToAdd,
-      'manual_adjustment',
+      'admin_adjustment',
       `Credit adjustment for ${subscription.planName} subscription`,
       'subscription',
       subscription.stripeSubscriptionId || undefined,

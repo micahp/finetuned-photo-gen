@@ -148,21 +148,20 @@ export class CreditService {
         };
       }
 
-      if (transactionResult) {
-        return {
-          success: true,
-          newBalance: transactionResult.balanceAfter,
-          transactionId: transactionResult.id,
-        };
-      } else {
-        // This case might be reached if wasAlreadyProcessed is true AND something went wrong fetching balance
-        // or if transaction genuinely failed before setting transactionResult, outside of wasAlreadyProcessed logic
+      // If we reach here, transaction should have completed successfully
+      if (!transactionResult) {
         return { 
           success: false, 
           error: 'Transaction did not complete as expected.', 
-          newBalance: finalBalance // finalBalance might be from pre-duplicate check or initial value
+          newBalance: finalBalance
         };
       }
+
+      return {
+        success: true,
+        newBalance: (transactionResult as { id: string; balanceAfter: number }).balanceAfter,
+        transactionId: (transactionResult as { id: string; balanceAfter: number }).id,
+      };
     } catch (error: any) {
       console.error('Error in recordTransaction:', error);
       // If the error is due to a unique constraint violation on ProcessedStripeEvent (e.g., race condition if not handled by above check)
