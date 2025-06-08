@@ -36,12 +36,10 @@ export const metadata: Metadata = {
     ],
   },
   manifest: '/site.webmanifest',
-  themeColor: '#ffffff',
-  viewport: 'width=device-width, initial-scale=1',
 };
 
 export const viewport: Viewport = {
-  themeColor: metadata.themeColor,
+  themeColor: '#ffffff',
   width: 'device-width',
   initialScale: 1,
 };
