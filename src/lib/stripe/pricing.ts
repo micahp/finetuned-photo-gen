@@ -14,7 +14,8 @@ export interface PricingPlan {
 // Validate environment variables are set for paid plans
 const getRequiredEnvVar = (name: string): string => {
   const value = process.env[name];
-  if (!value && process.env.NODE_ENV === 'production') {
+  // Only throw error at actual runtime, not during build-time static analysis
+  if (!value && process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE !== 'phase-production-build') {
     console.error(`Missing required environment variable: ${name}`);
     throw new Error(`Configuration error: ${name} is not set`);
   }
