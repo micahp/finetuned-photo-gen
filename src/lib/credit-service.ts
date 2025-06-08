@@ -168,7 +168,9 @@ export class CreditService {
           success: true,
           alreadyProcessed: true,
           newBalance: finalBalance,
-          transactionId: transactionResult?.id,
+          transactionId: (transactionResult as { id: string; balanceAfter: number } | null)?.id === '' 
+            ? undefined 
+            : (transactionResult as { id: string; balanceAfter: number } | null)?.id,
         };
       }
 
@@ -182,8 +184,8 @@ export class CreditService {
 
       return {
         success: true,
-        newBalance: transactionResult.balanceAfter,
-        transactionId: transactionResult.id,
+        newBalance: (transactionResult as { id: string; balanceAfter: number }).balanceAfter,
+        transactionId: (transactionResult as { id: string; balanceAfter: number }).id,
       };
     } catch (error: any) {
       console.error('Error in recordTransaction:', error);
