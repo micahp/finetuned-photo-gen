@@ -311,23 +311,12 @@
 ## 🚀 **Future Enhancements: Enhanced Model Support & Future Trainers** 
 
 ### **🆕 FLUX 1.1 Pro Ultra Integration** 📋 **PLANNED**
-- [ ] **Official FLUX 1.1 Pro Ultra Trainer** - black-forest-labs/flux-pro-trainer
-  - [ ] Add official Black Forest Labs trainer to ReplicateService
-  - [ ] Implement finetune_id system (different from LoRA weights)
-  - [ ] Update database schema to support finetune_id storage
-  - [ ] Create premium tier pricing for official trainers
-- [ ] **Enhanced Base Model Options**
-  - [ ] Add FLUX 1.1 Pro Ultra to training options
-  - [ ] Implement tier-based model access (Standard vs Premium)
-  - [ ] Update UI to show model tiers and pricing differences
+- [x] **Enhanced Base Model Options**
+  - [x] Add FLUX 1.1 Pro Ultra to training options
+  - [x] Implement tier-based model access (Standard vs Premium)
+  - [x] Update UI to show model tiers and pricing differences
   - [ ] Add model recommendation system based on use case
-- [ ] **Inference Integration**
-  - [ ] Integrate with black-forest-labs/flux-1.1-pro-ultra-finetuned
-  - [ ] Implement finetune_strength parameter control
-  - [ ] Update generation interface for finetune_id models
-  - [ ] Add model type detection and appropriate inference routing
 - [ ] **Premium Features**
-  - [ ] Subscription-based access to official trainers
   - [ ] Enhanced quality settings for premium models
   - [ ] Priority generation queue for premium users
   - [ ] Advanced parameter controls for professional use
