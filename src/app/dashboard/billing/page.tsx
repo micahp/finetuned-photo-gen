@@ -89,9 +89,14 @@ export default function BillingPage() {
             setProcessingSubscription(false);
             pollingRef.current = false;
             
-            // DON'T trigger session update to avoid infinite reload bug
-            // await update();
-            console.log('⚠️ Skipping session update to avoid infinite reload bug');
+            // Force session update now that subscription is active
+            console.log('🔄 Triggering session update for successful subscription')
+            await update()
+            
+            // Wait a moment for session to update, then refresh the page
+            setTimeout(() => {
+              window.location.reload()
+            }, 1000)
             
             const url = new URL(window.location.href);
             url.searchParams.delete('session_id');

@@ -106,13 +106,14 @@ export class CreditService {
               select: { credits: true },
             });
             finalBalance = user?.credits ?? 0;
+            transactionResult = { id: '', balanceAfter: finalBalance }; // Dummy transaction result for already processed
             return; // Exit transaction early
           }
         }
 
         // Check for existing transaction with same idempotency key INSIDE transaction
         if (data.idempotencyKey) {
-          const existingTransaction = await tx.creditTransaction.findUnique({
+          const existingTransaction = await tx.creditTransaction.findFirst({
             where: { idempotencyKey: data.idempotencyKey },
           });
 

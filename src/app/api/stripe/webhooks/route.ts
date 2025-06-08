@@ -3,7 +3,7 @@ import { stripe } from '../../../../lib/stripe'; // Adjusted path
 import { prisma } from '@/lib/db'; // Use shared Prisma instance
 import Stripe from 'stripe'; // Added import for Stripe type
 import { CreditService } from '@/lib/credit-service'
-import { PLANS } from '@/config/stripe';
+import { PRICING_PLANS, getPlanById } from '@/lib/stripe/pricing';
 
 // This is a basic placeholder. In a real scenario, you would:
 // 1. Verify the Stripe webhook signature using `stripe.webhooks.constructEvent`
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
             const creditsToAllocate = parseInt(creditsFromPlanString, 10);
 
             // Find the plan in our configuration (case-insensitive)
-            const appPlan = Object.values(PLANS).find(p => p.name.toLowerCase() === planName.toLowerCase());
+            const appPlan = PRICING_PLANS.find(p => p.name.toLowerCase() === planName.toLowerCase());
 
             if (appPlan) {
               if (appPlan.credits !== creditsToAllocate) {
@@ -121,8 +121,8 @@ export async function POST(req: NextRequest) {
             await prisma.$transaction(async (tx) => {
               const userData: any = {
                 subscriptionStatus: stripeSubscription.status,
-                // Use the canonical plan name from our app's config to ensure consistency
-                subscriptionPlan: appPlan ? appPlan.name : planName, 
+                // Use the canonical plan ID from our app's config to ensure consistency
+                subscriptionPlan: appPlan ? appPlan.id : planName.toLowerCase(), 
               };
               
               // Only update stripeCustomerId if we have one
@@ -149,8 +149,8 @@ export async function POST(req: NextRequest) {
                 create: {
                   userId: userId,
                   stripeSubscriptionId: subId,
-                  // Use the canonical plan name from our app's config
-                  planName: appPlan ? appPlan.name : planName,
+                  // Use the canonical plan ID from our app's config
+                  planName: appPlan ? appPlan.id : planName.toLowerCase(),
                   status: subStatus,
                   currentPeriodStart: currentPeriodStart,
                   currentPeriodEnd: currentPeriodEnd,
@@ -158,28 +158,28 @@ export async function POST(req: NextRequest) {
                 },
                 update: {
                   status: subStatus,
-                  // Use the canonical plan name from our app's config
-                  planName: appPlan ? appPlan.name : planName,
+                  // Use the canonical plan ID from our app's config
+                  planName: appPlan ? appPlan.id : planName.toLowerCase(),
                   currentPeriodStart: currentPeriodStart,
                   currentPeriodEnd: currentPeriodEnd,
                   monthlyCredits: creditsToAllocate,
                 },
               });
 
-              // CRITICAL FIX: Credit allocation now happens INSIDE the transaction
+              // CRITICAL FIX: Add credits INSIDE the transaction to prevent race conditions
               if (creditsToAllocate > 0) {
                 console.log(`🔄 Allocating ${creditsToAllocate} initial credits for user ${userId}, plan: ${planName}, session: ${session.id}`);
                 
-                // Generate idempotency key for credit transaction
+                // Generate idempotency key for credit allocation
                 const creditIdempotencyKey = `stripe:${event.id}:${userId}:subscription_initial`;
                 
                 // Check if credits already allocated (idempotency)
-                const existingCreditTx = await tx.creditTransaction.findUnique({
+                const existingCreditTx = await tx.creditTransaction.findFirst({
                   where: { idempotencyKey: creditIdempotencyKey }
                 });
                 
                 if (!existingCreditTx) {
-                  // Update user credits atomically
+                  // Add credits atomically within the transaction
                   const updatedUser = await tx.user.update({
                     where: { id: userId },
                     data: { credits: { increment: creditsToAllocate } },
@@ -203,7 +203,7 @@ export async function POST(req: NextRequest) {
                   
                   console.log(`✅ User ${userId} allocated ${creditsToAllocate} initial credits for ${planName}. New balance: ${updatedUser.credits}`);
                 } else {
-                  console.log(`🔒 Credits already allocated for user ${userId}, plan: ${planName} (idempotency)`);
+                  console.log(`🔒 Credits already allocated for user ${userId} (idempotency)`);
                 }
               } else {
                 console.log(`ℹ️ Subscription for ${planName} started for user ${userId}, no initial credits to allocate.`);
@@ -228,7 +228,7 @@ export async function POST(req: NextRequest) {
                 const creditIdempotencyKey = `stripe:${event.id}:${userId}:purchased`;
                 
                 // Check if purchase already processed (idempotency)
-                const existingCreditTx = await tx.creditTransaction.findUnique({
+                const existingCreditTx = await tx.creditTransaction.findFirst({
                   where: { idempotencyKey: creditIdempotencyKey }
                 });
                 
@@ -337,6 +337,9 @@ export async function POST(req: NextRequest) {
           const planName = stripeProduct.name;
           const creditsFromPlan = parseInt(stripeProduct.metadata?.credits || '0', 10);
 
+          // Find the plan in our configuration (case-insensitive)
+          const appPlan = PRICING_PLANS.find(p => p.name.toLowerCase() === planName.toLowerCase());
+
           await prisma.$transaction(async (tx) => {
             // CRITICAL FIX: Idempotency check now happens INSIDE the transaction
             const existingEvent = await tx.processedStripeEvent.findUnique({
@@ -365,7 +368,7 @@ export async function POST(req: NextRequest) {
               // Standard update for other status changes (e.g., active, past_due)
               const userData = {
                 subscriptionStatus: subscription.status,
-                subscriptionPlan: planName,
+                subscriptionPlan: appPlan ? appPlan.id : planName.toLowerCase(),
                 stripeSubscriptionStatus: subscription.status,
               };
               console.log(`[DIAGNOSTIC] Updating user in customer.subscription.updated (active)`, { userId, data: userData });
@@ -380,7 +383,7 @@ export async function POST(req: NextRequest) {
               where: { stripeSubscriptionId: subId },
               data: {
                 status: subscription.status,
-                planName: planName,
+                planName: appPlan ? appPlan.id : planName.toLowerCase(),
                 currentPeriodStart: new Date((subscription as any).current_period_start ? (subscription as any).current_period_start * 1000 : Date.now()),
                 currentPeriodEnd: new Date((subscription as any).current_period_end ? (subscription as any).current_period_end * 1000 : Date.now()),
                 monthlyCredits: creditsFromPlan,
@@ -573,6 +576,9 @@ export async function POST(req: NextRequest) {
           const planName = product.name;
           const creditsToAllocate = parseInt(product.metadata?.credits || '0', 10);
 
+          // Find the plan in our configuration (case-insensitive)
+          const appPlan = PRICING_PLANS.find(p => p.name.toLowerCase() === planName.toLowerCase());
+
           if (isNaN(creditsToAllocate) || creditsToAllocate <= 0) {
             console.error(`🔴 Error: Invalid or zero credits in product metadata for ${product.id}. No credits added.`);
           } else {
@@ -596,7 +602,7 @@ export async function POST(req: NextRequest) {
           await prisma.$transaction(async (tx) => {
             const userData = {
               subscriptionStatus: stripeSubscription.status,
-              subscriptionPlan: planName,
+              subscriptionPlan: appPlan ? appPlan.id : planName.toLowerCase(),
             };
             console.log(`[DIAGNOSTIC] Updating user in invoice.payment_succeeded`, { userId, data: userData });
             await tx.user.update({
