@@ -51,6 +51,16 @@ interface TrainingStatus {
   debugData?: any
 }
 
+interface DeletePreview {
+  id: string
+  name: string
+  status: string
+  trainingImagesCount: number
+  generatedImagesCount: number
+  huggingfaceRepo?: string
+  hasZipFiles: boolean
+}
+
 export default function ModelsPage() {
   const { data: session } = useSession()
   const [models, setModels] = useState<Model[]>([])
@@ -59,7 +69,7 @@ export default function ModelsPage() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
-  const [deletePreview, setDeletePreview] = useState<Model | null>(null)
+  const [deletePreview, setDeletePreview] = useState<DeletePreview | null>(null)
   const [retryingUpload, setRetryingUpload] = useState<string | null>(null)
 
   useEffect(() => {
@@ -135,7 +145,11 @@ export default function ModelsPage() {
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.preview) {
-          setDeletePreview(data.preview)
+          // Add the modelId to the preview since it's not included in the API response
+          setDeletePreview({
+            ...data.preview,
+            id: modelId
+          })
         }
       }
     } catch (error) {
@@ -461,7 +475,7 @@ export default function ModelsPage() {
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="text-red-500">✗</span>
-                    {deletePreview._count.trainingImages} training images
+                    {deletePreview.trainingImagesCount || 0} training images
                   </li>
                 </ul>
                 
@@ -469,7 +483,7 @@ export default function ModelsPage() {
                 <ul className="space-y-1 text-sm text-green-700">
                   <li className="flex items-center gap-2">
                     <span className="text-green-500">✓</span>
-                    {deletePreview._count.generatedImages} generated images (will remain in your gallery)
+                    {deletePreview.generatedImagesCount || 0} generated images (will remain in your gallery)
                   </li>
                 </ul>
               </div>

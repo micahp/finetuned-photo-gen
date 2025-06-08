@@ -2,16 +2,6 @@
  * @jest-environment node
  */
 
-// Mock the database
-jest.mock('@/lib/db', () => ({
-  prisma: {
-    user: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-    },
-  },
-}))
-
 // Mock bcryptjs
 jest.mock('bcryptjs', () => ({
   hash: jest.fn(),
@@ -172,6 +162,16 @@ describe('Core Authentication Logic Tests', () => {
           credits: true,
           createdAt: true,
           updatedAt: true,
+          stripeSubscriptionId: true,
+          stripePriceId: true,
+          stripeCurrentPeriodEnd: true,
+          stripeSubscriptionStatus: true,
+          purchasedCreditPacks: true,
+          lastApiCallAt: true,
+          apiCallCount: true,
+          emailPreferences: true,
+          adminNotes: true,
+          sessionInvalidatedAt: true,
         }
       })
     })
@@ -255,13 +255,35 @@ describe('Core Authentication Logic Tests', () => {
       const result = await createUser(uppercaseEmail, testPassword, testName)
 
       expect(result.email).toBe(uppercaseEmail.toLowerCase())
-      expect(prisma.user.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            email: uppercaseEmail.toLowerCase()
-          })
-        })
-      )
+      expect(prisma.user.create).toHaveBeenCalledWith({
+        data: {
+          email: uppercaseEmail.toLowerCase(),
+          password: '$2a$12$hashedpassword',
+          name: testName,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          isAdmin: true,
+          subscriptionStatus: true,
+          subscriptionPlan: true,
+          stripeCustomerId: true,
+          credits: true,
+          createdAt: true,
+          updatedAt: true,
+          stripeSubscriptionId: true,
+          stripePriceId: true,
+          stripeCurrentPeriodEnd: true,
+          stripeSubscriptionStatus: true,
+          purchasedCreditPacks: true,
+          lastApiCallAt: true,
+          apiCallCount: true,
+          emailPreferences: true,
+          adminNotes: true,
+          sessionInvalidatedAt: true,
+        }
+      })
     })
 
     it('should never return password in user objects', async () => {

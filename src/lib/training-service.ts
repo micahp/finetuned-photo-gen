@@ -184,15 +184,23 @@ export class TrainingService {
       if (replicateStatus.status === 'succeeded') {
         // For newly completed training, mark as ready immediately (no HF upload)
         if (!userModel?.huggingfaceRepo) {
-          // Update model to ready status
+          // Update model to ready status and save the correct versioned model ID
           if (userModel?.id) {
+            const updateData: any = {
+              status: 'ready',
+              loraReadyForInference: true,
+              trainingCompletedAt: new Date(),
+            }
+
+            // Extract the versioned model ID from training output
+            if (replicateStatus.output && replicateStatus.output.version) {
+              updateData.replicateModelId = replicateStatus.output.version
+              console.log(`✅ Updating model with versioned Replicate ID: ${replicateStatus.output.version}`)
+            }
+
             await prisma.userModel.update({
               where: { id: userModel.id },
-              data: {
-                status: 'ready',
-                loraReadyForInference: true,
-                trainingCompletedAt: new Date(),
-              }
+              data: updateData
             })
           }
 
@@ -205,7 +213,17 @@ export class TrainingService {
           }
         }
         
-        // Legacy models with existing HF repos
+        // Legacy models with existing HF repos - also update their replicate model ID
+        if (userModel?.id && replicateStatus.output && replicateStatus.output.version) {
+          await prisma.userModel.update({
+            where: { id: userModel.id },
+            data: {
+              replicateModelId: replicateStatus.output.version
+            }
+          })
+          console.log(`✅ Updated legacy model with versioned Replicate ID: ${replicateStatus.output.version}`)
+        }
+        
         return {
           id: trainingId,
           status: 'completed',

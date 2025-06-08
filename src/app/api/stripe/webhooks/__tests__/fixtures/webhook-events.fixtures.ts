@@ -74,7 +74,7 @@ export const createSubscriptionEvent = (
       },
       current_period_start: Math.floor(Date.now() / 1000),
       current_period_end: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60),
-      metadata: {},
+      metadata: { userId: TEST_IDS.userId },
       ...overrides,
     } as Stripe.Subscription,
   },
@@ -154,5 +154,6 @@ export const createMockSubscription = (overrides = {}) => ({
   customer: TEST_IDS.stripeCustomerId,
   current_period_start: Math.floor(Date.now() / 1000),
   current_period_end: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60),
+  metadata: { userId: TEST_IDS.userId },
   ...overrides,
 }); 

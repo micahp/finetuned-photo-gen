@@ -73,6 +73,26 @@ export class ReplicateService {
   }
 
   /**
+   * Sanitize model name to meet Replicate's requirements:
+   * - Only lowercase letters, numbers, dashes, underscores, periods
+   * - Cannot start or end with dash, underscore, or period
+   */
+  private sanitizeModelName(modelName: string): string {
+    return modelName
+      .toLowerCase()
+      // Replace spaces and apostrophes with hyphens
+      .replace(/[\s']+/g, '-')
+      // Remove any characters that aren't allowed
+      .replace(/[^a-z0-9\-_.]/g, '')
+      // Remove leading/trailing dashes, underscores, or periods
+      .replace(/^[-_.]+|[-_.]+$/g, '')
+      // Collapse multiple consecutive dashes into one
+      .replace(/-+/g, '-')
+      // Ensure it's not empty after sanitization
+      || 'model'
+  }
+
+  /**
    * Create a destination model for training
    */
   async createDestinationModel(modelName: string, description?: string): Promise<{ success: boolean; modelId?: `${string}/${string}`; error?: string }> {
@@ -82,10 +102,14 @@ export class ReplicateService {
       // For now, use a fixed owner name (can be made dynamic later)
       const owner = 'micahp'
       
+      // Sanitize the model name to meet Replicate's requirements
+      const sanitizedModelName = this.sanitizeModelName(modelName)
+      console.log(`Sanitized model name: ${sanitizedModelName}`)
+      
       // Generate unique model ID with timestamp and random suffix
       const timestamp = Date.now()
       const randomSuffix = Math.random().toString(36).substring(2, 8)
-      const modelId = `flux-lora-${modelName.toLowerCase().replace(/\s+/g, '-')}-${timestamp}-${randomSuffix}`
+      const modelId = `flux-lora-${sanitizedModelName}-${timestamp}-${randomSuffix}`
       
       // Use the correct models.create API with positional arguments
       const model = await this.client.models.create(
@@ -759,5 +783,111 @@ export class ReplicateService {
         cost: 'Variable pricing'
       }
     ]
+  }
+
+  /**
+   * Edit an image using Flux.1 Kontext Pro
+   */
+  async editImageWithKontext(params: {
+    input_image: string
+    prompt: string
+    width?: number
+    height?: number
+    seed?: number
+  }): Promise<ReplicateGenerationResponse> {
+    try {
+      console.log('🖌️ Editing image with Flux.1 Kontext Pro...', {
+        prompt: params.prompt,
+        has_image: !!params.input_image
+      })
+
+      // Run the Flux.1 Kontext Pro model
+      const prediction = await this.client.predictions.create({
+        version: "black-forest-labs/flux-kontext-pro:0f1178f5a27e9aa2d2d39c8a43c110f7fa7cbf64062ff04a04cd40899e546065", 
+        input: {
+          prompt: params.prompt,
+          input_image: params.input_image,
+          width: params.width || 768,
+          height: params.height || 768,
+          seed: params.seed
+        }
+      })
+
+      // Check for immediate errors
+      if (prediction.error) {
+        console.error('❌ Immediate error with Kontext edit:', prediction.error)
+        return {
+          id: String(prediction.id),
+          status: 'failed',
+          error: String(prediction.error)
+        }
+      }
+
+      // Wait for the prediction to complete - use get with polling instead of wait
+      let result = prediction;
+      let status = result.status;
+      
+      // Poll until the prediction is complete
+      while (status === 'starting' || status === 'processing') {
+        // Wait a bit before checking again
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Get the updated prediction
+        result = await this.client.predictions.get(String(prediction.id));
+        status = result.status;
+      }
+      
+      console.log('✅ Kontext edit completed:', {
+        id: result.id,
+        status: result.status,
+        output: result.output ? 'Present' : 'Not present',
+        error: result.error
+      })
+
+      // Handle the completed result
+      if (result.status === 'succeeded' && result.output) {
+        // The output is the edited image URL
+        const outputUrl = Array.isArray(result.output) 
+          ? result.output[0] 
+          : typeof result.output === 'string' 
+            ? result.output 
+            : result.output && typeof result.output === 'object' && ('image' in result.output || 'url' in result.output)
+              ? (result.output.image || result.output.url) as string
+              : null;
+
+        if (!outputUrl) {
+          console.error('❌ No output URL found in Kontext result:', result)
+          return {
+            id: String(result.id),
+            status: 'failed',
+            error: 'No output URL found in result'
+          }
+        }
+
+        return {
+          id: String(result.id),
+          status: 'completed',
+          images: [{
+            url: outputUrl,
+            width: params.width || 768,
+            height: params.height || 768
+          }]
+        }
+      } else {
+        console.error('❌ Kontext edit failed:', result.error || 'Unknown error')
+        return {
+          id: String(result.id),
+          status: 'failed',
+          error: result.error ? String(result.error) : 'Editing failed with unknown error'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Exception during Kontext edit:', error)
+      return {
+        id: `error_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
+    }
   }
 } 

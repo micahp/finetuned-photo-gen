@@ -265,6 +265,13 @@ export class TogetherAIService {
       }
       // Should not be reached if loop completes, but as a fallback:
       if (lastError) throw lastError;
+      
+      // Final fallback if somehow we get here without an error
+      return {
+        id: `fallback_${Date.now()}`,
+        status: 'failed',
+        error: 'Generation failed after all retries'
+      };
       // --- END RETRY LOGIC ---
 
     } catch (error) { // Outer catch for routing errors or rethrown retry errors

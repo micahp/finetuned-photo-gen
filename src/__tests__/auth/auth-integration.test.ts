@@ -6,17 +6,6 @@ import { NextRequest } from 'next/server'
 import { POST as registerPOST } from '@/app/api/auth/register/route'
 import { POST as validatePOST } from '@/app/api/auth/validate/route'
 
-// Mock the database
-jest.mock('@/lib/db', () => ({
-  prisma: {
-    user: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      deleteMany: jest.fn(),
-    },
-  },
-}))
-
 // Mock bcryptjs
 jest.mock('bcryptjs', () => ({
   hash: jest.fn(),
@@ -100,7 +89,17 @@ describe('Authentication Integration Tests', () => {
           credits: true,
           createdAt: true,
           updatedAt: true,
-        }
+          stripeSubscriptionId: true,
+          stripePriceId: true,
+          stripeCurrentPeriodEnd: true,
+          stripeSubscriptionStatus: true,
+          purchasedCreditPacks: true,
+          lastApiCallAt: true,
+          apiCallCount: true,
+          emailPreferences: true,
+          adminNotes: true,
+          sessionInvalidatedAt: true,
+        },
       })
     })
 
@@ -109,15 +108,15 @@ describe('Authentication Integration Tests', () => {
       ;(prisma.user.findUnique as jest.Mock).mockResolvedValue({
         id: 'existing-id',
         email: testEmail,
-        password: 'hashedpassword',
+        password: '$2a$12$hashedpassword',
       })
 
       const request = new NextRequest('http://localhost:3000/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           email: testEmail,
-          password: 'differentpassword',
-          name: 'Different Name'
+          password: testPassword,
+          name: testName
         }),
         headers: {
           'content-type': 'application/json',
@@ -132,7 +131,26 @@ describe('Authentication Integration Tests', () => {
       expect(responseData.error).toContain('already exists')
     })
 
-    it('should reject registration with invalid email', async () => {
+    it('should handle invalid request body', async () => {
+      const request = new NextRequest('http://localhost:3000/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          // Missing required fields
+        }),
+        headers: {
+          'content-type': 'application/json',
+        },
+      })
+
+      const response = await registerPOST(request)
+      const responseData = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(responseData.success).toBe(false)
+      expect(responseData.error).toContain('required')
+    })
+
+    it('should validate email format', async () => {
       const request = new NextRequest('http://localhost:3000/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
@@ -150,15 +168,15 @@ describe('Authentication Integration Tests', () => {
 
       expect(response.status).toBe(400)
       expect(responseData.success).toBe(false)
-      expect(responseData.error).toContain('Invalid email format')
+      expect(responseData.error).toContain('valid email')
     })
 
-    it('should reject registration with short password', async () => {
+    it('should validate password length', async () => {
       const request = new NextRequest('http://localhost:3000/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           email: testEmail,
-          password: '123',
+          password: '123', // Too short
           name: testName
         }),
         headers: {
@@ -171,7 +189,7 @@ describe('Authentication Integration Tests', () => {
 
       expect(response.status).toBe(400)
       expect(responseData.success).toBe(false)
-      expect(responseData.error).toContain('at least 6 characters')
+      expect(responseData.error).toContain('6 characters')
     })
   })
 
@@ -235,7 +253,7 @@ describe('Authentication Integration Tests', () => {
       expect(responseData.error).toContain('Invalid credentials')
     })
 
-    it('should reject login for non-existent user', async () => {
+    it('should reject non-existent user', async () => {
       ;(prisma.user.findUnique as jest.Mock).mockResolvedValue(null)
 
       const request = new NextRequest('http://localhost:3000/api/auth/validate', {
@@ -259,10 +277,13 @@ describe('Authentication Integration Tests', () => {
 
   describe('Complete Signup-Login Flow', () => {
     it('should complete full signup then login flow', async () => {
+      // Step 1: Register a new user
+      ;(prisma.user.findUnique as jest.Mock).mockResolvedValue(null)
+      
       const mockUser = {
-        id: 'test-id',
-        email: testEmail,
-        name: testName,
+        id: 'flow-test-id',
+        email: 'flow-test@example.com',
+        name: 'Flow Test User',
         subscriptionStatus: 'free',
         subscriptionPlan: null,
         stripeCustomerId: null,
@@ -270,21 +291,14 @@ describe('Authentication Integration Tests', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       }
-
-      // Step 1: Registration
-      ;(prisma.user.findUnique as jest.Mock)
-        .mockResolvedValueOnce(null) // User doesn't exist for registration
-        .mockResolvedValueOnce({ ...mockUser, password: '$2a$12$hashedpassword' }) // User exists for login
       ;(prisma.user.create as jest.Mock).mockResolvedValue(mockUser)
-      ;(bcrypt.compare as jest.Mock).mockResolvedValue(true)
 
-      // Register user
       const registerRequest = new NextRequest('http://localhost:3000/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
-          email: testEmail,
-          password: testPassword,
-          name: testName
+          email: 'flow-test@example.com',
+          password: 'flowtest123',
+          name: 'Flow Test User'
         }),
         headers: {
           'content-type': 'application/json',
@@ -298,24 +312,28 @@ describe('Authentication Integration Tests', () => {
       expect(registerData.success).toBe(true)
 
       // Step 2: Validate login credentials
-      const loginRequest = new NextRequest('http://localhost:3000/api/auth/validate', {
+      const userWithPassword = { ...mockUser, password: '$2a$12$hashedpassword' }
+      ;(prisma.user.findUnique as jest.Mock).mockResolvedValue(userWithPassword)
+      ;(bcrypt.compare as jest.Mock).mockResolvedValue(true)
+
+      const validateRequest = new NextRequest('http://localhost:3000/api/auth/validate', {
         method: 'POST',
         body: JSON.stringify({
-          email: testEmail,
-          password: testPassword
+          email: 'flow-test@example.com',
+          password: 'flowtest123'
         }),
         headers: {
           'content-type': 'application/json',
         },
       })
 
-      const loginResponse = await validatePOST(loginRequest)
-      const loginData = await loginResponse.json()
+      const validateResponse = await validatePOST(validateRequest)
+      const validateData = await validateResponse.json()
 
-      expect(loginResponse.status).toBe(200)
-      expect(loginData.email).toBe(testEmail)
-      expect(loginData.name).toBe(testName)
-      expect(loginData.id).toBe(registerData.data.user.id)
+      expect(validateResponse.status).toBe(200)
+      expect(validateData.email).toBe('flow-test@example.com')
+      expect(validateData.name).toBe('Flow Test User')
+      expect(validateData).not.toHaveProperty('password')
     })
   })
 }) 

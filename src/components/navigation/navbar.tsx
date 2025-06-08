@@ -13,9 +13,19 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { User, LogOut, Settings, CreditCard, Shield } from 'lucide-react'
+import Image from 'next/image'
+import { useEffect } from 'react'
 
 export function Navbar() {
   const { data: session, status } = useSession()
+
+  useEffect(() => {
+    // Check if the session has been invalidated by the server
+    if ((session as any)?.error === 'SessionInvalidated') {
+      console.log('Session invalidated, signing out...')
+      signOut({ callbackUrl: '/login?error=session-expired' })
+    }
+  }, [session])
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: '/' })
@@ -28,6 +38,7 @@ export function Navbar() {
           <div className="flex items-center">
             <Link href={session ? "/dashboard" : "/"} className="flex-shrink-0">
               <div className="flex items-center gap-2">
+                <Image src="/favicon-transparent.png" alt="Fine Photo Gen Logo" width={32} height={32} />
                 <h1 className="text-xl font-bold text-gray-900">Fine Photo Gen</h1>
                 <Badge 
                   variant="secondary" 
@@ -49,6 +60,9 @@ export function Navbar() {
                 </Link>
                 <Link href="/dashboard/generate">
                   <Button variant="ghost">Generate</Button>
+                </Link>
+                <Link href="/dashboard/edit">
+                  <Button variant="ghost">Edit</Button>
                 </Link>
                 <Link href="/dashboard/gallery">
                   <Button variant="ghost">Gallery</Button>

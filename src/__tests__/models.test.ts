@@ -13,6 +13,7 @@ jest.mock('@/lib/db', () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn(),
     },
     trainingImage: {
       findMany: jest.fn(),
@@ -40,7 +41,8 @@ describe('Model Management API', () => {
     id: 'user-123',
     email: 'test@example.com',
     name: 'Test User',
-    subscriptionStatus: 'free',
+    subscriptionStatus: 'active',
+    subscriptionPlan: 'creator',
     credits: 10,
   }
 
@@ -51,6 +53,8 @@ describe('Model Management API', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     ;(auth as jest.Mock).mockResolvedValue(mockSession)
+    ;(prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser)
+    ;(prisma.userModel.count as jest.Mock).mockResolvedValue(0)
   })
 
   describe('POST /api/models/create', () => {
@@ -101,6 +105,7 @@ describe('Model Management API', () => {
           status: 'pending',
           userId: 'user-123',
           triggerWord: 'test_model',
+          baseModel: 'black-forest-labs/FLUX.1-dev',
         },
       })
     })

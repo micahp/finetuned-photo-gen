@@ -27,6 +27,11 @@ export default {
   theme: {
   	extend: {
   		colors: {
+        brand: {
+          blue: '#007CF0',
+          purple: '#8A2BE2',
+          cyan: '#00DFD8',
+        },
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

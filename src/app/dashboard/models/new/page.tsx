@@ -16,7 +16,26 @@ import { ArrowLeft, ArrowRight, Check, Upload, Loader2, Settings, Info } from 'l
 import { ImageUpload } from '@/components/upload/ImageUpload'
 
 const modelSchema = z.object({
-  name: z.string().min(1, 'Model name is required').max(100, 'Model name too long'),
+  name: z.string()
+    .min(1, 'Model name is required')
+    .max(50, 'Model name must be less than 50 characters')
+    .refine(
+      (name) => {
+        // Allow reasonable characters, but warn about conversion
+        const hasOnlyAllowedChars = /^[a-zA-Z0-9\s'._-]+$/.test(name)
+        const afterSanitization = name
+          .toLowerCase()
+          .replace(/[\s']+/g, '-')
+          .replace(/[^a-z0-9\-_.]/g, '')
+          .replace(/^[-_.]+|[-_.]+$/g, '')
+          .replace(/-+/g, '-')
+        
+        return hasOnlyAllowedChars && afterSanitization.length >= 2
+      },
+      {
+        message: 'Model name can only contain letters, numbers, spaces, apostrophes, hyphens, underscores, and periods. Avoid special symbols.'
+      }
+    ),
   description: z.string().max(500, 'Description too long').optional(),
   triggerWord: z.string().optional(),
   baseModel: z.string().optional(),
@@ -293,18 +312,35 @@ export default function NewModelPage() {
                 <FormField
                   control={form.control}
                   name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Model Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g., John's Portrait Model"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    // Show preview of sanitized name for training
+                    const sanitizedName = field.value 
+                      ? field.value
+                          .toLowerCase()
+                          .replace(/[\s']+/g, '-')
+                          .replace(/[^a-z0-9\-_.]/g, '')
+                          .replace(/^[-_.]+|[-_.]+$/g, '')
+                          .replace(/-+/g, '-')
+                      : ''
+                    
+                    return (
+                      <FormItem>
+                        <FormLabel>Model Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g., John's Portrait Model"
+                            {...field}
+                          />
+                        </FormControl>
+                        {field.value && sanitizedName && field.value !== sanitizedName && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            Training name will be: <span className="font-mono">{sanitizedName}</span>
+                          </p>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )
+                  }}
                 />
 
                 <FormField

@@ -117,7 +117,7 @@ describe('POST /api/stripe/create-subscription-checkout', () => {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: mockPriceId, quantity: 1 }],
-      success_url: `${mockReturnUrl}?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${mockReturnUrl}?session_id={CHECKOUT_SESSION_ID}&refresh=true`,
       cancel_url: `${mockReturnUrl}?canceled=true`,
       metadata: { userId: mockUserId },
     });
@@ -145,7 +145,7 @@ describe('POST /api/stripe/create-subscription-checkout', () => {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: mockPriceId, quantity: 1 }],
-      success_url: `${mockReturnUrl}?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${mockReturnUrl}?session_id={CHECKOUT_SESSION_ID}&refresh=true`,
       cancel_url: `${mockReturnUrl}?canceled=true`,
       metadata: { userId: mockUserId },
     });

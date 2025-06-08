@@ -89,8 +89,8 @@ export function createSpecificTransactionMock(config: {
         findUnique: jest.fn().mockResolvedValueOnce(
           shouldUserNotExist ? null : { id: userId, credits: initialCredits }
         ),
-        update: shouldUserUpdateFail
-          ? jest.fn().mockRejectedValueOnce(new Error(userUpdateError))
+        update: shouldUserUpdateFail || shouldUserNotExist
+          ? jest.fn().mockRejectedValueOnce(new Error(shouldUserNotExist ? 'Record to update not found' : userUpdateError))
           : jest.fn().mockResolvedValueOnce({ id: userId, credits: newBalance }),
       },
       creditTransaction: {

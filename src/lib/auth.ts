@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs'
-import { prisma } from './db'
+import { getPrismaClient } from './db'
 import { User } from '@/generated/prisma'
 
 export async function hashPassword(password: string): Promise<string> {
@@ -11,7 +11,13 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 }
 
 export async function createUser(email: string, password: string, name?: string): Promise<Omit<User, 'password'>> {
+  // Ensure we're on the server
+  if (typeof window !== 'undefined') {
+    throw new Error('This function can only be called from server-side code')
+  }
+
   const normalizedEmail = email.toLowerCase();
+  const prisma = getPrismaClient();
 
   try {
     // Check if user already exists
@@ -53,6 +59,7 @@ export async function createUser(email: string, password: string, name?: string)
         apiCallCount: true,
         emailPreferences: true,
         adminNotes: true,
+        sessionInvalidatedAt: true,
       },
     });
 
@@ -67,7 +74,13 @@ export async function createUser(email: string, password: string, name?: string)
 }
 
 export async function findUserByEmail(email: string): Promise<User | null> {
+  // Ensure we're on the server
+  if (typeof window !== 'undefined') {
+    throw new Error('This function can only be called from server-side code')
+  }
+
   try {
+    const prisma = getPrismaClient();
     return await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -78,6 +91,11 @@ export async function findUserByEmail(email: string): Promise<User | null> {
 }
 
 export async function validateCredentials(email: string, password: string): Promise<Omit<User, 'password'> | null> {
+  // Ensure we're on the server
+  if (typeof window !== 'undefined') {
+    throw new Error('This function can only be called from server-side code')
+  }
+
   try {
     const user = await findUserByEmail(email)
     

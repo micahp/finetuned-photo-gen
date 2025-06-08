@@ -10,16 +10,6 @@ jest.mock('bcryptjs', () => ({
   compare: jest.fn(),
 }))
 
-// Mock Prisma
-jest.mock('@/lib/db', () => ({
-  prisma: {
-    user: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-    },
-  },
-}))
-
 import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 
@@ -73,6 +63,16 @@ describe('Authentication', () => {
           credits: true,
           createdAt: true,
           updatedAt: true,
+          stripeSubscriptionId: true,
+          stripePriceId: true,
+          stripeCurrentPeriodEnd: true,
+          stripeSubscriptionStatus: true,
+          purchasedCreditPacks: true,
+          lastApiCallAt: true,
+          apiCallCount: true,
+          emailPreferences: true,
+          adminNotes: true,
+          sessionInvalidatedAt: true,
         }
       })
     })

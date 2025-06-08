@@ -150,18 +150,12 @@ describe('CreditService - Credit Management', () => {
     it('should add credits, record transaction, and return new balance', async () => {
       const type = transactionTypes.purchased;
       const expectedNewBalanceAfterRecord = INITIAL_BALANCE + addAmount;
-      const finalBalanceAfterFetch = INITIAL_BALANCE + addAmount + 50;
 
       (CreditService.recordTransaction as jest.Mock).mockResolvedValueOnce({
         success: true,
         newBalance: expectedNewBalanceAfterRecord,
         transactionId: 'tx-add-123',
       });
-
-      prismaMock.user.findUnique.mockResolvedValueOnce({
-        id: TEST_USER_ID,
-        credits: finalBalanceAfterFetch,
-      } as any);
 
       const result = await CreditService.addCredits(
         TEST_USER_ID,
@@ -181,10 +175,8 @@ describe('CreditService - Credit Management', () => {
         relatedEntityId,
         metadata: undefined,
       });
-      expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
-        where: { id: TEST_USER_ID },
-        select: { credits: true },
-      });
+      // In the success case, user.findUnique should NOT be called
+      expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
       expectSuccessfulTransaction(result, expectedNewBalanceAfterRecord);
     });
 
@@ -235,25 +227,6 @@ describe('CreditService - Credit Management', () => {
       expectFailedTransaction(result, errorMessages.failedToAdd, balanceWhenErrorThrown);
     });
 
-    it('should return success:true and newBalance from recordTransaction if user is not found by the *second* findUnique (after successful recordTransaction)', async () => {
-      const type = transactionTypes.admin_adjustment;
-      const balanceFromSuccessfulRecordTransaction = INITIAL_BALANCE + addAmount;
-      (CreditService.recordTransaction as jest.Mock).mockResolvedValueOnce({
-        success: true,
-        newBalance: balanceFromSuccessfulRecordTransaction,
-        transactionId: 'tx-add-admin',
-      });
 
-      prismaMock.user.findUnique.mockResolvedValueOnce(null);
-
-      const result = await CreditService.addCredits(TEST_USER_ID, addAmount, type, description);
-
-      expect(CreditService.recordTransaction).toHaveBeenCalledTimes(1);
-      expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
-        where: { id: TEST_USER_ID },
-        select: { credits: true },
-      });
-      expectSuccessfulTransaction(result, balanceFromSuccessfulRecordTransaction);
-    });
   });
 }); 

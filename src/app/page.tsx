@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { PRICING_PLANS } from '@/lib/stripe/pricing'
 import { Navbar } from '@/components/navigation/navbar'
 import { Footer } from '@/components/navigation/footer'
+import Image from 'next/image'
 
 export default function HomePage() {
   return (
@@ -14,9 +15,12 @@ export default function HomePage() {
       {/* Hero Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center">
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            Fine Photo Gen
-          </h1>
+          <div className="flex justify-center items-center mb-6">
+            <Image src="/favicon-transparent.png" alt="Fine Photo Gen Logo" width={128} height={128} className="mr-4" />
+            <h1 className="text-5xl font-bold text-gray-900">
+              Fine Photo Gen
+            </h1>
+          </div>
           <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
             Create personalized AI images by training custom FLUX models with your own photos. 
             Upload 10-20 images of yourself and generate unlimited unique, personalized content.
@@ -96,7 +100,7 @@ export default function HomePage() {
             >
               {plan.popular && (
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <Badge className="bg-blue-500 text-white">Most Popular</Badge>
+                  <Badge className="bg-brand-blue text-white">Most Popular</Badge>
                 </div>
               )}
               <CardHeader>
@@ -117,7 +121,7 @@ export default function HomePage() {
                 </ul>
                 <Button 
                   asChild 
-                  className={`w-full mt-4 ${plan.popular ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                  className={`w-full mt-4 ${plan.popular ? 'bg-brand-blue hover:bg-blue-700' : ''}`}
                   variant={plan.popular ? 'default' : 'outline'}
                 >
                   <Link href="/register">
@@ -131,7 +135,7 @@ export default function HomePage() {
       </div>
 
       {/* CTA Section */}
-      <div className="bg-blue-600 text-white py-16">
+      <div className="bg-gradient-to-r from-brand-blue via-brand-purple to-brand-cyan text-white py-16">
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold mb-4">
             Ready to Create Personalized AI Images?

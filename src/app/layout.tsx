@@ -1,13 +1,16 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AuthSessionProvider } from "@/components/providers/session-provider";
 import { auth } from "@/lib/next-auth";
 import AutoReloadErrorBoundary from "@/components/AutoReloadErrorBoundary";
 import { Toaster } from "sonner";
 import { CookieConsent } from "@/components/legal/CookieConsent";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import "@/utils/errorMonitor"; // Auto-setup error monitoring
+import { Analytics } from "@vercel/analytics/react"
+import { SpeedInsights } from "@vercel/speed-insights/next"
+import { SessionGate } from '@/components/auth/SessionGate';
+import { NextAuthProvider } from '@/components/providers/NextAuthProvider';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,8 +36,12 @@ export const metadata: Metadata = {
     ],
   },
   manifest: '/site.webmanifest',
+};
+
+export const viewport: Viewport = {
   themeColor: '#ffffff',
-  viewport: 'width=device-width, initial-scale=1',
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default async function RootLayout({
@@ -51,12 +58,19 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AutoReloadErrorBoundary>
-          <AuthSessionProvider session={session}>
-            {children}
+          <NextAuthProvider session={session}>
+            <SessionGate />
+            <div className="flex flex-col min-h-screen">
+              <main className="flex-grow">
+                {children}
+              </main>
+            </div>
             <Toaster position="top-right" />
             <CookieConsent />
             {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} />}
-          </AuthSessionProvider>
+            <Analytics />
+            <SpeedInsights />
+          </NextAuthProvider>
         </AutoReloadErrorBoundary>
       </body>
     </html>

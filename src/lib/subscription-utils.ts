@@ -17,7 +17,7 @@ export function getPremiumFeatures(subscriptionPlan: string | null | undefined, 
     return {
       hasPremiumModels: false,
       hasAdvancedFeatures: false,
-      creditLimit: 5
+      creditLimit: 10
     }
   }
 
@@ -38,7 +38,7 @@ export function getSubscriptionCreditLimit(subscriptionPlan: string | null | und
     case 'ultra':
       return 5000
     default:
-      return 5
+      return 10
   }
 }
 

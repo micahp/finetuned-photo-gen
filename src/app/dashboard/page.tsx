@@ -199,7 +199,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
-                <CardTitle>Create Your First Model</CardTitle>
+                <CardTitle>Create A Model</CardTitle>
                 <CardDescription>
                   Upload 10-20 photos of yourself to train a personalized AI model
                 </CardDescription>

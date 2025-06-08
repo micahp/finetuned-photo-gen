@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,7 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2 } from 'lucide-react'
+import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2, ChevronRight } from 'lucide-react'
 import { TogetherAIService } from '@/lib/together-ai'
 import { SmartImage } from '@/components/ui/smart-image'
 import { isPremiumUser, isPremiumModel, getPremiumFeatures } from '@/lib/subscription-utils'
@@ -60,6 +60,7 @@ interface UserModel {
 
 export default function GeneratePage() {
   const { data: session, update } = useSession()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const preselectedModelId = searchParams.get('model')
 
@@ -489,6 +490,8 @@ export default function GeneratePage() {
                         onClick={() => {
                           if (userModels.length > 0) {
                             handleUserModelSelect(userModels[0].id)
+                          } else {
+                            router.push('/dashboard/models')
                           }
                         }}
                       >
@@ -497,7 +500,14 @@ export default function GeneratePage() {
                           <span className="font-medium">My Custom Models</span>
                           <Badge variant="secondary" className="text-xs">{userModels.length}</Badge>
                         </div>
-                        <p className="text-xs text-gray-600 mt-1">Use your trained models</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs text-gray-600">
+                            {userModels.length > 0 ? 'Use your trained models' : 'Create a model'}
+                          </p>
+                          {userModels.length === 0 && (
+                            <ChevronRight className="h-3 w-3 text-gray-400" />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

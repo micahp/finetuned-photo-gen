@@ -1,0 +1,212 @@
+// This is a temporary schema file that matches the current database structure
+// We're removing the EditedImage model since it doesn't exist in the database yet
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String?
+  password            String?
+  isAdmin             Boolean   @default(false) @map("is_admin")
+  subscriptionStatus  String    @default("free") @map("subscription_status")
+  subscriptionPlan    String?   @map("subscription_plan")
+  stripeCustomerId    String?   @map("stripe_customer_id")
+  credits             Int       @default(10)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  sessionInvalidatedAt DateTime? @map("session_invalidated_at") // Timestamp to trigger session refresh
+  
+  // Relations
+  userModels          UserModel[]
+  generatedImages     GeneratedImage[]
+  subscriptions       Subscription[]
+  jobQueue            JobQueue[]
+  creditTransactions  CreditTransaction[]
+  
+  // Stripe fields
+  stripeSubscriptionId    String?   @unique @map("stripe_subscription_id")
+  stripePriceId           String?   @map("stripe_price_id")
+  stripeCurrentPeriodEnd  DateTime? @map("stripe_current_period_end")
+  stripeSubscriptionStatus String?  @map("stripe_subscription_status") // e.g., "active", "canceled", "past_due"
+  
+  // For tracking one-time purchases like credit packs
+  purchasedCreditPacks Json? @default("[]") // Array of { packId: string, purchaseDate: Date, credits: number, stripeChargeId: string }
+  
+  // For advanced usage tracking, if needed beyond simple credit count
+  lastApiCallAt DateTime?
+  apiCallCount  Int       @default(0)
+  
+  // Preferences
+  emailPreferences Json? @default("{\"marketing\": true, \"transactional\": true, \"usage_reports\": false}")
+  
+  // Admin notes
+  adminNotes String? @db.Text
+  
+  @@map("users")
+}
+
+model UserModel {
+  id                     String    @id @default(cuid())
+  userId                 String    @map("user_id")
+  name                   String
+  status                 String    @default("pending") // pending, training, ready, failed
+  modelId                String?   @map("model_id") // Together AI model ID or LoRA ID
+  triggerWord            String?   @map("trigger_word") // e.g., "johndoe_person"
+  baseModel              String?   @default("black-forest-labs/FLUX.1-dev") @map("base_model") // Base model used for training
+  trainingImagesCount    Int?      @map("training_images_count")
+  trainingStartedAt      DateTime? @map("training_started_at")
+  trainingCompletedAt    DateTime? @map("training_completed_at")
+  
+  // External training fields
+  externalTrainingId     String?   @map("external_training_id") // Replicate training ID
+  externalTrainingService String?  @map("external_training_service") // 'replicate', 'runpod', etc.
+  trainingZipFilename    String?   @map("training_zip_filename") // ZIP filename in R2 for cleanup tracking
+  replicateModelId       String?   @map("replicate_model_id") // Replicate destination model ID (e.g., "micahp/flux-lora-xyz")
+  huggingfaceRepo        String?   @map("huggingface_repo") // HuggingFace repository path
+  huggingfaceStatus      String?   @map("huggingface_status") // 'uploading', 'ready', 'failed'
+  loraReadyForInference  Boolean   @default(false) @map("lora_ready_for_inference")
+  
+  // Model validation fields
+  validationStatus       String?   @default("unknown") @map("validation_status") // 'valid', 'invalid', 'unknown', 'checking'
+  validationError        String?   @map("validation_error") // Error message if validation failed
+  lastValidationCheck    DateTime? @map("last_validation_check") // When was the model last validated
+  
+  createdAt              DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingImages         TrainingImage[]
+  generatedImages        GeneratedImage[]
+  
+  @@map("user_models")
+}
+
+model TrainingImage {
+  id                String    @id @default(cuid())
+  userModelId       String    @map("user_model_id")
+  originalFilename  String    @map("original_filename")
+  s3Key             String    @map("s3_key")
+  fileSize          Int?      @map("file_size")
+  width             Int?
+  height            Int?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  userModel         UserModel @relation(fields: [userModelId], references: [id], onDelete: Cascade)
+  
+  @@map("training_images")
+}
+
+model GeneratedImage {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  userModelId       String?   @map("user_model_id")
+  prompt            String
+  imageUrl          String    @map("image_url")
+  cloudflareImageId String?   @map("cloudflare_image_id")
+  s3Key             String?   @map("s3_key")
+  
+  // Enhanced metadata fields
+  width             Int?      // Image width in pixels
+  height            Int?      // Image height in pixels
+  fileSize          Int?      @map("file_size") // File size in bytes
+  generationDuration Int?     @map("generation_duration") // Generation time in milliseconds
+  originalTempUrl   String?   @map("original_temp_url") // Original temporary URL for debugging
+  
+  generationParams  Json?     @map("generation_params") // store model settings, seed, etc.
+  creditsUsed       Int       @default(1) @map("credits_used")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userModel         UserModel? @relation(fields: [userModelId], references: [id])
+  
+  @@map("generated_images")
+}
+
+model JobQueue {
+  id              String    @id @default(cuid())
+  userId          String?   @map("user_id")
+  jobType         String    @map("job_type") // 'model_training', 'image_generation'
+  status          String    @default("pending")
+  payload         Json
+  attempts        Int       @default(0)
+  maxAttempts     Int       @default(3) @map("max_attempts")
+  errorMessage    String?   @map("error_message")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  
+  // Relations
+  user            User?     @relation(fields: [userId], references: [id])
+  
+  @@map("job_queue")
+}
+
+model Subscription {
+  id                    String    @id @default(cuid())
+  userId                String    @map("user_id")
+  stripeSubscriptionId  String?   @unique @map("stripe_subscription_id")
+  planName              String    @map("plan_name")
+  status                String
+  currentPeriodStart    DateTime? @map("current_period_start")
+  currentPeriodEnd      DateTime? @map("current_period_end")
+  monthlyCredits        Int?      @map("monthly_credits")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("subscriptions")
+}
+
+model CreditTransaction {
+  id                    String    @id @default(cuid())
+  userId                String    @map("user_id")
+  amount                Int       // Positive for earned/purchased, negative for spent
+  type                  String    // 'earned', 'spent', 'purchased', 'subscription_renewal', 'refund'
+  description           String
+  relatedEntityType     String?   @map("related_entity_type") // 'image_generation', 'model_training', 'subscription', etc.
+  relatedEntityId       String?   @map("related_entity_id") // ID of the related entity
+  balanceAfter          Int       @map("balance_after") // User's credit balance after this transaction
+  metadata              Json?     // Additional transaction metadata
+  createdAt             DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("credit_transactions")
+}
+
+enum CreditTransactionType {
+  earned
+  spent
+  purchased
+  subscription_renewal
+  refund
+  admin_adjustment
+}
+
+enum RelatedEntityType {
+  image_generation
+  model_training
+  subscription
+  admin_action
+}
+
+model ProcessedStripeEvent {
+  id        String   @id @default(cuid())
+  eventId   String   @unique // The Stripe event ID
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+} 
