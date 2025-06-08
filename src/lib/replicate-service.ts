@@ -73,6 +73,26 @@ export class ReplicateService {
   }
 
   /**
+   * Sanitize model name to meet Replicate's requirements:
+   * - Only lowercase letters, numbers, dashes, underscores, periods
+   * - Cannot start or end with dash, underscore, or period
+   */
+  private sanitizeModelName(modelName: string): string {
+    return modelName
+      .toLowerCase()
+      // Replace spaces and apostrophes with hyphens
+      .replace(/[\s']+/g, '-')
+      // Remove any characters that aren't allowed
+      .replace(/[^a-z0-9\-_.]/g, '')
+      // Remove leading/trailing dashes, underscores, or periods
+      .replace(/^[-_.]+|[-_.]+$/g, '')
+      // Collapse multiple consecutive dashes into one
+      .replace(/-+/g, '-')
+      // Ensure it's not empty after sanitization
+      || 'model'
+  }
+
+  /**
    * Create a destination model for training
    */
   async createDestinationModel(modelName: string, description?: string): Promise<{ success: boolean; modelId?: `${string}/${string}`; error?: string }> {
@@ -82,10 +102,14 @@ export class ReplicateService {
       // For now, use a fixed owner name (can be made dynamic later)
       const owner = 'micahp'
       
+      // Sanitize the model name to meet Replicate's requirements
+      const sanitizedModelName = this.sanitizeModelName(modelName)
+      console.log(`Sanitized model name: ${sanitizedModelName}`)
+      
       // Generate unique model ID with timestamp and random suffix
       const timestamp = Date.now()
       const randomSuffix = Math.random().toString(36).substring(2, 8)
-      const modelId = `flux-lora-${modelName.toLowerCase().replace(/\s+/g, '-')}-${timestamp}-${randomSuffix}`
+      const modelId = `flux-lora-${sanitizedModelName}-${timestamp}-${randomSuffix}`
       
       // Use the correct models.create API with positional arguments
       const model = await this.client.models.create(

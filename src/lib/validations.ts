@@ -37,7 +37,24 @@ export const createModelSchema = z.object({
   name: z
     .string()
     .min(1, 'Model name is required')
-    .max(50, 'Model name must be less than 50 characters'),
+    .max(50, 'Model name must be less than 50 characters')
+    .refine(
+      (name) => {
+        // Allow reasonable characters, but warn about conversion
+        const hasOnlyAllowedChars = /^[a-zA-Z0-9\s'._-]+$/.test(name)
+        const afterSanitization = name
+          .toLowerCase()
+          .replace(/[\s']+/g, '-')
+          .replace(/[^a-z0-9\-_.]/g, '')
+          .replace(/^[-_.]+|[-_.]+$/g, '')
+          .replace(/-+/g, '-')
+        
+        return hasOnlyAllowedChars && afterSanitization.length >= 2
+      },
+      {
+        message: 'Model name can only contain letters, numbers, spaces, apostrophes, hyphens, underscores, and periods. Avoid special symbols.'
+      }
+    ),
   images: z
     .array(z.instanceof(File))
     .min(10, 'At least 10 images are required')

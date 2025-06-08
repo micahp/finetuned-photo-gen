@@ -228,7 +228,7 @@
   - [x] Enhanced `checkout.session.completed` webhook for subscriptions and one-time payments
   - [x] Customer portal webhook integration
 - [x] Pricing plans and products setup
-  - [x] 4-tier pricing structure: Free (5 credits), Creator ($20/200 credits), Pro ($40/400 credits), Enterprise ($99/1000 credits)
+  - [x] 4-tier pricing structure: Free (10 credits), Creator ($20/200 credits), Pro ($40/400 credits), Enterprise ($99/1000 credits)
   - [x] Comprehensive feature definitions and model slot allocations
   - [x] Pricing configuration with Stripe price IDs
 - [x] Subscription API endpoints
@@ -396,7 +396,7 @@ Phase 7: Implement remaining security recommendations, finalize housekeeping ite
 ## 🏗️ **Architecture Decisions**
 
 ### **Complete Billing System Architecture** ✅ **NEW**
-- **4-Tier Pricing Structure**: Free (5 credits), Creator ($20/200 credits), Pro ($40/1000 credits), Ultra ($99/5000 credits)
+- **4-Tier Pricing Structure**: Free (10 credits), Creator ($20/200 credits), Pro ($40/1000 credits), Ultra ($99/5000 credits)
 - **Responsive Pricing Cards**: Mobile-first design with 1-2-4 column responsive grid layout
 - **Stripe Integration**: Complete checkout flow with success/cancel handling and toast notifications
 - **Subscription Management**: Customer portal access for existing subscribers with upgrade/downgrade capabilities
