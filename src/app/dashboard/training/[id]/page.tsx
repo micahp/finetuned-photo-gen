@@ -25,9 +25,7 @@ import {
   Copy,
   Archive,
   Database,
-  Zap,
-  Upload,
-  Globe
+  Zap
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TrainingStatusResolver } from '@/lib/training-status-resolver'
@@ -73,7 +71,7 @@ interface DebugStage {
 const statusConfig = {
   starting: { label: 'Starting', icon: Play, color: 'bg-blue-500', bgColor: 'bg-blue-50', textColor: 'text-blue-700' },
   training: { label: 'Training', icon: Activity, color: 'bg-yellow-500', bgColor: 'bg-yellow-50', textColor: 'text-yellow-700' },
-  uploading: { label: 'Uploading', icon: Upload, color: 'bg-purple-500', bgColor: 'bg-purple-50', textColor: 'text-purple-700' },
+  uploading: { label: 'Uploading', icon: Activity, color: 'bg-purple-500', bgColor: 'bg-purple-50', textColor: 'text-purple-700' },
   completed: { label: 'Completed', icon: CheckCircle, color: 'bg-green-500', bgColor: 'bg-green-50', textColor: 'text-green-700' },
   failed: { label: 'Failed', icon: XCircle, color: 'bg-red-500', bgColor: 'bg-red-50', textColor: 'text-red-700' },
 }
@@ -82,7 +80,6 @@ const stageConfig = {
   initializing: { label: 'Initialization', icon: Settings, description: 'Setting up training environment' },
   zip_creation: { label: 'Image Preparation', icon: Archive, description: 'Creating training images bundle' },
   replicate_training: { label: 'LoRA Training', icon: Zap, description: 'Training the LoRA model with Replicate' },
-  huggingface_upload: { label: 'Model Upload', icon: Upload, description: 'Uploading trained model to HuggingFace' },
   completion: { label: 'Completion', icon: CheckCircle, description: 'Training workflow completed successfully' },
 }
 
@@ -561,7 +558,6 @@ export default function TrainingDetailsPage() {
             <div>Stage: <code>{trainingJob.stage}</code></div>
             <div>Has Error: <code>{!!trainingJob.error}</code></div>
             <div>Error: <code>{trainingJob.error || 'None'}</code></div>
-            <div>HuggingFace Repo: <code>{trainingJob.huggingFaceRepo || 'None'}</code></div>
             <div>Model ID: <code>{trainingJob.modelId}</code></div>
           </div>
         </CardContent>
@@ -666,22 +662,7 @@ export default function TrainingDetailsPage() {
                   <span className="text-sm text-gray-900">${trainingJob.estimatedCost.toFixed(2)}</span>
                 </div>
 
-                {trainingJob.huggingFaceRepo && (
-                  <div className="pt-4 border-t">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-600">HuggingFace Model</span>
-                      <a 
-                        href={`https://huggingface.co/${trainingJob.huggingFaceRepo}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center text-sm text-blue-600 hover:text-blue-700"
-                      >
-                        {trainingJob.huggingFaceRepo}
-                        <ExternalLink className="h-3 w-3 ml-1" />
-                      </a>
-                    </div>
-                  </div>
-                )}
+
               </CardContent>
             </Card>
 
@@ -695,16 +676,10 @@ export default function TrainingDetailsPage() {
                     </div>
                     <div className="flex-1">
                       <CardTitle className="text-red-800 text-lg font-semibold">
-                        {trainingJob.error?.includes('Model training completed successfully') 
-                          ? 'Upload Failed' 
-                          : trainingJob.debugData?.lastError?.stage === 'huggingface_upload' 
-                            ? 'Model Upload Failed' 
-                            : 'Training Failed'}
+                        Training Failed
                       </CardTitle>
                       <p className="text-sm text-red-600 mt-1">
-                        {trainingJob.error?.includes('Model training completed successfully') 
-                          ? 'Your model was trained successfully, but we encountered an issue uploading it to HuggingFace.'
-                          : 'We encountered an issue during the training process.'}
+                        We encountered an issue during the training process.
                       </p>
                     </div>
                   </div>
@@ -753,116 +728,12 @@ export default function TrainingDetailsPage() {
                     </div>
                   )}
                   
-                  {/* Action Section */}
-                  {(trainingJob.error?.includes('Model training completed successfully') || 
-                    trainingJob.debugData?.lastError?.stage === 'huggingface_upload' ||
-                    trainingJob.status === 'uploading' ||
-                    // Show retry upload for jobs that completed training but don't have HF repo
-                    (trainingJob.status === 'completed' && !trainingJob.huggingFaceRepo)) && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex items-start space-x-3">
-                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
-                          <Upload className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div className="flex-1 space-y-3">
-                          <div>
-                            <h4 className="text-sm font-medium text-blue-800 mb-1">Good News!</h4>
-                            <p className="text-sm text-blue-700">
-                              Your model was trained successfully and is safely stored on Replicate. 
-                              You can retry uploading it to HuggingFace to make it available for use.
-                            </p>
-                          </div>
-                          
-                          <Button
-                            onClick={retryUpload}
-                            disabled={retrying}
-                            size="sm"
-                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                          >
-                            {retrying ? (
-                              <>
-                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                Retrying Upload...
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="h-4 w-4 mr-2" />
-                                Retry HuggingFace Upload
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+
                 </CardContent>
               </Card>
             )}
 
-            {/* Upload Section - Show if training completed but no HuggingFace repo */}
-            {((trainingJob.debugData?.canRetryUpload) ||
-              (trainingJob.status === 'completed' && !trainingJob.huggingFaceRepo && !trainingJob.error) ||
-              (trainingJob.status === 'uploading' && trainingJob.debugData?.needsUpload)) && (
-              <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <Upload className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div className="flex-1">
-                      <CardTitle className="text-blue-800 text-lg font-semibold">
-                        {trainingJob.debugData?.needsUpload ? 'Ready for Upload' : 'Upload to HuggingFace'}
-                      </CardTitle>
-                      <p className="text-sm text-blue-600 mt-1">
-                        {trainingJob.debugData?.needsUpload 
-                          ? 'Your model training completed successfully and is ready to be uploaded to HuggingFace.'
-                          : 'Your model training completed successfully. Upload it to HuggingFace to make it available for inference.'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-              
-                  
-                  <div className="bg-white/60 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
-                        <Globe className="h-4 w-4 text-blue-600" />
-                      </div>
-                      <div className="flex-1 space-y-3">
-                        <div>
-                          <h4 className="text-sm font-medium text-blue-800 mb-1">Upload to HuggingFace</h4>
-                          <p className="text-sm text-blue-700">
-                            Upload your trained model to HuggingFace to make it publicly available 
-                            and usable in the image generation interface.
-                          </p>
-                        </div>
-                        
-                        <Button
-                          onClick={retryUpload}
-                          disabled={retrying}
-                          size="sm"
-                          className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                        >
-                          {retrying ? (
-                            <>
-                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Uploading to HuggingFace...
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="h-4 w-4 mr-2" />
-                              Upload to HuggingFace
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+
 
             {/* Model Configuration */}
             <Card>
