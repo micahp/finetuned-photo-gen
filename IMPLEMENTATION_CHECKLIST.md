@@ -329,7 +329,7 @@
 - [ ] **Premium Features**
   - [ ] Subscription-based access to official trainers
   - [ ] Enhanced quality settings for premium models
-  - [ ] Priority training queue for premium users
+  - [ ] Priority generation queue for premium users
   - [ ] Advanced parameter controls for professional use
 
 ### **🆕 Batch Generation (up to 10 images at a time)** 📋 **PLANNED**
