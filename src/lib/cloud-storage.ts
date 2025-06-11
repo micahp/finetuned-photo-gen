@@ -46,7 +46,7 @@ export class CloudStorageService {
       } : undefined,
       localConfig: useLocal ? {
         uploadDir: path.join(process.cwd(), 'temp', 'training-zips'),
-        baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+        baseUrl: process.env.NEXT_PUBLIC_BASE_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://photogen.innovativehype.xyz')
       } : undefined
     }
 

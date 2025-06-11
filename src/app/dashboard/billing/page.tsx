@@ -168,7 +168,7 @@ export default function BillingPage() {
         body: JSON.stringify({
           priceId: planId,
           mode: 'subscription',
-          returnUrl: window.location.href // Pass the current URL as the return URL
+          returnUrl: `${window.location.origin}/dashboard/billing` // Use origin + path instead of full href
         }),
       })
 

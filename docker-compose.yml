@@ -1,7 +1,6 @@
 # Production-ready Docker Compose configuration (DEFAULT)
 # Use: docker compose up (production)
 # Use: docker compose -f docker-compose.dev.yml up (development)
-version: '3.8'
 
 services:
   # Migration service - runs once then exits
@@ -20,7 +19,7 @@ services:
       - .env
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finetuned_photo_gen}?schema=public
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
     depends_on:
       db:
@@ -54,6 +53,9 @@ services:
       args:
         STRIPE_API_TOKEN: ${STRIPE_API_TOKEN}
         STRIPE_PUBLISHABLE_TOKEN: ${STRIPE_PUBLISHABLE_TOKEN}
+        NEXT_PUBLIC_STRIPE_CREATOR_PLAN_PRICE_ID: ${STRIPE_CREATOR_PLAN_PRICE_ID}
+        NEXT_PUBLIC_STRIPE_PRO_PLAN_PRICE_ID: ${STRIPE_PRO_PLAN_PRICE_ID}
+        NEXT_PUBLIC_STRIPE_ULTRA_PLAN_PRICE_ID: ${STRIPE_ULTRA_PLAN_PRICE_ID}
         NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
         DATABASE_URL: ${DATABASE_URL}
         NEXT_PUBLIC_GA_TRACKING_ID: ${NEXT_PUBLIC_GA_TRACKING_ID:-}
@@ -66,10 +68,16 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3005
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finetuned_photo_gen}?schema=public
       - NEXTAUTH_URL=https://photogen.innovativehype.xyz
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - NEXT_PUBLIC_GA_TRACKING_ID=${NEXT_PUBLIC_GA_TRACKING_ID:-}
+      - NEXT_PUBLIC_BASE_URL=https://photogen.innovativehype.xyz
+      - STRIPE_API_TOKEN=${STRIPE_API_TOKEN}
+      - STRIPE_PUBLISHABLE_TOKEN=${STRIPE_PUBLISHABLE_TOKEN}
+      - NEXT_PUBLIC_STRIPE_CREATOR_PLAN_PRICE_ID=${STRIPE_CREATOR_PLAN_PRICE_ID}
+      - NEXT_PUBLIC_STRIPE_PRO_PLAN_PRICE_ID=${STRIPE_PRO_PLAN_PRICE_ID}
+      - NEXT_PUBLIC_STRIPE_ULTRA_PLAN_PRICE_ID=${STRIPE_ULTRA_PLAN_PRICE_ID}
       # Add other production environment variables as needed
       - NEXT_TELEMETRY_DISABLED=1
     depends_on:
@@ -147,6 +155,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - BACKUP_RETENTION_DAYS=30
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finetuned_photo_gen}
     volumes:
       - ./backups:/backups
       - backup_scripts:/scripts
