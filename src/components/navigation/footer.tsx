@@ -54,8 +54,12 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="border-t border-gray-700 mt-8 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            <div className="text-sm text-gray-400">
-              Built with AI ethics and user privacy in mind
+            <div className="text-sm text-gray-400 flex flex-col sm:flex-row gap-2 sm:gap-4 items-center">
+              <span>Built with AI ethics and user privacy in mind</span>
+              <span className="hidden sm:inline">|</span>
+              <Link href="https://bolt.new" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+                Built with Bolt.new
+              </Link>
             </div>
             <div className="flex space-x-6 text-sm text-gray-300">
               <Link href="/legal/privacy" className="hover:text-white transition-colors">Privacy</Link>
