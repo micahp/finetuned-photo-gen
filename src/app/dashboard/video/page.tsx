@@ -90,14 +90,16 @@ export default function VideoGenerationPage() {
     .filter((m) => m.mode === 'text-to-video')
     .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
   
+  // Find SeeDANCE Pro model for image-to-video default, fallback to cheapest
+  const seedanceProModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === 'seedance-pro-image')
   const cheapestImageModel = AVAILABLE_VIDEO_MODELS
     .filter((m) => m.mode === 'image-to-video')
     .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
 
-  // Set defaults with Veo 3 preferred for text-to-video
+  // Set defaults with Veo 3 preferred for text-to-video and SeeDANCE Pro for image-to-video
   const defaultModelIdByMode: Record<'text-to-video' | 'image-to-video', string> = {
     'text-to-video': veo3Model?.id || cheapestTextModel?.id || '',
-    'image-to-video': cheapestImageModel?.id || '',
+    'image-to-video': seedanceProModel?.id || cheapestImageModel?.id || '',
   }
 
   const form = useForm<VideoGenerationFormData>({
