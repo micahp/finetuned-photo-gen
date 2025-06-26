@@ -20,7 +20,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { User, LogOut, Settings, CreditCard, Shield, Menu, Home, Sparkles, Camera, Palette, Cpu, Activity } from 'lucide-react'
+import { User, LogOut, Settings, CreditCard, Shield, Menu, Home, Sparkles, Camera, Palette, Cpu, Activity, Video } from 'lucide-react'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 
@@ -44,6 +44,7 @@ export function Navbar() {
     { href: '/dashboard', label: 'Dashboard', icon: Home },
     { href: '/dashboard/generate', label: 'Generate', icon: Sparkles },
     { href: '/dashboard/edit', label: 'Edit', icon: Palette },
+    { href: '/dashboard/video', label: 'Video', icon: Video },
     { href: '/dashboard/gallery', label: 'Gallery', icon: Camera },
     { href: '/dashboard/models', label: 'Models', icon: Cpu },
     { href: '/dashboard/training', label: 'Training', icon: Activity },
