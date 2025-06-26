@@ -98,6 +98,33 @@ export class CloudStorageService {
   }
 
   /**
+   * Upload a file buffer to cloud storage or local storage
+   */
+  async uploadFile(
+    filename: string,
+    buffer: Buffer,
+    contentType: string,
+    options?: {
+      ttlHours?: number // Auto-delete after this many hours
+      folder?: string // Optional folder prefix
+    }
+  ): Promise<UploadResult> {
+    try {
+      if (this.config.useLocal) {
+        return await this.uploadBufferToLocal(filename, buffer, contentType, options)
+      } else {
+        return await this.uploadBufferToR2(filename, buffer, contentType, options)
+      }
+    } catch (error) {
+      console.error('File upload error:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Upload failed'
+      }
+    }
+  }
+
+  /**
    * Upload to Cloudflare R2
    */
   private async uploadToR2(
@@ -177,6 +204,97 @@ export class CloudStorageService {
     const publicUrl = `${this.config.localConfig.baseUrl}/api/training/zip/${filename}`
 
     console.log(`⚠️  ZIP stored locally (dev mode): ${destinationPath}`)
+    console.log(`🔗 Public URL: ${publicUrl}`)
+
+    return {
+      success: true,
+      url: publicUrl,
+      filePath: destinationPath
+    }
+  }
+
+  /**
+   * Upload buffer to Cloudflare R2
+   */
+  private async uploadBufferToR2(
+    filename: string,
+    buffer: Buffer,
+    contentType: string,
+    options?: { ttlHours?: number; folder?: string }
+  ): Promise<UploadResult> {
+    if (!this.s3Client || !this.config.r2Config) {
+      throw new Error('R2 client not initialized')
+    }
+
+    const folder = options?.folder || 'uploads'
+    const key = `${folder}/${filename}`
+
+    const uploadParams = {
+      Bucket: this.config.r2Config.bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      CacheControl: 'public, max-age=3600',
+      Metadata: {
+        'upload-time': new Date().toISOString(),
+        'ttl-hours': (options?.ttlHours || 24).toString(),
+        'purpose': 'file-upload'
+      }
+    }
+
+    console.log('🔍 R2 BUFFER UPLOAD - Upload params:', {
+      bucket: this.config.r2Config.bucket,
+      key: key,
+      size: buffer.length,
+      contentType: contentType
+    })
+
+    const command = new PutObjectCommand(uploadParams)
+    await this.s3Client.send(command)
+
+    // Generate public URL
+    const publicUrl = this.config.r2Config.publicUrl 
+      ? `${this.config.r2Config.publicUrl}/${key}`
+      : `${this.normalizeEndpoint(this.config.r2Config.endpoint)}/${this.config.r2Config.bucket}/${key}`
+
+    console.log(`✅ File uploaded to Cloudflare R2: ${publicUrl}`)
+
+    return {
+      success: true,
+      url: publicUrl
+    }
+  }
+
+  /**
+   * Upload buffer to local storage
+   */
+  private async uploadBufferToLocal(
+    filename: string,
+    buffer: Buffer,
+    contentType: string,
+    options?: { ttlHours?: number; folder?: string }
+  ): Promise<UploadResult> {
+    if (!this.config.localConfig) {
+      throw new Error('Local storage config not found')
+    }
+
+    const folder = options?.folder || 'uploads'
+    const uploadDir = path.join(this.config.localConfig.uploadDir, '..', folder)
+
+    // Ensure upload directory exists
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true })
+    }
+
+    const destinationPath = path.join(uploadDir, filename)
+    
+    // Write buffer to local storage
+    fs.writeFileSync(destinationPath, buffer)
+
+    // Generate public URL that will be served by Next.js API route
+    const publicUrl = `${this.config.localConfig.baseUrl}/api/uploads/${folder}/${filename}`
+
+    console.log(`⚠️  File stored locally (dev mode): ${destinationPath}`)
     console.log(`🔗 Public URL: ${publicUrl}`)
 
     return {

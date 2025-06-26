@@ -85,13 +85,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check premium model access
+    // Check premium model access (DEV bypass)
+    const isDev = process.env.NODE_ENV === 'development'
     if (modelId && isPremiumModel(modelId)) {
       const hasPremiumAccess = isPremiumUser(user.subscriptionPlan, user.subscriptionStatus)
-      
-      if (!hasPremiumAccess) {
+
+      if (!hasPremiumAccess && !isDev) {
         return NextResponse.json(
-          { 
+          {
             error: 'Premium model access required. Please upgrade your subscription to use FLUX Pro models.',
             upgradeRequired: true
           },

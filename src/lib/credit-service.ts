@@ -16,6 +16,7 @@ export type RelatedEntityType =
   | 'model_training' 
   | 'subscription' 
   | 'admin_action'
+  | 'video_generation'
 
 export interface CreditTransactionData {
   userId: string

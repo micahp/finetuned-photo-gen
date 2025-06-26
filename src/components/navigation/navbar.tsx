@@ -20,9 +20,10 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { User, LogOut, Settings, CreditCard, Shield, Menu, Home, Sparkles, Camera, Palette, Cpu, Activity, Video } from 'lucide-react'
+import { User, LogOut, Settings, CreditCard, Shield, Menu, Home, Sparkles, Camera, Palette, Cpu, Activity, Video, Crown } from 'lucide-react'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
+import { isPremiumUser } from '@/lib/subscription-utils'
 
 export function Navbar() {
   const { data: session, status } = useSession()
@@ -40,15 +41,28 @@ export function Navbar() {
     await signOut({ callbackUrl: '/' })
   }
 
+  // Check premium access and dev mode
+  const hasPremiumAccess = isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
+  const isDev = process.env.NODE_ENV === 'development'
+  const showVideoNavigation = hasPremiumAccess || isDev
+
   const navigationItems = [
     { href: '/dashboard', label: 'Dashboard', icon: Home },
     { href: '/dashboard/generate', label: 'Generate', icon: Sparkles },
     { href: '/dashboard/edit', label: 'Edit', icon: Palette },
-    { href: '/dashboard/video', label: 'Video', icon: Video },
+    { href: '/dashboard/video', label: 'Video', icon: Video, requiresPremium: true },
     { href: '/dashboard/gallery', label: 'Gallery', icon: Camera },
     { href: '/dashboard/models', label: 'Models', icon: Cpu },
     { href: '/dashboard/training', label: 'Training', icon: Activity },
   ]
+
+  // Filter navigation items based on premium access
+  const filteredNavigationItems = navigationItems.filter(item => {
+    if (item.requiresPremium) {
+      return showVideoNavigation
+    }
+    return true
+  })
 
   return (
     <nav className="border-b bg-white">
@@ -76,10 +90,13 @@ export function Navbar() {
               <>
                 {/* Desktop Navigation */}
                 <div className="hidden md:flex items-center space-x-2">
-                  {navigationItems.map((item) => (
+                  {filteredNavigationItems.map((item) => (
                     <Link key={item.href} href={item.href}>
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" className="flex items-center gap-1">
                         {item.label}
+                        {item.requiresPremium && !hasPremiumAccess && isDev && (
+                          <Crown className="h-3 w-3 text-yellow-500" />
+                        )}
                       </Button>
                     </Link>
                   ))}
@@ -137,7 +154,7 @@ export function Navbar() {
                             Navigation
                           </h3>
                         </div>
-                        {navigationItems.map((item) => {
+                        {filteredNavigationItems.map((item) => {
                           const Icon = item.icon
                           return (
                             <Link
@@ -147,7 +164,12 @@ export function Navbar() {
                               className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
                             >
                               <Icon className="h-5 w-5 text-gray-500" />
-                              <span className="font-medium">{item.label}</span>
+                              <span className="font-medium flex items-center gap-1">
+                                {item.label}
+                                {item.requiresPremium && !hasPremiumAccess && isDev && (
+                                  <Crown className="h-3 w-3 text-yellow-500" />
+                                )}
+                              </span>
                             </Link>
                           )
                         })}
