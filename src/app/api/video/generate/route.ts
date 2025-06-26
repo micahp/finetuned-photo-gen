@@ -14,6 +14,7 @@ const generateVideoSchema = z.object({
   fps: z.number().min(12).max(30).default(24),
   motionLevel: z.number().min(1).max(10).default(5),
   seed: z.number().optional(),
+  imageFile: z.instanceof(File).optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -27,9 +28,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Parse and validate request body
-    const body = await request.json()
-    const validationResult = generateVideoSchema.safeParse(body)
+    // Parse FormData from request
+    const formData = await request.formData()
+    
+    // Extract and validate form fields
+    const prompt = formData.get('prompt') as string
+    const modelId = formData.get('modelId') as string
+    const duration = parseInt(formData.get('duration') as string)
+    const aspectRatio = formData.get('aspectRatio') as string
+    const fps = parseInt(formData.get('fps') as string)
+    const motionLevel = parseInt(formData.get('motionLevel') as string)
+    const seedString = formData.get('seed') as string
+    const seed = seedString ? parseInt(seedString) : undefined
+    const imageFile = formData.get('imageFile') as File | null
+
+    // Validate the parsed data
+    const validationResult = generateVideoSchema.safeParse({
+      prompt,
+      modelId,
+      duration,
+      aspectRatio,
+      fps,
+      motionLevel,
+      seed,
+      imageFile: imageFile || undefined,
+    })
     
     if (!validationResult.success) {
       return NextResponse.json(
@@ -38,7 +61,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { prompt, modelId, duration, aspectRatio, fps, motionLevel, seed } = validationResult.data
+    const validatedData = validationResult.data
 
     // Get user from database
     const user = await prisma.user.findUnique({
@@ -56,7 +79,7 @@ export async function POST(request: NextRequest) {
     const falVideoService = new FalVideoService()
     
     // Get model configuration and calculate cost
-    const modelConfig = falVideoService.getModelConfig(modelId)
+    const modelConfig = falVideoService.getModelConfig(validatedData.modelId)
     if (!modelConfig) {
       return NextResponse.json(
         { error: 'Invalid model selected' },
@@ -64,8 +87,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate that image is provided for image-to-video models
+    if (modelConfig.mode === 'image-to-video' && !validatedData.imageFile) {
+      return NextResponse.json(
+        { error: 'Image file is required for image-to-video generation' },
+        { status: 400 }
+      )
+    }
+
     // Calculate credit cost
-    const estimatedCost = Math.ceil(falVideoService.calculateCost(modelId, duration))
+    const estimatedCost = Math.ceil(falVideoService.calculateCost(validatedData.modelId, validatedData.duration))
 
     // Check if user has enough credits
     if (user.credits < estimatedCost) {
@@ -91,9 +122,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate aspect ratio support
-    if (!falVideoService.isAspectRatioSupported(modelId, aspectRatio)) {
+    if (!falVideoService.isAspectRatioSupported(validatedData.modelId, validatedData.aspectRatio)) {
       return NextResponse.json(
-        { error: `Aspect ratio ${aspectRatio} not supported by ${modelConfig.name}` },
+        { error: `Aspect ratio ${validatedData.aspectRatio} not supported by ${modelConfig.name}` },
         { status: 400 }
       )
     }
@@ -101,22 +132,32 @@ export async function POST(request: NextRequest) {
     console.log('🎬 Starting video generation:', {
       userId: user.id,
       model: modelConfig.name,
-      prompt: prompt.substring(0, 100) + '...',
-      duration,
-      aspectRatio,
+      mode: modelConfig.mode,
+      prompt: validatedData.prompt.substring(0, 100) + '...',
+      duration: validatedData.duration,
+      aspectRatio: validatedData.aspectRatio,
+      hasImage: !!validatedData.imageFile,
       estimatedCost
     })
+
+    // Convert image file to buffer if provided
+    let imageBuffer: Buffer | undefined
+    if (validatedData.imageFile) {
+      const arrayBuffer = await validatedData.imageFile.arrayBuffer()
+      imageBuffer = Buffer.from(arrayBuffer)
+    }
 
     // Generate video
     const generationStartTime = Date.now()
     const videoResult = await falVideoService.generateVideo({
-      prompt,
-      modelId,
-      duration,
-      aspectRatio,
-      fps,
-      motionLevel,
-      seed
+      prompt: validatedData.prompt,
+      modelId: validatedData.modelId,
+      duration: validatedData.duration,
+      aspectRatio: validatedData.aspectRatio,
+      fps: validatedData.fps,
+      motionLevel: validatedData.motionLevel,
+      seed: validatedData.seed,
+      imageBuffer,
     })
 
     const generationDuration = Date.now() - generationStartTime
@@ -133,24 +174,26 @@ export async function POST(request: NextRequest) {
       const generatedVideo = await prisma.generatedVideo.create({
         data: {
           userId: user.id,
-          prompt,
+          prompt: validatedData.prompt,
           videoUrl: '', // Will be updated when processing completes
           thumbnailUrl: null,
-          modelId,
-          duration,
-          aspectRatio,
-          fps,
-          motionLevel,
+          modelId: validatedData.modelId,
+          duration: validatedData.duration,
+          aspectRatio: validatedData.aspectRatio,
+          fps: validatedData.fps,
+          motionLevel: validatedData.motionLevel,
           status: 'processing',
           falJobId: videoResult.id,
           generationParams: {
             model: modelConfig.name,
             provider: 'fal.ai',
-            aspectRatio,
-            duration,
-            fps,
-            motionLevel,
-            seed
+            mode: modelConfig.mode,
+            aspectRatio: validatedData.aspectRatio,
+            duration: validatedData.duration,
+            fps: validatedData.fps,
+            motionLevel: validatedData.motionLevel,
+            seed: validatedData.seed,
+            hasSourceImage: !!validatedData.imageFile
           },
           creditsUsed: estimatedCost,
           generationDuration
@@ -161,7 +204,7 @@ export async function POST(request: NextRequest) {
       await CreditService.spendCredits(
         user.id,
         estimatedCost,
-        `Video generation: ${prompt.substring(0, 50)}...`,
+        `Video generation: ${validatedData.prompt.substring(0, 50)}...`,
         'video_generation' as RelatedEntityType,
         generatedVideo.id
       )
@@ -178,10 +221,10 @@ export async function POST(request: NextRequest) {
           id: generatedVideo.id,
           status: 'processing',
           jobId: videoResult.id,
-          prompt,
-          modelId,
-          duration,
-          aspectRatio,
+          prompt: validatedData.prompt,
+          modelId: validatedData.modelId,
+          duration: validatedData.duration,
+          aspectRatio: validatedData.aspectRatio,
           creditsUsed: estimatedCost,
           createdAt: generatedVideo.createdAt
         },
@@ -193,14 +236,14 @@ export async function POST(request: NextRequest) {
     const generatedVideo = await prisma.generatedVideo.create({
       data: {
         userId: user.id,
-        prompt,
+        prompt: validatedData.prompt,
         videoUrl: videoResult.videoUrl || '',
         thumbnailUrl: videoResult.thumbnailUrl,
-        modelId,
-        duration,
-        aspectRatio,
-        fps,
-        motionLevel,
+        modelId: validatedData.modelId,
+        duration: validatedData.duration,
+        aspectRatio: validatedData.aspectRatio,
+        fps: validatedData.fps,
+        motionLevel: validatedData.motionLevel,
         width: videoResult.width,
         height: videoResult.height,
         fileSize: videoResult.fileSize,
@@ -209,12 +252,14 @@ export async function POST(request: NextRequest) {
         generationParams: {
           model: modelConfig.name,
           provider: 'fal.ai',
-          aspectRatio,
-          duration,
-          fps,
-          motionLevel,
-          seed,
-          fileSize: videoResult.fileSize
+          mode: modelConfig.mode,
+          aspectRatio: validatedData.aspectRatio,
+          duration: validatedData.duration,
+          fps: validatedData.fps,
+          motionLevel: validatedData.motionLevel,
+          seed: validatedData.seed,
+          fileSize: videoResult.fileSize,
+          hasSourceImage: !!validatedData.imageFile
         },
         creditsUsed: estimatedCost,
         generationDuration
@@ -225,7 +270,7 @@ export async function POST(request: NextRequest) {
     await CreditService.spendCredits(
       user.id,
       estimatedCost,
-      `Video generation: ${prompt.substring(0, 50)}...`,
+      `Video generation: ${validatedData.prompt.substring(0, 50)}...`,
       'video_generation' as RelatedEntityType,
       generatedVideo.id
     )
@@ -243,11 +288,11 @@ export async function POST(request: NextRequest) {
         id: generatedVideo.id,
         url: videoResult.videoUrl,
         thumbnailUrl: videoResult.thumbnailUrl,
-        prompt,
-        modelId,
-        duration,
-        aspectRatio,
-        fps,
+        prompt: validatedData.prompt,
+        modelId: validatedData.modelId,
+        duration: validatedData.duration,
+        aspectRatio: validatedData.aspectRatio,
+        fps: validatedData.fps,
         width: videoResult.width,
         height: videoResult.height,
         fileSize: videoResult.fileSize,

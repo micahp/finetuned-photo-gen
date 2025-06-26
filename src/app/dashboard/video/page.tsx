@@ -30,10 +30,12 @@ import {
   Film,
   Camera,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Image as ImageIcon
 } from 'lucide-react'
 import { isPremiumUser } from '@/lib/subscription-utils'
 import { VIDEO_MODELS as AVAILABLE_VIDEO_MODELS, VideoModel } from '@/lib/video-models'
+import { ImageUpload } from '@/components/upload/ImageUpload'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -46,6 +48,7 @@ const videoGenerationSchema = z.object({
   fps: z.number().min(12).max(30),
   motionLevel: z.number().min(1).max(10),
   seed: z.number().optional(),
+  imageFile: z.instanceof(File).optional(),
 })
 
 type VideoGenerationFormData = z.infer<typeof videoGenerationSchema>
@@ -76,25 +79,32 @@ export default function VideoGenerationPage() {
   const [error, setError] = useState<string | JSX.Element | null>(null)
   const [generationProgress, setGenerationProgress] = useState(0)
   const [estimatedCost, setEstimatedCost] = useState(0)
+  const [uploadedImages, setUploadedImages] = useState<File[]>([])
 
   // Track which generation mode (text or image) the user is on
   const [activeMode, setActiveMode] = useState<'text-to-video' | 'image-to-video'>('text-to-video')
 
-  // Derive the cheapest model ID for each mode to use as a sensible default
-  const cheapestModelIdByMode: Record<'text-to-video' | 'image-to-video', string> = {
-    'text-to-video': AVAILABLE_VIDEO_MODELS
-      .filter((m) => m.mode === 'text-to-video')
-      .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]?.id || '',
-    'image-to-video': AVAILABLE_VIDEO_MODELS
-      .filter((m) => m.mode === 'image-to-video')
-      .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]?.id || '',
+  // Find Veo 3 model for text-to-video default, fallback to cheapest
+  const veo3Model = AVAILABLE_VIDEO_MODELS.find(m => m.id === 'veo-3-text')
+  const cheapestTextModel = AVAILABLE_VIDEO_MODELS
+    .filter((m) => m.mode === 'text-to-video')
+    .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
+  
+  const cheapestImageModel = AVAILABLE_VIDEO_MODELS
+    .filter((m) => m.mode === 'image-to-video')
+    .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
+
+  // Set defaults with Veo 3 preferred for text-to-video
+  const defaultModelIdByMode: Record<'text-to-video' | 'image-to-video', string> = {
+    'text-to-video': veo3Model?.id || cheapestTextModel?.id || '',
+    'image-to-video': cheapestImageModel?.id || '',
   }
 
   const form = useForm<VideoGenerationFormData>({
     resolver: zodResolver(videoGenerationSchema),
     defaultValues: {
       prompt: '',
-      modelId: cheapestModelIdByMode['text-to-video'],
+      modelId: defaultModelIdByMode['text-to-video'],
       duration: 5,
       aspectRatio: '16:9',
       fps: 24,
@@ -132,6 +142,16 @@ export default function VideoGenerationPage() {
     )
   }
 
+  const handleImagesUploaded = (files: File[]) => {
+    setUploadedImages(files)
+    if (files.length > 0) {
+      // Set the first uploaded image as the selected image for generation
+      form.setValue('imageFile', files[0])
+    } else {
+      form.setValue('imageFile', undefined)
+    }
+  }
+
   const onSubmit = async (data: VideoGenerationFormData) => {
     try {
       setIsGenerating(true)
@@ -151,18 +171,36 @@ export default function VideoGenerationPage() {
         return
       }
 
+      // For image-to-video mode, ensure an image is uploaded
+      if (activeMode === 'image-to-video' && !data.imageFile) {
+        setError('Please upload an image for image-to-video generation')
+        return
+      }
+
       // All video models require premium access - handled at page level
 
       const progressInterval = setInterval(() => {
         setGenerationProgress(prev => Math.min(prev + Math.random() * 15, 95))
       }, 2000)
 
+      // Prepare form data for API call
+      const formData = new FormData()
+      formData.append('prompt', data.prompt)
+      formData.append('modelId', data.modelId)
+      formData.append('duration', data.duration.toString())
+      formData.append('aspectRatio', data.aspectRatio)
+      formData.append('fps', data.fps.toString())
+      formData.append('motionLevel', data.motionLevel.toString())
+      if (data.seed) {
+        formData.append('seed', data.seed.toString())
+      }
+      if (data.imageFile) {
+        formData.append('imageFile', data.imageFile)
+      }
+
       const response = await fetch('/api/video/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+        body: formData,
       })
 
       clearInterval(progressInterval)
@@ -222,7 +260,7 @@ export default function VideoGenerationPage() {
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Video Generation</h1>
-        <p className="text-gray-600">Create stunning videos from text prompts using advanced AI models</p>
+        <p className="text-gray-600">Create stunning videos from text prompts or images using advanced AI models</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -231,10 +269,10 @@ export default function VideoGenerationPage() {
             const mode = val as 'text-to-video' | 'image-to-video'
             setActiveMode(mode)
 
-            // If current model isn't valid for the newly selected mode, switch to cheapest model for that mode
+            // If current model isn't valid for the newly selected mode, switch to default model for that mode
             const currentModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === form.getValues('modelId'))
             if (!currentModel || currentModel.mode !== mode) {
-              form.setValue('modelId', cheapestModelIdByMode[mode])
+              form.setValue('modelId', defaultModelIdByMode[mode])
             }
           }} className="space-y-6">
             <TabsList className="mb-4">
@@ -299,12 +337,34 @@ export default function VideoGenerationPage() {
                     </CardContent>
                   </Card>
 
+                  {/* Image Upload for Image-to-Video Mode */}
+                  {activeMode === 'image-to-video' && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <ImageIcon className="h-5 w-5" />
+                          Source Image
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ImageUpload
+                          onImagesUploaded={handleImagesUploaded}
+                          maxFiles={1}
+                          className="mb-4"
+                        />
+                        <FormDescription>
+                          Upload an image to animate. Supported formats: JPEG, PNG, WebP, TIFF. Max file size: 10MB.
+                        </FormDescription>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* Prompt Input */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Wand2 className="h-5 w-5" />
-                        Video Prompt
+                        {activeMode === 'text-to-video' ? 'Video Prompt' : 'Animation Prompt (Optional)'}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -315,13 +375,20 @@ export default function VideoGenerationPage() {
                           <FormItem>
                             <FormControl>
                               <Textarea
-                                placeholder="Describe the video you want to create..."
+                                placeholder={
+                                  activeMode === 'text-to-video'
+                                    ? "Describe the video you want to create..."
+                                    : "Describe how you want the image to be animated..."
+                                }
                                 className="min-h-[120px] resize-none"
                                 {...field}
                               />
                             </FormControl>
                             <FormDescription>
-                              Be specific about camera movements, lighting, and desired actions. Max 1000 characters.
+                              {activeMode === 'text-to-video'
+                                ? "Be specific about camera movements, lighting, and desired actions. Max 1000 characters."
+                                : "Describe the motion and animation you want applied to your image. Max 1000 characters."
+                              }
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -427,7 +494,7 @@ export default function VideoGenerationPage() {
                   <Button
                     type="submit"
                     size="lg"
-                    disabled={isGenerating || estimatedCost > creditsRemaining}
+                    disabled={isGenerating || estimatedCost > creditsRemaining || (activeMode === 'image-to-video' && uploadedImages.length === 0)}
                     className="w-full"
                   >
                     {isGenerating ? (
@@ -465,27 +532,6 @@ export default function VideoGenerationPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lightbulb className="h-5 w-5" />
-                Coming Soon
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 mb-4">
-                Video generation will be available soon with support for:
-              </p>
-              <ul className="text-sm space-y-2">
-                <li>• Runway Gen-3 Alpha</li>
-                <li>• Kling AI v1.5 & v2.1</li>
-                <li>• Minimax Video-01</li>
-                <li>• Custom duration controls</li>
-                <li>• Motion level settings</li>
-              </ul>
-            </CardContent>
-          </Card>
-
           {generatedVideo && (
             <Card>
               <CardHeader>

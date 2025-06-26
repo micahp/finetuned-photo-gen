@@ -13,6 +13,7 @@ export interface VideoGenerationParams {
   seed?: number
   width?: number
   height?: number
+  imageBuffer?: Buffer // For image-to-video generation
 }
 
 export interface VideoGenerationResponse {
@@ -76,9 +77,11 @@ export class FalVideoService {
 
       console.log('🎬 Starting video generation with Fal.ai:', {
         model: model.name,
+        mode: model.mode,
         prompt: params.prompt.substring(0, 100) + '...',
         duration: params.duration || model.defaultParams.fps,
-        aspectRatio: params.aspectRatio || '16:9'
+        aspectRatio: params.aspectRatio || '16:9',
+        hasImage: !!params.imageBuffer
       })
 
       // Validate duration
@@ -87,8 +90,8 @@ export class FalVideoService {
       // Calculate dimensions based on aspect ratio
       const dimensions = this.getDimensions(params.aspectRatio || '16:9')
       
-      // Prepare request payload
-      const requestPayload = {
+      // Prepare base request payload
+      const requestPayload: any = {
         prompt: params.prompt,
         duration_seconds: duration,
         aspect_ratio: params.aspectRatio || '16:9',
@@ -99,9 +102,19 @@ export class FalVideoService {
         seed: params.seed
       }
 
+      // For image-to-video models, handle image upload
+      if (model.mode === 'image-to-video' && params.imageBuffer) {
+        // Convert image buffer to base64 data URL for Fal.ai
+        const base64Image = params.imageBuffer.toString('base64')
+        const mimeType = this.detectImageMimeType(params.imageBuffer)
+        requestPayload.image_url = `data:${mimeType};base64,${base64Image}`
+      }
+
       console.log('📡 Sending request to Fal.ai:', {
         model: model.falModelId,
-        payload: requestPayload
+        mode: model.mode,
+        hasImage: !!requestPayload.image_url,
+        payload: { ...requestPayload, image_url: requestPayload.image_url ? '[IMAGE_DATA]' : undefined }
       })
 
       // Submit video generation job
@@ -334,5 +347,32 @@ export class FalVideoService {
   isAspectRatioSupported(modelId: string, aspectRatio: string): boolean {
     const model = this.getModelConfig(modelId)
     return model ? model.supportedAspectRatios.includes(aspectRatio) : false
+  }
+
+  /**
+   * Detect MIME type from image buffer
+   */
+  private detectImageMimeType(buffer: Buffer): string {
+    // Check for JPEG
+    if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xD8) {
+      return 'image/jpeg'
+    }
+    // Check for PNG
+    if (buffer.length >= 8 && 
+        buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+      return 'image/png'
+    }
+    // Check for WebP
+    if (buffer.length >= 12 && 
+        buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) {
+      return 'image/webp'
+    }
+    // Check for TIFF
+    if (buffer.length >= 4 && 
+        ((buffer[0] === 0x49 && buffer[1] === 0x49) || (buffer[0] === 0x4D && buffer[1] === 0x4D))) {
+      return 'image/tiff'
+    }
+    // Default to JPEG
+    return 'image/jpeg'
   }
 } 
