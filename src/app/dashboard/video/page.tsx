@@ -82,7 +82,9 @@ export default function VideoGenerationPage() {
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
 
   // Track which generation mode (text or image) the user is on
-  const [activeMode, setActiveMode] = useState<'text-to-video' | 'image-to-video'>('text-to-video')
+  const [activeMode, setActiveMode] = useState<'text-to-video' | 'image-to-video'>(
+    'text-to-video'
+  )
 
   // Find Veo 3 model for text-to-video default, fallback to cheapest
   const veo3Model = AVAILABLE_VIDEO_MODELS.find(m => m.id === 'veo-3-text')
@@ -129,6 +131,16 @@ export default function VideoGenerationPage() {
       router.replace('/dashboard/billing?upgradeRequired=video')
     }
   }, [session, hasPremiumAccess, isDev, router])
+
+  // NEW: Ensure the selected model always matches the active mode
+  useEffect(() => {
+    const currentModel = AVAILABLE_VIDEO_MODELS.find(
+      (m) => m.id === form.getValues('modelId')
+    )
+    if (!currentModel || currentModel.mode !== activeMode) {
+      form.setValue('modelId', defaultModelIdByMode[activeMode])
+    }
+  }, [activeMode, form])
 
   // Show upgrade prompt while session is loading for non-premium users
   if (session && !isDev && !hasPremiumAccess) {
@@ -270,12 +282,6 @@ export default function VideoGenerationPage() {
           <Tabs value={activeMode} onValueChange={(val) => {
             const mode = val as 'text-to-video' | 'image-to-video'
             setActiveMode(mode)
-
-            // If current model isn't valid for the newly selected mode, switch to default model for that mode
-            const currentModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === form.getValues('modelId'))
-            if (!currentModel || currentModel.mode !== mode) {
-              form.setValue('modelId', defaultModelIdByMode[mode])
-            }
           }} className="space-y-6">
             <TabsList className="mb-4">
               <TabsTrigger value="text-to-video">Text → Video</TabsTrigger>
@@ -300,7 +306,7 @@ export default function VideoGenerationPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <Select onValueChange={field.onChange} value={field.value}>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select a video model" />
                                 </SelectTrigger>
@@ -438,7 +444,7 @@ export default function VideoGenerationPage() {
                           <FormItem>
                             <FormLabel>Aspect Ratio</FormLabel>
                             <FormControl>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <Select onValueChange={field.onChange} value={field.value}>
                                 <SelectTrigger>
                                   <SelectValue />
                                 </SelectTrigger>
