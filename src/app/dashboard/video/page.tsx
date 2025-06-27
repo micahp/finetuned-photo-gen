@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'
 import { Slider } from '@/components/ui/slider'
 import { Progress } from '@/components/ui/progress'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { 
   Loader2, 
   Play, 
@@ -30,7 +31,10 @@ import {
   Camera,
   Sparkles,
   ExternalLink,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Volume2,
+  VolumeX,
+  Info
 } from 'lucide-react'
 import { isPremiumUser } from '@/lib/subscription-utils'
 import { VIDEO_MODELS as AVAILABLE_VIDEO_MODELS, VideoModel } from '@/lib/video-models'
@@ -407,6 +411,26 @@ export default function VideoGenerationPage() {
                       <CardTitle className="flex items-center gap-2">
                         <Film className="h-5 w-5" />
                         Video Model
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <div className="space-y-2">
+                                <p className="font-medium">Audio Support:</p>
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Volume2 className="h-3 w-3 text-green-600" />
+                                  <span>Veo 3: Generates video with synchronized audio</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm">
+                                  <VolumeX className="h-3 w-3 text-gray-500" />
+                                  <span>All other models: Video only (no audio)</span>
+                                </div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -428,7 +452,14 @@ export default function VideoGenerationPage() {
                                     >
                                       <div className="flex items-center gap-2">
                                         <span className="font-medium">{model.name}</span>
-                                        <Crown className="h-3 w-3 text-yellow-500" />
+                                        <div className="flex items-center gap-1">
+                                          {model.hasAudio ? (
+                                            <Volume2 className="h-3 w-3 text-green-600" />
+                                          ) : (
+                                            <VolumeX className="h-3 w-3 text-gray-400" />
+                                          )}
+                                          <Crown className="h-3 w-3 text-yellow-500" />
+                                        </div>
                                       </div>
                                     </SelectItem>
                                   ))}
@@ -450,6 +481,14 @@ export default function VideoGenerationPage() {
                               <span className="font-medium">Cost:</span> {selectedModel.costPerSecond} credits/sec
                             </div>
                           </div>
+                          {selectedModel.hasAudio && (
+                            <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm">
+                              <div className="flex items-center gap-2 text-green-700">
+                                <Volume2 className="h-4 w-4" />
+                                <span className="font-medium">This model generates video with synchronized audio</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </CardContent>

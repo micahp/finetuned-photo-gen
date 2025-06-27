@@ -18,6 +18,8 @@ export interface VideoModel {
   }
   /** Allowed clip durations (seconds) accepted by the underlying API, if restricted */
   durationOptions?: number[]
+  /** Whether the model generates video with synchronized audio */
+  hasAudio: boolean
 }
 
 /**
@@ -45,6 +47,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [5, 10],
+    hasAudio: false,
   },
   {
     id: 'seedance-pro-text',
@@ -59,6 +62,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [5, 10],
+    hasAudio: false,
   },
   {
     id: 'seedance-lite-image',
@@ -73,6 +77,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [5, 10],
+    hasAudio: false,
   },
   {
     id: 'seedance-lite-text',
@@ -87,6 +92,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [5, 10],
+    hasAudio: false,
   },
 
   /* -------------------------- Hailuo 02 (MiniMax) -------------------------- */
@@ -103,6 +109,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [6, 10],
+    hasAudio: false,
   },
   {
     id: 'hailuo-02-pro-text',
@@ -117,6 +124,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [6, 10],
+    hasAudio: false,
   },
   {
     id: 'hailuo-02-standard-image',
@@ -131,6 +139,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [6, 10],
+    hasAudio: false,
   },
   {
     id: 'hailuo-02-standard-text',
@@ -145,6 +154,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [6, 10],
+    hasAudio: false,
   },
 
   /* --------------------------------- Veo 3 --------------------------------- */
@@ -161,6 +171,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 6,
     },
     durationOptions: [5, 6, 7, 8],
+    hasAudio: true,
   },
 
   /* -------------------------- Kling 2.1 (Kuaishou) -------------------------- */
@@ -177,6 +188,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [5, 10],
+    hasAudio: false,
   },
   {
     id: 'kling-2.1-pro-image',
@@ -191,6 +203,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [5, 10],
+    hasAudio: false,
   },
   {
     id: 'kling-2.1-standard-image',
@@ -205,5 +218,33 @@ export const VIDEO_MODELS: VideoModel[] = [
       motionLevel: 5,
     },
     durationOptions: [5, 10],
+    hasAudio: false,
   },
 ] 
+
+/**
+ * Get audio capability information for a model by ID
+ */
+export function getModelAudioCapability(modelId: string): { hasAudio: boolean; name: string } | null {
+  const model = VIDEO_MODELS.find(m => m.id === modelId)
+  if (!model) return null
+  
+  return {
+    hasAudio: model.hasAudio,
+    name: model.name
+  }
+}
+
+/**
+ * Get all models with audio support
+ */
+export function getModelsWithAudio(): VideoModel[] {
+  return VIDEO_MODELS.filter(model => model.hasAudio)
+}
+
+/**
+ * Get all models without audio support (video only)
+ */
+export function getVideoOnlyModels(): VideoModel[] {
+  return VIDEO_MODELS.filter(model => !model.hasAudio)
+} 
