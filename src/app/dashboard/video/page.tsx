@@ -453,11 +453,6 @@ export default function VideoGenerationPage() {
                                       <div className="flex items-center gap-2">
                                         <span className="font-medium">{model.name}</span>
                                         <div className="flex items-center gap-1">
-                                          {model.hasAudio ? (
-                                            <Volume2 className="h-3 w-3 text-green-600" />
-                                          ) : (
-                                            <VolumeX className="h-3 w-3 text-gray-400" />
-                                          )}
                                           <Crown className="h-3 w-3 text-yellow-500" />
                                         </div>
                                       </div>

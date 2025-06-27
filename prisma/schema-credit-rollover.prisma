@@ -17,13 +17,6 @@ model User {
   subscriptionPlan         String?             @map("subscription_plan")
   stripeCustomerId         String?             @map("stripe_customer_id")
   credits                  Int                 @default(10)
-  monthlyCredits           Int                 @default(0) @map("monthly_credits")
-  rolloverCredits          Int                 @default(0) @map("rollover_credits")
-  maxRolloverCredits       Int                 @default(0) @map("max_rollover_credits")
-  lastRolloverProcessedAt  DateTime?           @map("last_rollover_processed_at")
-  rolloverLimitReachedAt   DateTime?           @map("rollover_limit_reached_at")
-  lastCreditCalculationAt  DateTime?           @map("last_credit_calculation_at")
-  creditCalculationHash    String?             @map("credit_calculation_hash")
   createdAt                DateTime            @default(now()) @map("created_at")
   updatedAt                DateTime            @updatedAt @map("updated_at")
   isAdmin                  Boolean             @default(false) @map("is_admin")
@@ -37,17 +30,29 @@ model User {
   stripePriceId            String?             @map("stripe_price_id")
   stripeSubscriptionId     String?             @unique @map("stripe_subscription_id")
   stripeSubscriptionStatus String?             @map("stripe_subscription_status")
+  
+  // NEW: Credit Rollover Fields
+  monthlyCredits           Int                 @default(0) @map("monthly_credits")
+  rolloverCredits          Int                 @default(0) @map("rollover_credits")
+  maxRolloverCredits       Int                 @default(0) @map("max_rollover_credits")
+  lastRolloverProcessedAt  DateTime?           @map("last_rollover_processed_at")
+  rolloverLimitReachedAt   DateTime?           @map("rollover_limit_reached_at")
+  lastCreditCalculationAt  DateTime?           @map("last_credit_calculation_at")
+  creditCalculationHash    String?             @map("credit_calculation_hash")
+  
   creditTransactions       CreditTransaction[]
-  creditBalances           CreditBalance[]
-  creditPacks              CreditPack[]
   editedImages             EditedImage[]
   generatedImages          GeneratedImage[]
   jobQueue                 JobQueue[]
   subscriptions            Subscription[]
   userModels               UserModel[]
   generatedVideos          GeneratedVideo[]
+  creditBalances           CreditBalance[]     // NEW: Relation
+  creditPacks              CreditPack[]        // NEW: Relation
 
   @@map("users")
+  @@index([credits, rolloverCredits], name: "idx_users_credits_rollover")
+  @@index([lastRolloverProcessedAt], name: "idx_users_last_rollover")
 }
 
 model UserModel {
@@ -186,60 +191,8 @@ model CreditTransaction {
   @@unique([idempotencyKey], name: "unique_idempotency_key")
   @@unique([userId, relatedEntityId, type], map: "unique_user_entity_type", name: "prevent_duplicate_subscription_credits")
   @@map("credit_transactions")
-}
-
-model CreditBalance {
-  id                    String    @id @default(cuid())
-  userId                String    @map("user_id")
-  
-  // Credit breakdown
-  monthlyCredits        Int       @map("monthly_credits") // Credits from current subscription period
-  rolloverCredits       Int       @map("rollover_credits") // Credits rolled over from previous periods
-  purchasedCredits      Int       @map("purchased_credits") // Credits from one-time purchases
-  totalCredits          Int       @map("total_credits") // Sum of above three types
-  
-  // Period tracking
-  periodStart           DateTime  @map("period_start") // Start of billing period
-  periodEnd             DateTime  @map("period_end") // End of billing period
-  subscriptionPlan      String?   @map("subscription_plan") // Plan active during this period
-  
-  // Metadata
-  createdAt             DateTime  @default(now()) @map("created_at")
-  metadata              Json?     // Additional tracking data
-  
-  // Relations
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@map("credit_balances")
-  @@index([userId, periodStart])
-  @@index([userId, createdAt])
-}
-
-model CreditPack {
-  id                String    @id @default(cuid())
-  userId            String    @map("user_id")
-  
-  // Purchase details
-  credits           Int       // Number of credits in pack
-  amountPaid        Int       @map("amount_paid") // Amount paid in cents
-  stripePaymentId   String?   @map("stripe_payment_id")
-  
-  // Usage tracking
-  creditsUsed       Int       @default(0) @map("credits_used")
-  creditsRemaining  Int       @map("credits_remaining") // Calculated field or computed
-  
-  // Expiration (optional for future use)
-  expiresAt         DateTime? @map("expires_at")
-  
-  // Metadata
-  purchasedAt       DateTime  @default(now()) @map("purchased_at")
-  metadata          Json?
-  
-  // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@map("credit_packs")
-  @@index([userId, purchasedAt])
+  @@index([userId, type, createdAt], name: "idx_credit_transactions_user_type_created")
+  @@index([userId, createdAt], name: "idx_credit_transactions_billing_period", where: "type IN ('subscription_renewal', 'rollover_applied')")
 }
 
 model ProcessedStripeEvent {
@@ -248,6 +201,62 @@ model ProcessedStripeEvent {
   createdAt DateTime @default(now())
 
   @@index([eventId])
+}
+
+// NEW: Credit Balance History Model
+model CreditBalance {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  
+  // Credit breakdown
+  monthlyCredits    Int       @map("monthly_credits")
+  rolloverCredits   Int       @map("rollover_credits")
+  purchasedCredits  Int       @map("purchased_credits")
+  totalCredits      Int       @map("total_credits")
+  
+  // Period tracking
+  periodStart       DateTime  @map("period_start")
+  periodEnd         DateTime  @map("period_end")
+  subscriptionPlan  String?   @map("subscription_plan")
+  
+  // Metadata
+  createdAt         DateTime  @default(now()) @map("created_at")
+  metadata          Json?
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("credit_balances")
+  @@index([userId, periodStart], name: "idx_credit_balances_user_period")
+  @@index([userId, createdAt], name: "idx_credit_balances_user_created")
+}
+
+// NEW: Credit Pack Purchase Model
+model CreditPack {
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  
+  // Purchase details
+  credits          Int
+  amountPaid       Int       @map("amount_paid")
+  stripePaymentId  String?   @map("stripe_payment_id")
+  
+  // Usage tracking
+  creditsUsed      Int       @default(0) @map("credits_used")
+  creditsRemaining Int       @map("credits_remaining")
+  
+  // Expiration (optional for future use)
+  expiresAt        DateTime? @map("expires_at")
+  
+  // Metadata
+  purchasedAt      DateTime  @default(now()) @map("purchased_at")
+  metadata         Json?
+  
+  // Relations
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("credit_packs")
+  @@index([userId, purchasedAt], name: "idx_credit_packs_user_purchased")
 }
 
 enum CreditTransactionType {
@@ -259,10 +268,11 @@ enum CreditTransactionType {
   admin_adjustment
   subscription_created
   manual_adjustment
-  rollover_applied        // Credits rolled over from previous period
-  rollover_expired        // Credits that exceeded rollover cap
-  rollover_limit_reached  // When user hits rollover maximum
-  period_renewal          // New billing period started
+  // NEW: Rollover types
+  rollover_applied
+  rollover_expired
+  rollover_limit_reached
+  period_renewal
 }
 
 model GeneratedVideo {
@@ -274,20 +284,20 @@ model GeneratedVideo {
   modelId            String   @map("model_id")
   duration           Int      // Duration in seconds
   aspectRatio        String   @map("aspect_ratio")
-  fps                Int      @default(24)
-  motionLevel        Int?     @map("motion_level")
-  width              Int?
-  height             Int?
-  fileSize           Int?     @map("file_size")
+  creditsUsed        Int      @map("credits_used")
+  falJobId           String   @map("fal_job_id")
+  status             String   @default("pending")
+  processingTime     Int?     @map("processing_time")
   generationParams   Json?    @map("generation_params")
-  creditsUsed        Int      @default(5) @map("credits_used")
-  status             String   @default("completed") // processing, completed, failed
-  falJobId           String?  @map("fal_job_id")
-  generationDuration Int?     @map("generation_duration") // Generation time in milliseconds
+  cloudflareVideoId  String?  @map("cloudflare_video_id")
+  metadata           Json?
   createdAt          DateTime @default(now()) @map("created_at")
+  completedAt        DateTime? @map("completed_at")
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("generated_videos")
+  @@index([userId, createdAt])
+  @@index([falJobId])
 }
 
 enum RelatedEntityType {
@@ -296,5 +306,5 @@ enum RelatedEntityType {
   model_training
   subscription
   admin_action
-  video_generation
-}
+  video_generation // NEW: For video generation costs
+} 
