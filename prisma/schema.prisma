@@ -17,13 +17,6 @@ model User {
   subscriptionPlan         String?             @map("subscription_plan")
   stripeCustomerId         String?             @map("stripe_customer_id")
   credits                  Int                 @default(10)
-  monthlyCredits           Int                 @default(0) @map("monthly_credits")
-  rolloverCredits          Int                 @default(0) @map("rollover_credits")
-  maxRolloverCredits       Int                 @default(0) @map("max_rollover_credits")
-  lastRolloverProcessedAt  DateTime?           @map("last_rollover_processed_at")
-  rolloverLimitReachedAt   DateTime?           @map("rollover_limit_reached_at")
-  lastCreditCalculationAt  DateTime?           @map("last_credit_calculation_at")
-  creditCalculationHash    String?             @map("credit_calculation_hash")
   createdAt                DateTime            @default(now()) @map("created_at")
   updatedAt                DateTime            @updatedAt @map("updated_at")
   isAdmin                  Boolean             @default(false) @map("is_admin")
@@ -38,8 +31,6 @@ model User {
   stripeSubscriptionId     String?             @unique @map("stripe_subscription_id")
   stripeSubscriptionStatus String?             @map("stripe_subscription_status")
   creditTransactions       CreditTransaction[]
-  creditBalances           CreditBalance[]
-  creditPacks              CreditPack[]
   editedImages             EditedImage[]
   generatedImages          GeneratedImage[]
   jobQueue                 JobQueue[]
@@ -188,60 +179,6 @@ model CreditTransaction {
   @@map("credit_transactions")
 }
 
-model CreditBalance {
-  id                    String    @id @default(cuid())
-  userId                String    @map("user_id")
-  
-  // Credit breakdown
-  monthlyCredits        Int       @map("monthly_credits") // Credits from current subscription period
-  rolloverCredits       Int       @map("rollover_credits") // Credits rolled over from previous periods
-  purchasedCredits      Int       @map("purchased_credits") // Credits from one-time purchases
-  totalCredits          Int       @map("total_credits") // Sum of above three types
-  
-  // Period tracking
-  periodStart           DateTime  @map("period_start") // Start of billing period
-  periodEnd             DateTime  @map("period_end") // End of billing period
-  subscriptionPlan      String?   @map("subscription_plan") // Plan active during this period
-  
-  // Metadata
-  createdAt             DateTime  @default(now()) @map("created_at")
-  metadata              Json?     // Additional tracking data
-  
-  // Relations
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@map("credit_balances")
-  @@index([userId, periodStart])
-  @@index([userId, createdAt])
-}
-
-model CreditPack {
-  id                String    @id @default(cuid())
-  userId            String    @map("user_id")
-  
-  // Purchase details
-  credits           Int       // Number of credits in pack
-  amountPaid        Int       @map("amount_paid") // Amount paid in cents
-  stripePaymentId   String?   @map("stripe_payment_id")
-  
-  // Usage tracking
-  creditsUsed       Int       @default(0) @map("credits_used")
-  creditsRemaining  Int       @map("credits_remaining") // Calculated field or computed
-  
-  // Expiration (optional for future use)
-  expiresAt         DateTime? @map("expires_at")
-  
-  // Metadata
-  purchasedAt       DateTime  @default(now()) @map("purchased_at")
-  metadata          Json?
-  
-  // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@map("credit_packs")
-  @@index([userId, purchasedAt])
-}
-
 model ProcessedStripeEvent {
   id        String   @id @default(cuid())
   eventId   String   @unique
@@ -259,10 +196,6 @@ enum CreditTransactionType {
   admin_adjustment
   subscription_created
   manual_adjustment
-  rollover_applied        // Credits rolled over from previous period
-  rollover_expired        // Credits that exceeded rollover cap
-  rollover_limit_reached  // When user hits rollover maximum
-  period_renewal          // New billing period started
 }
 
 model GeneratedVideo {
