@@ -1,3 +1,4 @@
+import { fal } from '@fal-ai/client'
 import { CloudStorageService } from './cloud-storage'
 import { ImageProcessingService } from './image-processing-service'
 import { VIDEO_MODELS, VideoModel } from './video-models'
@@ -39,6 +40,12 @@ export class FalVideoService {
     if (!this.apiKey) {
       throw new Error('Fal.ai API key is required')
     }
+    
+    // Configure the fal client
+    fal.config({
+      credentials: this.apiKey,
+    })
+    
     this.cloudStorage = new CloudStorageService()
   }
 
@@ -117,59 +124,75 @@ export class FalVideoService {
         payload: { ...requestPayload, image_url: requestPayload.image_url ? '[IMAGE_DATA]' : undefined }
       })
 
-      // Submit video generation job
-      const response = await fetch(`${this.baseUrl}/${model.falModelId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Key ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestPayload)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || `Fal.ai API error: ${response.status}`)
-      }
-
-      const result = await response.json()
+      // Check if webhook URL is configured for async processing
+      const webhookUrl = process.env.FAL_WEBHOOK_URL
       
-      console.log('✅ Fal.ai video generation completed:', {
-        requestId: result.request_id,
-        hasVideo: !!result.video,
-        hasImage: !!result.image
-      })
-
-      // Handle successful response
-      if (result.video && result.video.url) {
-        const videoUrl = result.video.url
-        const thumbnailUrl = result.image?.url || null
-
-        // Process and upload video to CloudFlare R2
-        const processedVideo = await this.processAndUploadVideo(
-          videoUrl,
-          thumbnailUrl,
-          `video_${Date.now()}.mp4`
-        )
-
+      if (webhookUrl) {
+        // Use async processing with webhooks
+        console.log('🔗 Using async processing with webhook:', webhookUrl)
+        
+        const result = await fal.subscribe(model.falModelId, {
+          input: requestPayload,
+          webhookUrl: webhookUrl,
+          onQueueUpdate: (update) => {
+            console.log('📊 Queue update:', update)
+          }
+        })
+        
+        console.log('✅ Fal.ai async job submitted:', {
+          requestId: result.requestId,
+          status: 'processing'
+        })
+        
         return {
-          id: result.request_id || `fal_video_${Date.now()}`,
-          status: 'completed',
-          videoUrl: processedVideo.videoUrl,
-          thumbnailUrl: processedVideo.thumbnailUrl,
-          duration: duration,
-          fileSize: processedVideo.fileSize,
-          width: dimensions.width,
-          height: dimensions.height,
-          fps: params.fps || model.defaultParams.fps
-        }
-      } else {
-        // Handle async processing (if Fal.ai returns job ID for longer videos)
-        return {
-          id: result.request_id || `fal_processing_${Date.now()}`,
+          id: result.requestId,
           status: 'processing'
         }
-      }
+      } else {
+        // Fallback to synchronous processing
+        console.log('⚠️ No webhook URL configured, using synchronous processing')
+        
+                 const result = await fal.run(model.falModelId, {
+           input: requestPayload
+         }) as any
+         
+         console.log('✅ Fal.ai video generation completed:', {
+           requestId: result.request_id,
+           hasVideo: !!result.video,
+           hasImage: !!result.image
+         })
+         
+         // Handle successful response
+         if (result.video && result.video.url) {
+           const videoUrl = result.video.url
+           const thumbnailUrl = result.image?.url || null
+
+           // Process and upload video to CloudFlare R2
+           const processedVideo = await this.processAndUploadVideo(
+             videoUrl,
+             thumbnailUrl,
+             `video_${Date.now()}.mp4`
+           )
+
+           return {
+             id: result.request_id || `fal_video_${Date.now()}`,
+             status: 'completed',
+             videoUrl: processedVideo.videoUrl,
+             thumbnailUrl: processedVideo.thumbnailUrl,
+             duration: duration,
+             fileSize: processedVideo.fileSize,
+             width: dimensions.width,
+             height: dimensions.height,
+             fps: params.fps || model.defaultParams.fps
+           }
+         } else {
+           // Handle async processing fallback
+           return {
+             id: result.request_id || `fal_processing_${Date.now()}`,
+             status: 'processing'
+           }
+         }
+       }
 
     } catch (error) {
       console.error('❌ Fal.ai video generation error:', error)
@@ -242,7 +265,7 @@ export class FalVideoService {
   /**
    * Process video and upload to CloudFlare R2
    */
-  private async processAndUploadVideo(
+  async processAndUploadVideo(
     videoUrl: string,
     thumbnailUrl: string | null,
     filename: string

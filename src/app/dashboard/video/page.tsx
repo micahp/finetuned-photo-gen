@@ -17,7 +17,6 @@ import {
   Play, 
   Download, 
   Crown, 
-  Lightbulb, 
   Copy, 
   Plus, 
   ChevronDown, 
@@ -67,6 +66,31 @@ interface GeneratedVideo {
 
 // VideoModel interface imported from video-models.ts
 
+// Starter prompts for magic button
+const TEXT_TO_VIDEO_PROMPTS: string[] = [
+  // Seedance 1.0 Pro – Text → Video
+  "A bright blue race car speeds along a snowy racetrack. [Low-angle shot] Captures several cars speeding along the racetrack through a harsh snowstorm. [Overhead shot] The camera gradually pulls upward, revealing the full race scene illuminated by storm lights.",
+  // Seedance 1.0 Lite – Text → Video (same as image variant)
+  "A little dog is running in the sunshine. The camera follows the dog as it plays in a garden.",
+  // Hailuo 02 Pro / Standard – Text → Video (Galactic Smuggler)
+  "A Galactic Smuggler is a rogue figure with a cybernetic arm and a well-worn coat that hints at many dangerous escapades across the galaxy. Their ship is filled with rare and exotic treasures from distant planets, concealed in hidden compartments, showing their expertise in illicit trade. Their belt is adorned with energy-based weapons, ready to be drawn at any moment to protect themselves or escape from tight situations. This character thrives in the shadows of space, navigating between the law and chaos with stealth and wit, always seeking the next big score while evading bounty hunters and law enforcement. The rogue's ship, rugged yet efficient, serves as both a home and a tool for their dangerous lifestyle. The treasures they collect reflect the diverse and intriguing worlds they've encountered—alien artifacts, rare minerals, and artifacts of unknown origin. Their reputation precedes them, with whispers of their dealings and the deadly encounters that often follow. A master of negotiation and deception, the Galactic Smuggler navigates the cosmos with an eye on the horizon, always one step ahead of those who pursue them.",
+  // Veo 3 – Text → Video
+  "A casual street interview on a busy New York City sidewalk in the afternoon. The interviewer holds a plain, unbranded microphone and asks: Have you seen Google's new Veo3 model? It is a super good model. Person replies: Yeah I saw it, it's already available on fal. It's crazy good.",
+]
+
+const IMAGE_TO_VIDEO_PROMPTS: string[] = [
+  // Seedance 1.0 Pro – Image → Video
+  "A skier glides over fresh snow, joyously smiling while kicking up large clouds of snow as he turns. Accelerating gradually down the slope, the camera moves smoothly alongside.",
+  // Seedance 1.0 Lite – Image → Video
+  "A little dog is running in the sunshine. The camera follows the dog as it plays in a garden.",
+  // Hailuo 02 – Image → Video
+  "Man walked into winter cave with polar bear.",
+  // Kling 2.1 Master – Image → Video
+  "Sunlight dapples through budding branches, illuminating a vibrant tapestry of greens and browns as a pair of robins meticulously weave twigs and mud into a cradle of life, their tiny forms a whirlwind of activity against a backdrop of blossoming spring. The scene unfolds with a gentle, observational pace, allowing the viewer to fully appreciate the intricate details of nest construction, the soft textures of downy feathers contrasted against the rough bark of the branches, the delicate balance of strength and fragility in their creation.",
+  // Kling 2.1 Pro – Image → Video
+  "Warm, incandescent streetlights paint the rain-slicked cobblestones in pools of amber light as a couple walks hand-in-hand, their silhouettes stark against the blurry backdrop of a city shrouded in a gentle downpour; the camera lingers on the subtle textures of their rain-soaked coats and the glistening reflections dancing on the wet pavement, creating a sense of intimate vulnerability and shared quietude.",
+]
+
 export default function VideoGenerationPage() {
   const { data: session, update } = useSession()
   const hasPremiumAccess = isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
@@ -80,6 +104,7 @@ export default function VideoGenerationPage() {
   const [generationProgress, setGenerationProgress] = useState(0)
   const [estimatedCost, setEstimatedCost] = useState(0)
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
+  const [generatingPrompt, setGeneratingPrompt] = useState(false)
 
   // Track which generation mode (text or image) the user is on
   const [activeMode, setActiveMode] = useState<'text-to-video' | 'image-to-video'>(
@@ -166,6 +191,64 @@ export default function VideoGenerationPage() {
     }
   }
 
+  const pollVideoStatus = async (jobId: string, progressInterval: NodeJS.Timeout) => {
+    try {
+      const maxAttempts = 60 // Poll for up to 5 minutes (60 * 5s = 5min)
+      let attempts = 0
+
+      const poll = async (): Promise<void> => {
+        if (attempts >= maxAttempts) {
+          clearInterval(progressInterval)
+          setError('Video generation timed out. Please try again.')
+          setIsGenerating(false)
+          return
+        }
+
+        try {
+          const statusResponse = await fetch(`/api/video/status/${jobId}`)
+          if (!statusResponse.ok) {
+            throw new Error('Failed to check video status')
+          }
+
+          const statusResult = await statusResponse.json()
+          
+          if (statusResult.success) {
+            const video = statusResult.video
+            
+            if (video.status === 'completed') {
+              clearInterval(progressInterval)
+              setGeneratedVideo(video)
+              setGenerationProgress(100)
+              setIsGenerating(false)
+              return
+            } else if (video.status === 'failed') {
+              clearInterval(progressInterval)
+              setError(video.error || 'Video generation failed')
+              setIsGenerating(false)
+              return
+            }
+            // Still processing, continue polling
+          }
+
+          attempts++
+          setTimeout(poll, 5000) // Poll every 5 seconds
+        } catch (pollError) {
+          console.error('Polling error:', pollError)
+          attempts++
+          setTimeout(poll, 5000)
+        }
+      }
+
+      // Start polling after a short delay
+      setTimeout(poll, 2000)
+    } catch (error) {
+      console.error('Poll setup error:', error)
+      clearInterval(progressInterval)
+      setError('Failed to track video generation progress')
+      setIsGenerating(false)
+    }
+  }
+
   const onSubmit = async (data: VideoGenerationFormData) => {
     try {
       setIsGenerating(true)
@@ -193,6 +276,7 @@ export default function VideoGenerationPage() {
 
       // All video models require premium access - handled at page level
 
+      // Start with fake progress, will switch to real progress if job is processing
       const progressInterval = setInterval(() => {
         setGenerationProgress(prev => Math.min(prev + Math.random() * 15, 95))
       }, 2000)
@@ -227,9 +311,17 @@ export default function VideoGenerationPage() {
       const result = await response.json()
       
       if (result.success) {
-        setGeneratedVideo(result.video)
-        setCreditsRemaining(result.creditsRemaining)
-        setGenerationProgress(100)
+        if (result.video.status === 'processing') {
+          // Start polling for async job completion
+          setGeneratedVideo(result.video)
+          setCreditsRemaining(result.creditsRemaining)
+          await pollVideoStatus(result.video.jobId, progressInterval)
+        } else {
+          // Synchronous completion
+          setGeneratedVideo(result.video)
+          setCreditsRemaining(result.creditsRemaining)
+          setGenerationProgress(100)
+        }
         await update()
       } else {
         throw new Error(result.error || 'Video generation failed')
@@ -270,15 +362,27 @@ export default function VideoGenerationPage() {
     }
   }
 
+  // Magic prompt generator
+  const handleGenerateRandomPrompt = () => {
+    setGeneratingPrompt(true)
+    // Simulate async to keep UX consistent with image tab
+    setTimeout(() => {
+      const sourceArray = activeMode === 'text-to-video' ? TEXT_TO_VIDEO_PROMPTS : IMAGE_TO_VIDEO_PROMPTS
+      const randomPrompt = sourceArray[Math.floor(Math.random() * sourceArray.length)]
+      form.setValue('prompt', randomPrompt)
+      setGeneratingPrompt(false)
+    }, 300)
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Video Generation</h1>
         <p className="text-gray-600">Create stunning videos from text prompts or images using advanced AI models</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="space-y-6">
           <Tabs value={activeMode} onValueChange={(val) => {
             const mode = val as 'text-to-video' | 'image-to-video'
             setActiveMode(mode)
@@ -347,33 +451,59 @@ export default function VideoGenerationPage() {
 
                   {/* Image Upload for Image-to-Video Mode */}
                   {activeMode === 'image-to-video' && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <ImageIcon className="h-5 w-5" />
-                          Source Image
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ImageUpload
-                          onImagesUploaded={handleImagesUploaded}
-                          maxFiles={1}
-                          className="mb-4"
-                        />
-                        <FormDescription>
-                          Upload an image to animate. Supported formats: JPEG, PNG, WebP, TIFF. Max file size: 10MB.
-                        </FormDescription>
-                      </CardContent>
-                    </Card>
+                    <div className="space-y-3">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <ImageIcon className="h-5 w-5" />
+                            Source Image
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ImageUpload
+                            onImagesUploaded={handleImagesUploaded}
+                            maxFiles={1}
+                            className="mb-4"
+                          />
+                          <FormDescription>
+                            Upload an image to animate. Supported formats: JPEG, PNG, WebP, TIFF. Max file size: 10MB.
+                          </FormDescription>
+                        </CardContent>
+                      </Card>
+                      {/* Help text to generate an example image - now outside the card */}
+                      <Link
+                        href="/dashboard/generate"
+                        className="text-xs text-gray-500 hover:text-purple-600 transition-colors inline-block"
+                      >
+                        Don't have an image? Generate one with our examples →
+                      </Link>
+                    </div>
                   )}
 
                   {/* Prompt Input */}
                   <Card>
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Wand2 className="h-5 w-5" />
-                        {activeMode === 'text-to-video' ? 'Video Prompt' : 'Animation Prompt (Optional)'}
-                      </CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                          <Wand2 className="h-5 w-5" />
+                          {activeMode === 'text-to-video' ? 'Video Prompt' : 'Animation Prompt (Optional)'}
+                        </CardTitle>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleGenerateRandomPrompt}
+                          disabled={generatingPrompt}
+                          className="h-8 w-8 p-0"
+                          title="Generate random prompt"
+                        >
+                          {generatingPrompt ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <FormField
