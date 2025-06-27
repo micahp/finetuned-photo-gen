@@ -167,6 +167,12 @@ export default function VideoGenerationPage() {
     }
   }, [activeMode, form])
 
+  useEffect(() => {
+    if (selectedModel?.durationOptions && !selectedModel.durationOptions.includes(form.getValues('duration'))) {
+      form.setValue('duration', selectedModel.durationOptions[0])
+    }
+  }, [selectedModel, form])
+
   // Show upgrade prompt while session is loading for non-premium users
   if (session && !isDev && !hasPremiumAccess) {
     return (
@@ -552,14 +558,30 @@ export default function VideoGenerationPage() {
                               Duration: {field.value} seconds
                             </FormLabel>
                             <FormControl>
-                              <Slider
-                                min={3}
-                                max={selectedModel?.maxDuration || 30}
-                                step={1}
-                                value={[field.value]}
-                                onValueChange={(values) => field.onChange(values[0])}
-                                className="w-full"
-                              />
+                              {selectedModel?.durationOptions ? (
+                                <Select
+                                  value={field.value.toString()}
+                                  onValueChange={(v) => field.onChange(parseInt(v))}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select duration" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {selectedModel.durationOptions.map((d) => (
+                                      <SelectItem key={d} value={d.toString()}>{d} seconds</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Slider
+                                  min={3}
+                                  max={selectedModel?.maxDuration || 30}
+                                  step={1}
+                                  value={[field.value]}
+                                  onValueChange={(values) => field.onChange(values[0])}
+                                  className="w-full"
+                                />
+                              )}
                             </FormControl>
                             <FormMessage />
                           </FormItem>

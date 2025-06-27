@@ -16,6 +16,8 @@ export interface VideoModel {
     fps: number
     motionLevel: number
   }
+  /** Allowed clip durations (seconds) accepted by the underlying API, if restricted */
+  durationOptions?: number[]
 }
 
 /**
@@ -42,6 +44,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [5, 10],
   },
   {
     id: 'seedance-pro-text',
@@ -55,6 +58,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [5, 10],
   },
   {
     id: 'seedance-lite-image',
@@ -68,6 +72,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [5, 10],
   },
   {
     id: 'seedance-lite-text',
@@ -81,6 +86,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [5, 10],
   },
 
   /* -------------------------- Hailuo 02 (MiniMax) -------------------------- */
@@ -96,6 +102,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [6, 10],
   },
   {
     id: 'hailuo-02-pro-text',
@@ -109,6 +116,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [6, 10],
   },
   {
     id: 'hailuo-02-standard-image',
@@ -122,6 +130,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [6, 10],
   },
   {
     id: 'hailuo-02-standard-text',
@@ -135,6 +144,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [6, 10],
   },
 
   /* --------------------------------- Veo 3 --------------------------------- */
@@ -150,6 +160,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 30,
       motionLevel: 6,
     },
+    durationOptions: [5, 6, 7, 8],
   },
 
   /* -------------------------- Kling 2.1 (Kuaishou) -------------------------- */
@@ -165,6 +176,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [5, 10],
   },
   {
     id: 'kling-2.1-pro-image',
@@ -178,6 +190,7 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [5, 10],
   },
   {
     id: 'kling-2.1-standard-image',
@@ -191,5 +204,6 @@ export const VIDEO_MODELS: VideoModel[] = [
       fps: 24,
       motionLevel: 5,
     },
+    durationOptions: [5, 10],
   },
 ] 
