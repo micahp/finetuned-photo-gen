@@ -40,7 +40,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/bytedance/seedance/v1/pro/image-to-video',
     mode: 'image-to-video',
     maxDuration: 10,
-    costPerSecond: 25, // 2× markup over $0.12/sec
+    costPerSecond: 12,
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: {
       fps: 24,
@@ -55,7 +55,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/bytedance/seedance/v1/pro/text-to-video',
     mode: 'text-to-video',
     maxDuration: 10,
-    costPerSecond: 25,
+    costPerSecond: 12,
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: {
       fps: 24,
@@ -70,7 +70,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/bytedance/seedance/v1/lite/image-to-video',
     mode: 'image-to-video',
     maxDuration: 10,
-    costPerSecond: 18, // 2× markup over $0.08/sec
+    costPerSecond: 8,
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: {
       fps: 24,
@@ -85,7 +85,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/bytedance/seedance/v1/lite/text-to-video',
     mode: 'text-to-video',
     maxDuration: 10,
-    costPerSecond: 18,
+    costPerSecond: 8,
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: {
       fps: 24,
@@ -102,7 +102,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/pro/image-to-video',
     mode: 'image-to-video',
     maxDuration: 15,
-    costPerSecond: 28,
+    costPerSecond: 14,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -117,7 +117,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/pro/text-to-video',
     mode: 'text-to-video',
     maxDuration: 15,
-    costPerSecond: 28,
+    costPerSecond: 14,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -132,7 +132,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/standard/image-to-video',
     mode: 'image-to-video',
     maxDuration: 15,
-    costPerSecond: 22,
+    costPerSecond: 11,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -147,7 +147,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/standard/text-to-video',
     mode: 'text-to-video',
     maxDuration: 15,
-    costPerSecond: 22,
+    costPerSecond: 11,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -164,7 +164,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/veo3',
     mode: 'text-to-video',
     maxDuration: 30,
-    costPerSecond: 50,
+    costPerSecond: 25,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 30,
@@ -181,7 +181,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/kling-video/v2.1/master/image-to-video',
     mode: 'image-to-video',
     maxDuration: 20,
-    costPerSecond: 55,
+    costPerSecond: 25,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -196,7 +196,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/kling-video/v2.1/pro/image-to-video',
     mode: 'image-to-video',
     maxDuration: 20,
-    costPerSecond: 36,
+    costPerSecond: 18,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -211,7 +211,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/kling-video/v2.1/standard/image-to-video',
     mode: 'image-to-video',
     maxDuration: 20,
-    costPerSecond: 26,
+    costPerSecond: 13,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
