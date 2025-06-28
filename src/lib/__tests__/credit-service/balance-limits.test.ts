@@ -112,7 +112,7 @@ describe('CreditService - Balance & Limits', () => {
     it('should return correct usage limits for a typical user', async () => {
       const userCredits = 500;
       const planCredits = 1000;
-      const planModels = 5;
+      const planModels = 10;
       const userModelsCount = 2;
       const expectedWarningThreshold = Math.floor(planCredits * 0.1);
 
@@ -148,7 +148,7 @@ describe('CreditService - Balance & Limits', () => {
 
     it('should indicate cannot create model if user is at model limit', async () => {
       const planCredits = 1000;
-      const planModels = 3;
+      const planModels = 10;
 
       prismaMock.user.findUnique.mockResolvedValueOnce({
         id: TEST_USER_ID,
@@ -167,7 +167,7 @@ describe('CreditService - Balance & Limits', () => {
 
     it('should indicate cannot generate image if user has zero credits', async () => {
       const planCredits = 1000;
-      const planModels = 5;
+      const planModels = 10;
       const expectedWarningThreshold = Math.floor(planCredits * 0.1);
 
       prismaMock.user.findUnique.mockResolvedValueOnce({
@@ -198,7 +198,7 @@ describe('CreditService - Balance & Limits', () => {
         subscriptionPlan: 'pro',
       } as any);
       
-      setupPlanMock({ id: 'pro', credits: planCredits, maxModels: 5 });
+      setupPlanMock({ id: 'pro', credits: planCredits, maxModels: 10 });
       prismaMock.userModel.count.mockResolvedValueOnce(0);
 
       const limits = await CreditService.checkUsageLimits(TEST_USER_ID);
@@ -217,7 +217,7 @@ describe('CreditService - Balance & Limits', () => {
         subscriptionPlan: 'pro',
       } as any);
       
-      setupPlanMock({ id: 'pro', credits: planCredits, maxModels: 5 });
+      setupPlanMock({ id: 'pro', credits: planCredits, maxModels: 10 });
       prismaMock.userModel.count.mockResolvedValueOnce(0);
 
       const limits = await CreditService.checkUsageLimits(TEST_USER_ID);
@@ -246,10 +246,10 @@ describe('CreditService - Balance & Limits', () => {
       const limits = await CreditService.checkUsageLimits(TEST_USER_ID);
 
       expect(limits.maxCreditsPerMonth).toBe(0);
-      expect(limits.maxModels).toBe(1);
+      expect(limits.maxModels).toBe(0);
       expect(limits.currentCredits).toBe(10);
       expect(limits.currentModels).toBe(0);
-      expect(limits.canCreateModel).toBe(true);
+      expect(limits.canCreateModel).toBe(false);
       expect(limits.canGenerateImage).toBe(true);
       expect(limits.warningThreshold).toBe(0);
       expect(limits.isNearLimit).toBe(false);
