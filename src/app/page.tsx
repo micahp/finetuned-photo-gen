@@ -93,39 +93,34 @@ export default function HomePage() {
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-          {PRICING_PLANS.map((plan) => (
+          {PRICING_PLANS.map((plan, index) => (
             <Card 
               key={plan.id} 
-              className={`relative ${plan.popular ? 'border-blue-500 border-2 shadow-lg' : ''}`}
+              className={`relative ${index === 1 ? 'border-blue-500 border-2 shadow-lg' : ''}`}
             >
-              {plan.popular && (
+              {index === 1 && (
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                   <Badge className="bg-brand-blue text-white">Most Popular</Badge>
                 </div>
               )}
               <CardHeader>
                 <CardTitle className="text-xl">{plan.name}</CardTitle>
-                <CardDescription className="text-sm">{plan.description}</CardDescription>
                 <div className="text-3xl font-bold">
-                  ${plan.price}
-                  {plan.price > 0 && <span className="text-sm text-gray-500">/month</span>}
+                  {plan.monthlyCredits} credits
+                  <span className="text-sm text-gray-500">/month</span>
                 </div>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2 text-sm">
-                  <li>✓ {plan.credits} AI generations per month</li>
-                  <li>✓ {plan.maxModels} personalized model{plan.maxModels !== 1 ? 's' : ''}</li>
-                  {plan.features.slice(2, 5).map((feature, index) => (
-                    <li key={index}>✓ {feature}</li>
-                  ))}
-                </ul>
+                <p className="text-sm text-gray-600 mb-4">
+                  Perfect for {plan.id === 'free' ? 'trying out' : plan.id === 'starter' ? 'getting started' : plan.id === 'creator' ? 'regular use' : 'power users'}
+                </p>
                 <Button 
                   asChild 
-                  className={`w-full mt-4 ${plan.popular ? 'bg-brand-blue hover:bg-blue-700' : ''}`}
-                  variant={plan.popular ? 'default' : 'outline'}
+                  className={`w-full ${index === 1 ? 'bg-brand-blue hover:bg-blue-700' : ''}`}
+                  variant={index === 1 ? 'default' : 'outline'}
                 >
                   <Link href="/register">
-                    {plan.buttonText}
+                    Get Started
                   </Link>
                 </Button>
               </CardContent>
