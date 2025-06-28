@@ -4,9 +4,9 @@
 
 // Per-action credit costs
 export const CREDIT_COSTS = {
-  photo: 1,
+  photo: 5,
   video: 5, // Base cost - actual video cost is calculated dynamically
-  edit: 1,
+  edit: 5,
   model_train: 100,
   model_upload: 10
 } as const;
