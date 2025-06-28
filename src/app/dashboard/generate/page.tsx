@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2, ChevronRight } from 'lucide-react'
+import { CreditCostHint } from '@/components/credits/CreditCostHint'
 import { TogetherAIService } from '@/lib/together-ai'
 import { SmartImage } from '@/components/ui/smart-image'
 import { isPremiumUser, isPremiumModel, getPremiumFeatures } from '@/lib/subscription-utils'
@@ -440,7 +441,7 @@ export default function GeneratePage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Generate Images</h1>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center">Generate Images <CreditCostHint action="photo" /></h1>
           <p className="text-gray-600 mt-2">
             Create stunning AI-generated images with FLUX models
           </p>

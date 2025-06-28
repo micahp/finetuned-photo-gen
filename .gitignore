@@ -47,3 +47,16 @@ next-env.d.ts
 
 /src/generated/prisma
 /public/uploads
+
+.roo
+.taskmaster
+.windsurf
+.vscode
+.trae
+.cursor
+.clinerules
+.roomodes
+
+
+AGENTS.md
+CLAUDE.md
