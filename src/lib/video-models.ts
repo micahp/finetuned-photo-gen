@@ -40,7 +40,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/bytedance/seedance/v1/pro/image-to-video',
     mode: 'image-to-video',
     maxDuration: 10,
-    costPerSecond: 12,
+    costPerSecond: 25,
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: {
       fps: 24,
@@ -55,7 +55,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/bytedance/seedance/v1/pro/text-to-video',
     mode: 'text-to-video',
     maxDuration: 10,
-    costPerSecond: 12,
+    costPerSecond: 25,
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: {
       fps: 24,
@@ -70,7 +70,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/bytedance/seedance/v1/lite/image-to-video',
     mode: 'image-to-video',
     maxDuration: 10,
-    costPerSecond: 8,
+    costPerSecond: 18,
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: {
       fps: 24,
@@ -85,7 +85,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/bytedance/seedance/v1/lite/text-to-video',
     mode: 'text-to-video',
     maxDuration: 10,
-    costPerSecond: 8,
+    costPerSecond: 18,
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: {
       fps: 24,
@@ -102,7 +102,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/pro/image-to-video',
     mode: 'image-to-video',
     maxDuration: 15,
-    costPerSecond: 14,
+    costPerSecond: 28,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -117,7 +117,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/pro/text-to-video',
     mode: 'text-to-video',
     maxDuration: 15,
-    costPerSecond: 14,
+    costPerSecond: 28,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -132,7 +132,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/standard/image-to-video',
     mode: 'image-to-video',
     maxDuration: 15,
-    costPerSecond: 11,
+    costPerSecond: 22,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -147,7 +147,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/standard/text-to-video',
     mode: 'text-to-video',
     maxDuration: 15,
-    costPerSecond: 11,
+    costPerSecond: 22,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -164,7 +164,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/veo3',
     mode: 'text-to-video',
     maxDuration: 30,
-    costPerSecond: 25,
+    costPerSecond: 50,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 30,
@@ -181,7 +181,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/kling-video/v2.1/master/image-to-video',
     mode: 'image-to-video',
     maxDuration: 20,
-    costPerSecond: 25,
+    costPerSecond: 55,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -196,7 +196,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/kling-video/v2.1/pro/image-to-video',
     mode: 'image-to-video',
     maxDuration: 20,
-    costPerSecond: 18,
+    costPerSecond: 36,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -211,7 +211,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/kling-video/v2.1/standard/image-to-video',
     mode: 'image-to-video',
     maxDuration: 20,
-    costPerSecond: 13,
+    costPerSecond: 26,
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -221,6 +221,30 @@ export const VIDEO_MODELS: VideoModel[] = [
     hasAudio: false,
   },
 ] 
+
+// Runtime pricing overrides
+// Allow dynamic adjustment of video pricing without code changes.
+// 1. Global multiplier via `VIDEO_PRICING_MULTIPLIER` (e.g. "0.8" for 20% discount)
+// 2. Model specific overrides via `VIDEO_MODEL_<MODEL_ID>_COST` where MODEL_ID is upper-case and non-alphanumeric chars replaced with `_`.
+const pricingMultiplierEnv = process.env.VIDEO_PRICING_MULTIPLIER
+const pricingMultiplier = pricingMultiplierEnv ? parseFloat(pricingMultiplierEnv) : 1
+
+if (!Number.isNaN(pricingMultiplier) && pricingMultiplier !== 1) {
+  VIDEO_MODELS.forEach(model => {
+    model.costPerSecond = Number((model.costPerSecond * pricingMultiplier).toFixed(2))
+  })
+}
+
+VIDEO_MODELS.forEach(model => {
+  const envKey = `VIDEO_MODEL_${model.id.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_COST`
+  const override = process.env[envKey]
+  if (override) {
+    const parsed = parseFloat(override)
+    if (!Number.isNaN(parsed)) {
+      model.costPerSecond = parsed
+    }
+  }
+})
 
 /**
  * Get audio capability information for a model by ID

@@ -106,8 +106,8 @@ export async function POST(req: NextRequest) {
             const appPlan = PRICING_PLANS.find(p => p.name.toLowerCase() === planName.toLowerCase());
 
             if (appPlan) {
-              if (appPlan.credits !== creditsToAllocate) {
-                console.warn(`⚠️ Stripe plan credit mismatch for "${planName}". App config: ${appPlan.credits}, Stripe: ${creditsToAllocate}. Using Stripe's value.`);
+              if (appPlan.monthlyCredits !== creditsToAllocate) {
+                console.warn(`⚠️ Stripe plan credit mismatch for "${planName}". App config: ${appPlan.monthlyCredits}, Stripe: ${creditsToAllocate}. Using Stripe's value.`);
               }
             } else {
               console.warn(`⚠️ Plan "${planName}" from Stripe not found in app configuration. Cannot verify credit amount.`);
