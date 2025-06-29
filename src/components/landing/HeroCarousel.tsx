@@ -9,6 +9,24 @@ import {
   VideoPerformanceMonitor,
   getOptimalQuality
 } from '@/lib/video-optimization';
+import { 
+  TouchGestureHandler, 
+  isTouchDevice, 
+  getDeviceOrientation,
+  addOrientationChangeListener,
+  isSlowDevice,
+  requestIdleCallback 
+} from '@/lib/touch-utils';
+import {
+  handleCarouselKeyboardNavigation,
+  CarouselKeyboardOptions,
+  announceToScreenReader,
+  prefersReducedMotion,
+  detectScreenReader,
+  validateAccessibility,
+  getVideoAccessibilityAttributes,
+  SCREEN_READER_ONLY_CLASS
+} from '@/lib/accessibility-utils';
 
 interface VideoSource {
   url: string;
@@ -26,6 +44,8 @@ interface HeroCarouselProps {
     title?: string;
     poster?: string;
     lowQualityPlaceholder?: string;
+    description?: string; // For accessibility
+    transcript?: string; // For accessibility
   }>;
   autoplayInterval?: number;
   className?: string;
@@ -33,6 +53,7 @@ interface HeroCarouselProps {
   enableAutoplay?: boolean;
   enableAdaptiveQuality?: boolean;
   preloadStrategy?: 'auto' | 'metadata' | 'none';
+  ariaLabel?: string; // Custom accessible name for the carousel
 }
 
 // Detect user connection quality
@@ -96,7 +117,8 @@ export function HeroCarousel({
   pauseOnHover = true,
   enableAutoplay = true,
   enableAdaptiveQuality = true,
-  preloadStrategy = 'metadata'
+  preloadStrategy = 'metadata',
+  ariaLabel
 }: HeroCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isCarouselPlaying, setIsCarouselPlaying] = useState(enableAutoplay);
@@ -105,9 +127,23 @@ export function HeroCarousel({
   const [estimatedBandwidth, setEstimatedBandwidth] = useState<number>(0);
   const [videoQualityMap, setVideoQualityMap] = useState<Map<string, 'low' | 'medium' | 'high'>>(new Map());
   
+  // Accessibility state
+  const [hasFocus, setHasFocus] = useState(false);
+  const [announceSlideChange, setAnnounceSlideChange] = useState(true);
+  const [isScreenReaderDetected, setIsScreenReaderDetected] = useState(false);
+  const [reducedMotionPreference, setReducedMotionPreference] = useState(false);
+  
+  // Mobile and touch state
+  const [isTouchEnabled, setIsTouchEnabled] = useState(false);
+  const [deviceOrientation, setDeviceOrientation] = useState<'portrait' | 'landscape'>('landscape');
+  const [isSlowConnection, setIsSlowConnection] = useState(false);
+  const [isSwiping, setIsSwiping] = useState(false);
+  
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const carouselIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const loadStartTimes = useRef<Map<number, number>>(new Map());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const touchHandler = useRef<TouchGestureHandler | null>(null);
   
   // Enhanced optimization utilities
   const bandwidthEstimator = useRef(new BandwidthEstimator());
@@ -117,6 +153,87 @@ export function HeroCarousel({
   
   const connectionQuality = useConnectionQuality();
   const deviceType = useDeviceType();
+
+  // Initialize mobile detection and touch support
+  useEffect(() => {
+    setIsTouchEnabled(isTouchDevice());
+    setDeviceOrientation(getDeviceOrientation());
+    setIsSlowConnection(isSlowDevice());
+
+    // Initialize accessibility settings
+    setIsScreenReaderDetected(detectScreenReader());
+    setReducedMotionPreference(prefersReducedMotion());
+
+    // Listen for orientation changes
+    const removeOrientationListener = addOrientationChangeListener((orientation) => {
+      setDeviceOrientation(orientation);
+    });
+
+    // Listen for reduced motion preference changes
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handleMotionChange = (e: MediaQueryListEvent) => {
+      setReducedMotionPreference(e.matches);
+      if (e.matches && isCarouselPlaying) {
+        setIsCarouselPlaying(false);
+        announceToScreenReader('Carousel paused due to reduced motion preference');
+      }
+    };
+    mediaQuery.addEventListener('change', handleMotionChange);
+
+    return () => {
+      removeOrientationListener();
+      mediaQuery.removeEventListener('change', handleMotionChange);
+    };
+  }, [isCarouselPlaying]);
+
+  // Initialize touch gesture handling
+  useEffect(() => {
+    if (!containerRef.current || !isTouchEnabled) return;
+
+    const touchOptions = {
+      minSwipeDistance: deviceType === 'mobile' ? 30 : 50,
+      maxSwipeTime: 600,
+      minVelocity: 0.2,
+      preventScroll: true,
+      enableMomentum: true,
+    };
+
+    touchHandler.current = new TouchGestureHandler(containerRef.current, touchOptions);
+
+    touchHandler.current
+      .setSwipeLeftCallback(() => {
+        if (videos.length > 1) {
+          const nextIndex = (currentIndex + 1) % videos.length;
+          setCurrentIndex(nextIndex);
+        }
+      })
+      .setSwipeRightCallback(() => {
+        if (videos.length > 1) {
+          const prevIndex = (currentIndex - 1 + videos.length) % videos.length;
+          setCurrentIndex(prevIndex);
+        }
+      })
+      .setTouchStartCallback(() => {
+        setIsSwiping(true);
+        // Pause carousel during swipe
+        if (isCarouselPlaying) {
+          setIsCarouselPlaying(false);
+        }
+      })
+      .setTouchEndCallback((gesture) => {
+        setIsSwiping(false);
+        // Resume carousel after swipe if it was playing
+        if (enableAutoplay && !gesture) {
+          requestIdleCallback(() => {
+            setIsCarouselPlaying(true);
+          });
+        }
+      });
+
+    return () => {
+      touchHandler.current?.destroy();
+    };
+  }, [currentIndex, videos.length, isCarouselPlaying, enableAutoplay, deviceType, isTouchEnabled]);
 
   // Initialize bandwidth estimation
   useEffect(() => {
@@ -196,31 +313,45 @@ export function HeroCarousel({
     }
   }, [getOptimalVideoSource, estimatedBandwidth]);
 
-  // Preload adjacent videos intelligently
+  // Enhanced preload strategy for mobile devices
   const preloadAdjacentVideos = useCallback(() => {
     if (!enableAutoplay || videos.length <= 1) return;
 
     const nextIndex = (currentIndex + 1) % videos.length;
     const prevIndex = (currentIndex - 1 + videos.length) % videos.length;
 
-    // Preload next video (higher priority)
+    // Mobile-optimized preloading strategy
+    const shouldPreloadPrevious = !isSlowConnection && 
+      connectionQuality !== 'low' && 
+      deviceType !== 'mobile';
+
+    // Always preload next video (higher priority)
     if (!loadedVideos.has(nextIndex)) {
       const nextVideo = videoRefs.current[nextIndex];
       const nextVideoData = videos[nextIndex];
       if (nextVideo && nextVideoData && nextVideo.readyState < 2) {
-        loadVideoWithPlaceholder(nextVideoData, nextVideo);
+        // Use low-quality placeholder for mobile on slow connections
+        if (deviceType === 'mobile' && isSlowConnection) {
+          requestIdleCallback(() => {
+            loadVideoWithPlaceholder(nextVideoData, nextVideo);
+          });
+        } else {
+          loadVideoWithPlaceholder(nextVideoData, nextVideo);
+        }
       }
     }
 
-    // Preload previous video if connection is good
-    if (connectionQuality !== 'low' && !loadedVideos.has(prevIndex)) {
+    // Preload previous video only on desktop or fast connections
+    if (shouldPreloadPrevious && !loadedVideos.has(prevIndex)) {
       const prevVideo = videoRefs.current[prevIndex];
       const prevVideoData = videos[prevIndex];
       if (prevVideo && prevVideoData && prevVideo.readyState < 2) {
-        loadVideoWithPlaceholder(prevVideoData, prevVideo);
+        requestIdleCallback(() => {
+          loadVideoWithPlaceholder(prevVideoData, prevVideo);
+        }, 1000);
       }
     }
-  }, [currentIndex, videos, loadedVideos, connectionQuality, enableAutoplay, loadVideoWithPlaceholder]);
+  }, [currentIndex, videos, loadedVideos, connectionQuality, enableAutoplay, loadVideoWithPlaceholder, isSlowConnection, deviceType]);
 
   // Auto-advance carousel with accessibility consideration
   useEffect(() => {
@@ -338,12 +469,117 @@ export function HeroCarousel({
 
   // Manual navigation
   const goToSlide = (index: number) => {
-    setCurrentIndex(index);
+    if (index >= 0 && index < videos.length && index !== currentIndex) {
+      setCurrentIndex(index);
+      if (announceSlideChange) {
+        announceToScreenReader(`Moved to slide ${index + 1} of ${videos.length}: ${videos[index]?.title || 'Video'}`);
+      }
+    }
   };
 
   const toggleCarouselPlayback = () => {
-    setIsCarouselPlaying(!isCarouselPlaying);
+    const newPlayingState = !isCarouselPlaying;
+    setIsCarouselPlaying(newPlayingState);
+    
+    // Announce state change
+    if (announceSlideChange) {
+      announceToScreenReader(newPlayingState ? 'Carousel playing' : 'Carousel paused');
+    }
   };
+
+  // Navigation functions for keyboard handling
+  const goToNextSlide = useCallback(() => {
+    const nextIndex = (currentIndex + 1) % videos.length;
+    goToSlide(nextIndex);
+  }, [currentIndex, videos.length]);
+
+  const goToPreviousSlide = useCallback(() => {
+    const prevIndex = (currentIndex - 1 + videos.length) % videos.length;
+    goToSlide(prevIndex);
+  }, [currentIndex, videos.length]);
+
+  const goToFirstSlide = useCallback(() => {
+    goToSlide(0);
+  }, []);
+
+  const goToLastSlide = useCallback(() => {
+    goToSlide(videos.length - 1);
+  }, [videos.length]);
+
+  // Keyboard navigation handler
+  const handleKeyboardNavigation = useCallback((event: KeyboardEvent) => {
+    if (!hasFocus) return;
+
+    const keyboardOptions: CarouselKeyboardOptions = {
+      onNext: goToNextSlide,
+      onPrevious: goToPreviousSlide,
+      onPause: () => setIsCarouselPlaying(false),
+      onPlay: () => setIsCarouselPlaying(true),
+      onHome: goToFirstSlide,
+      onEnd: goToLastSlide,
+      isPlaying: isCarouselPlaying,
+      currentIndex,
+      totalSlides: videos.length,
+    };
+
+    const handled = handleCarouselKeyboardNavigation(event, keyboardOptions);
+    
+    // Additional keyboard handling for accessibility
+    if (!handled && event.key === 'Tab') {
+      // Allow tab navigation but pause carousel temporarily
+      if (isCarouselPlaying) {
+        setIsCarouselPlaying(false);
+        setTimeout(() => {
+          if (!hasFocus) setIsCarouselPlaying(true);
+        }, 3000); // Resume after 3 seconds if focus leaves
+      }
+    }
+  }, [
+    hasFocus,
+    goToNextSlide,
+    goToPreviousSlide,
+    goToFirstSlide,
+    goToLastSlide,
+    isCarouselPlaying,
+    currentIndex,
+    videos.length,
+  ]);
+
+  // Focus management
+  const handleFocus = useCallback(() => {
+    setHasFocus(true);
+    if (isCarouselPlaying && (pauseOnHover || isScreenReaderDetected)) {
+      setIsCarouselPlaying(false);
+    }
+  }, [isCarouselPlaying, pauseOnHover, isScreenReaderDetected]);
+
+  const handleBlur = useCallback(() => {
+    setHasFocus(false);
+    // Resume autoplay after a brief delay if it was originally enabled
+    if (enableAutoplay && !reducedMotionPreference) {
+      setTimeout(() => {
+        if (!hasFocus && !isHovered) {
+          setIsCarouselPlaying(true);
+        }
+      }, 1000);
+    }
+  }, [enableAutoplay, reducedMotionPreference, hasFocus, isHovered]);
+
+  // Add keyboard navigation support
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const container = containerRef.current;
+    container.addEventListener('keydown', handleKeyboardNavigation);
+    container.addEventListener('focus', handleFocus);
+    container.addEventListener('blur', handleBlur);
+
+    return () => {
+      container.removeEventListener('keydown', handleKeyboardNavigation);
+      container.removeEventListener('focus', handleFocus);
+      container.removeEventListener('blur', handleBlur);
+    };
+  }, [handleKeyboardNavigation, handleFocus, handleBlur]);
 
   // Determine preload value based on strategy and position
   const getPreloadValue = (index: number) => {
@@ -357,15 +593,50 @@ export function HeroCarousel({
 
   return (
     <motion.div
-      className={`relative w-full h-full overflow-hidden rounded-lg ${className}`}
+      ref={containerRef}
+      className={`relative w-full h-full overflow-hidden rounded-lg focus-visible ${className} ${
+        isSwiping ? 'cursor-grabbing' : isTouchEnabled ? 'cursor-grab' : ''
+      }`}
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.5 }}
+      transition={{ 
+        duration: reducedMotionPreference ? 0 : 0.5,
+        ease: "easeOut"
+      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      role="region"
+      aria-label={ariaLabel || "Video carousel"}
+      aria-describedby="carousel-instructions"
+      aria-roledescription="carousel"
+      tabIndex={0}
+      style={{
+        // Optimize for touch devices
+        touchAction: isTouchEnabled ? 'pan-y pinch-zoom' : 'auto',
+        WebkitTapHighlightColor: 'transparent',
+      }}
     >
+      {/* Screen reader instructions */}
+      <div id="carousel-instructions" className={SCREEN_READER_ONLY_CLASS}>
+        Use arrow keys to navigate between slides. Press space to pause or play the carousel. 
+        Press home to go to the first slide, end for the last slide.
+        {videos.length > 0 && ` Currently showing slide ${currentIndex + 1} of ${videos.length}.`}
+      </div>
+
+      {/* Live region for announcements */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className={SCREEN_READER_ONLY_CLASS}
+        id="carousel-announcements"
+      />
+
       {/* Video Container */}
-      <div className="relative w-full h-full bg-photoai-dark">
+      <div 
+        className="relative w-full h-full bg-photoai-dark"
+        role="group"
+        aria-label="Video slides"
+      >
         {videos.length > 0 ? (
           videos.map((video, index) => (
             <motion.div
@@ -373,12 +644,18 @@ export function HeroCarousel({
               className="absolute inset-0"
               initial={{ opacity: 0 }}
               animate={{ opacity: index === currentIndex ? 1 : 0 }}
-              transition={{ duration: 0.5 }}
+              transition={{ 
+                duration: reducedMotionPreference ? 0 : 0.5,
+                ease: "easeInOut"
+              }}
+              role="group"
+              aria-label={`Slide ${index + 1} of ${videos.length}`}
+              aria-hidden={index !== currentIndex}
             >
               <video
                 ref={(el) => setVideoRef(el, index)}
                 className="w-full h-full object-cover"
-                autoPlay={index === currentIndex && accessibilitySettings.autoplay}
+                autoPlay={index === currentIndex && accessibilitySettings.autoplay && !reducedMotionPreference}
                 muted
                 playsInline
                 loop
@@ -390,7 +667,17 @@ export function HeroCarousel({
                 preload={getPreloadValue(index)}
                 crossOrigin="anonymous"
                 controls={accessibilitySettings.showControls}
-                aria-label={video.title || `Hero video ${index + 1}`}
+                aria-label={`${video.title || `Video ${index + 1}`}${video.description ? `. ${video.description}` : ''}`}
+                aria-describedby={video.transcript ? `transcript-${video.id}` : undefined}
+                tabIndex={index === currentIndex ? 0 : -1}
+                {...getVideoAccessibilityAttributes(
+                  videoRefs.current[index] || document.createElement('video'),
+                  {
+                    includeTranscript: !!video.transcript,
+                    respectReducedMotion: true,
+                    autoplayAllowed: !reducedMotionPreference,
+                  }
+                )}
               >
                 {/* Multiple source support for optimal delivery */}
                 {video.sources && video.sources.length > 0 ? (
@@ -413,6 +700,16 @@ export function HeroCarousel({
               
               {/* Video overlay for better text readability */}
               <div className="absolute inset-0 bg-black/20" />
+
+              {/* Video transcript for accessibility */}
+              {video.transcript && (
+                <div 
+                  id={`transcript-${video.id}`}
+                  className={SCREEN_READER_ONLY_CLASS}
+                >
+                  Video transcript: {video.transcript}
+                </div>
+              )}
               
               {/* Loading indicator for current video */}
               {index === currentIndex && !loadedVideos.has(index) && (
@@ -448,45 +745,152 @@ export function HeroCarousel({
         )}
       </div>
 
-      {/* Navigation Dots */}
+      {/* Mobile Navigation Arrows - Visible on Touch Devices */}
+      {isTouchEnabled && videos.length > 1 && deviceType === 'mobile' && (
+        <>
+          <button
+            onClick={goToPreviousSlide}
+            className="absolute left-2 top-1/2 transform -translate-y-1/2 w-12 h-12 bg-black/50 hover:bg-black/70 active:bg-black/80 rounded-full flex items-center justify-center transition-colors z-10 focus-visible"
+            aria-label={`Previous slide. Currently on slide ${currentIndex + 1} of ${videos.length}${videos[currentIndex]?.title ? `: ${videos[currentIndex].title}` : ''}`}
+            aria-describedby="carousel-instructions"
+            tabIndex={0}
+            style={{
+              minWidth: '44px',
+              minHeight: '44px',
+            }}
+          >
+            <div className="w-0 h-0 border-r-4 border-r-white border-t-3 border-t-transparent border-b-3 border-b-transparent mr-1" />
+            <span className={SCREEN_READER_ONLY_CLASS}>Previous slide</span>
+          </button>
+          
+          <button
+            onClick={goToNextSlide}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 w-12 h-12 bg-black/50 hover:bg-black/70 active:bg-black/80 rounded-full flex items-center justify-center transition-colors z-10 focus-visible"
+            aria-label={`Next slide. Currently on slide ${currentIndex + 1} of ${videos.length}${videos[currentIndex]?.title ? `: ${videos[currentIndex].title}` : ''}`}
+            aria-describedby="carousel-instructions"
+            tabIndex={0}
+            style={{
+              minWidth: '44px',
+              minHeight: '44px',
+            }}
+          >
+            <div className="w-0 h-0 border-l-4 border-l-white border-t-3 border-t-transparent border-b-3 border-b-transparent ml-1" />
+            <span className={SCREEN_READER_ONLY_CLASS}>Next slide</span>
+          </button>
+        </>
+      )}
+
+      {/* Enhanced Navigation Dots - Touch Optimized with Accessibility */}
       {videos.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
-          {videos.map((_, index) => (
+        <div 
+          className={`absolute ${
+            deviceType === 'mobile' ? 'bottom-6' : 'bottom-4'
+          } left-1/2 transform -translate-x-1/2 flex ${
+            deviceType === 'mobile' ? 'space-x-4' : 'space-x-2'
+          }`}
+          role="tablist"
+          aria-label="Slide navigation"
+          aria-describedby="carousel-instructions"
+        >
+          {videos.map((video, index) => (
             <button
               key={index}
               onClick={() => goToSlide(index)}
-              className={`w-2 h-2 rounded-full transition-all duration-300 ${
+              className={`${
+                deviceType === 'mobile' ? 'w-3 h-3 p-2' : 'w-2 h-2'
+              } rounded-full transition-all duration-300 focus-visible ${
                 index === currentIndex 
                   ? 'bg-photoai-accent-cyan shadow-lg shadow-photoai-accent-cyan/50' 
-                  : 'bg-white/30 hover:bg-white/50'
+                  : 'bg-white/30 hover:bg-white/50 active:bg-white/70'
+              } ${
+                deviceType === 'mobile' 
+                  ? 'min-w-[44px] min-h-[44px] flex items-center justify-center' 
+                  : ''
               }`}
-              aria-label={`Go to slide ${index + 1}`}
-            />
+              aria-label={`Go to slide ${index + 1}${video.title ? `: ${video.title}` : ''}`}
+              aria-current={index === currentIndex ? 'true' : 'false'}
+              aria-selected={index === currentIndex}
+              role="tab"
+              tabIndex={index === currentIndex ? 0 : -1}
+              style={{
+                // Ensure minimum touch target size (44px)
+                minWidth: deviceType === 'mobile' ? '44px' : 'auto',
+                minHeight: deviceType === 'mobile' ? '44px' : 'auto',
+              }}
+            >
+              {deviceType === 'mobile' && (
+                <div className={`w-3 h-3 rounded-full ${
+                  index === currentIndex 
+                    ? 'bg-photoai-accent-cyan' 
+                    : 'bg-white/50'
+                }`} />
+              )}
+              <span className={SCREEN_READER_ONLY_CLASS}>
+                Slide {index + 1} of {videos.length}
+                {index === currentIndex && ' (current)'}
+              </span>
+            </button>
           ))}
         </div>
       )}
 
-      {/* Play/Pause Control */}
-      <button
-        onClick={toggleCarouselPlayback}
-        className="absolute top-4 right-4 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center transition-colors"
-        aria-label={isCarouselPlaying ? 'Pause carousel' : 'Play carousel'}
-      >
-        {isCarouselPlaying ? (
-          <div className="w-3 h-3 flex space-x-0.5">
-            <div className="w-1 h-3 bg-white"></div>
-            <div className="w-1 h-3 bg-white"></div>
-          </div>
-        ) : (
-          <div className="w-0 h-0 border-l-3 border-l-white border-t-2 border-t-transparent border-b-2 border-b-transparent ml-0.5" />
-        )}
-      </button>
+      {/* Enhanced Play/Pause Control - Touch Optimized with Full Accessibility */}
+      {enableAutoplay && (
+        <button
+          onClick={toggleCarouselPlayback}
+          className={`absolute ${
+            deviceType === 'mobile' ? 'top-4 right-4 w-12 h-12' : 'top-4 right-4 w-8 h-8'
+          } bg-black/50 hover:bg-black/70 active:bg-black/80 rounded-full flex items-center justify-center transition-colors focus-visible z-20`}
+          aria-label={`${isCarouselPlaying ? 'Pause' : 'Play'} carousel autoplay. Currently ${isCarouselPlaying ? 'playing' : 'paused'}.`}
+          aria-pressed={isCarouselPlaying}
+          aria-describedby="carousel-instructions"
+          tabIndex={0}
+          style={{
+            // Ensure minimum touch target size
+            minWidth: deviceType === 'mobile' ? '44px' : 'auto',
+            minHeight: deviceType === 'mobile' ? '44px' : 'auto',
+          }}
+        >
+          {isCarouselPlaying ? (
+            <>
+              <div className={`${
+                deviceType === 'mobile' ? 'w-4 h-4' : 'w-3 h-3'
+              } flex space-x-0.5 items-center justify-center`}>
+                <div className={`${
+                  deviceType === 'mobile' ? 'w-1.5 h-4' : 'w-1 h-3'
+                } bg-white rounded-sm`}></div>
+                <div className={`${
+                  deviceType === 'mobile' ? 'w-1.5 h-4' : 'w-1 h-3'
+                } bg-white rounded-sm`}></div>
+              </div>
+              <span className={SCREEN_READER_ONLY_CLASS}>Pause autoplay</span>
+            </>
+          ) : (
+            <>
+              <div className={`w-0 h-0 ${
+                deviceType === 'mobile' 
+                  ? 'border-l-4 border-l-white border-t-3 border-t-transparent border-b-3 border-b-transparent ml-1' 
+                  : 'border-l-3 border-l-white border-t-2 border-t-transparent border-b-2 border-b-transparent ml-0.5'
+              }`} />
+              <span className={SCREEN_READER_ONLY_CLASS}>Resume autoplay</span>
+            </>
+          )}
+        </button>
+      )}
 
-      {/* Performance indicator (dev mode) */}
+      {/* Enhanced Performance Indicator (dev mode) */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="absolute top-4 left-4 text-xs text-white/60 bg-black/50 p-2 rounded space-y-1">
+        <div className={`absolute ${
+          deviceType === 'mobile' ? 'top-16 left-2 text-[10px]' : 'top-4 left-4 text-xs'
+        } text-white/60 bg-black/50 p-2 rounded space-y-1 ${
+          deviceType === 'mobile' ? 'max-w-[200px]' : ''
+        }`}>
           <div>Connection: {connectionQuality}</div>
           <div>Device: {deviceType}</div>
+          <div>Orientation: {deviceOrientation}</div>
+          <div>Touch: {isTouchEnabled ? 'Yes' : 'No'}</div>
+          <div>Slow Device: {isSlowConnection ? 'Yes' : 'No'}</div>
+          <div>Swiping: {isSwiping ? 'Yes' : 'No'}</div>
           <div>Loaded: {loadedVideos.size}/{videos.length}</div>
           <div>Bandwidth: {Math.round(estimatedBandwidth)}kbps</div>
           <div>Quality Score: {Math.round(performanceMonitor.current.getOverallQualityScore())}</div>
@@ -494,25 +898,51 @@ export function HeroCarousel({
         </div>
       )}
 
-      {/* Loading progress bar */}
+      {/* Accessible Loading progress bar */}
       {videos.length > 0 && accessibilitySettings.autoplay && (
-        <div className="absolute bottom-1 left-4 right-4">
+        <div 
+          className="absolute bottom-1 left-4 right-4"
+          role="progressbar"
+          aria-label="Slide transition progress"
+          aria-valuenow={isCarouselPlaying && !isHovered ? 50 : 0}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-hidden={!isCarouselPlaying || isHovered}
+        >
           <div className="w-full bg-white/20 h-0.5 rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-photoai-accent-cyan"
               initial={{ width: '0%' }}
               animate={{ 
-                width: isCarouselPlaying && !isHovered ? '100%' : '0%' 
+                width: isCarouselPlaying && !isHovered && !reducedMotionPreference ? '100%' : '0%' 
               }}
               transition={{ 
-                duration: autoplayInterval / 1000,
+                duration: reducedMotionPreference ? 0 : autoplayInterval / 1000,
                 ease: 'linear',
-                repeat: isCarouselPlaying && !isHovered ? Infinity : 0
+                repeat: isCarouselPlaying && !isHovered && !reducedMotionPreference ? Infinity : 0
               }}
             />
           </div>
         </div>
       )}
+
+      {/* Final status announcement for screen readers */}
+      <div
+        aria-live="polite"
+        aria-atomic="false"
+        className={SCREEN_READER_ONLY_CLASS}
+        id="carousel-status"
+      >
+        {videos.length > 0 && (
+          <>
+            Video carousel with {videos.length} slides. 
+            Currently on slide {currentIndex + 1}: {videos[currentIndex]?.title || 'Video'}.
+            Autoplay is {isCarouselPlaying ? 'playing' : 'paused'}.
+            {reducedMotionPreference && ' Motion reduced per user preference.'}
+            {isScreenReaderDetected && ' Screen reader detected - enhanced accessibility active.'}
+          </>
+        )}
+      </div>
     </motion.div>
   );
 } 
