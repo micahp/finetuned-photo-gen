@@ -6,45 +6,22 @@ import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { HeroCarousel } from './HeroCarousel';
 import { useState, useEffect } from 'react';
+import { generateDemoVideos, OptimizedVideo, createVideoPreloadLinks } from '@/lib/video-optimization';
 
 interface HeroSectionProps {
-  videos?: Array<{
-    id: string;
-    url: string;
-    thumbnail: string;
-    title?: string;
-    poster?: string;
-  }>;
+  videos?: OptimizedVideo[];
   className?: string;
 }
 
-// Mock data for demonstration - replace with actual video content
-const defaultVideos = [
-  {
-    id: 'video1',
-    url: '/api/placeholder-video', // This will need to be replaced with actual video URLs
-    thumbnail: '/placeholder-thumbnail-1.jpg',
-    poster: '/placeholder-poster-1.jpg',
-    title: 'AI Portrait Generation'
-  },
-  {
-    id: 'video2', 
-    url: '/api/placeholder-video',
-    thumbnail: '/placeholder-thumbnail-2.jpg',
-    poster: '/placeholder-poster-2.jpg',
-    title: 'Custom Style Training'
-  },
-  {
-    id: 'video3',
-    url: '/api/placeholder-video', 
-    thumbnail: '/placeholder-thumbnail-3.jpg',
-    poster: '/placeholder-poster-3.jpg',
-    title: 'Professional Results'
-  }
-];
-
-export function HeroSection({ videos = defaultVideos, className = '' }: HeroSectionProps) {
+export function HeroSection({ videos, className = '' }: HeroSectionProps) {
   const [userCount, setUserCount] = useState(0);
+  const [optimizedVideos, setOptimizedVideos] = useState<OptimizedVideo[]>([]);
+
+  // Initialize optimized demo videos
+  useEffect(() => {
+    const demoVideos = videos || generateDemoVideos();
+    setOptimizedVideos(demoVideos);
+  }, [videos]);
 
   // Animate user count on component mount
   useEffect(() => {
@@ -68,12 +45,23 @@ export function HeroSection({ videos = defaultVideos, className = '' }: HeroSect
 
   return (
     <div className={`relative min-h-screen flex items-center justify-center overflow-hidden ${className}`}>
+      {/* Video preload optimization */}
+      {optimizedVideos.length > 0 && (
+        <div 
+          dangerouslySetInnerHTML={{ 
+            __html: createVideoPreloadLinks(optimizedVideos, 2) 
+          }} 
+        />
+      )}
+
       {/* Background Video Carousel */}
       <div className="absolute inset-0 z-0">
         <HeroCarousel 
-          videos={videos}
+          videos={optimizedVideos}
           autoplayInterval={6000}
           pauseOnHover={false}
+          enableAdaptiveQuality={true}
+          preloadStrategy="metadata"
           className="w-full h-full"
         />
         {/* Dark overlay for text readability */}
