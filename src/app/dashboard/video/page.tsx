@@ -13,6 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Slider } from '@/components/ui/slider'
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import imagePrompts from './moreImagePrompts.json'
 import { 
   Loader2, 
   Play, 
@@ -80,13 +81,18 @@ const TEXT_TO_VIDEO_PROMPTS: string[] = [
   "A Galactic Smuggler is a rogue figure with a cybernetic arm and a well-worn coat that hints at many dangerous escapades across the galaxy. Their ship is filled with rare and exotic treasures from distant planets, concealed in hidden compartments, showing their expertise in illicit trade. Their belt is adorned with energy-based weapons, ready to be drawn at any moment to protect themselves or escape from tight situations. This character thrives in the shadows of space, navigating between the law and chaos with stealth and wit, always seeking the next big score while evading bounty hunters and law enforcement. The rogue's ship, rugged yet efficient, serves as both a home and a tool for their dangerous lifestyle. The treasures they collect reflect the diverse and intriguing worlds they've encountered—alien artifacts, rare minerals, and artifacts of unknown origin. Their reputation precedes them, with whispers of their dealings and the deadly encounters that often follow. A master of negotiation and deception, the Galactic Smuggler navigates the cosmos with an eye on the horizon, always one step ahead of those who pursue them.",
   // Veo 3 – Text → Video
   "A casual street interview on a busy New York City sidewalk in the afternoon. The interviewer holds a plain, unbranded microphone and asks: Have you seen Google's new Veo3 model? It is a super good model. Person replies: Yeah I saw it, it's already available on fal. It's crazy good.",
+  ...imagePrompts,
 ]
+
+
 
 const IMAGE_TO_VIDEO_PROMPTS: string[] = [
   // Seedance 1.0 Pro – Image → Video
   "A skier glides over fresh snow, joyously smiling while kicking up large clouds of snow as he turns. Accelerating gradually down the slope, the camera moves smoothly alongside.",
   // Seedance 1.0 Lite – Image → Video
   "A little dog is running in the sunshine. The camera follows the dog as it plays in a garden.",
+  // Fal framepack
+  "A mesmerising video of a deep sea jellyfish moving through an inky-black ocean. The jellyfish glows softly with an amber bioluminescence. The overall scene is lifelike.",
   // Hailuo 02 – Image → Video
   "Man walked into winter cave with polar bear.",
   // Kling 2.1 Master – Image → Video
@@ -411,10 +417,10 @@ export default function VideoGenerationPage() {
                       <CardTitle className="flex items-center gap-2">
                         <Film className="h-5 w-5" />
                         Video Model
-                        <TooltipProvider>
-                          <Tooltip>
+                        <TooltipProvider delayDuration={0} data-state="instant-open">
+                          <Tooltip delayDuration={0}>
                             <TooltipTrigger asChild>
-                              <Info className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                              <Info className="h-4 w-4 text-gray-400 hover:text-gray-600" />
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs">
                               <div className="space-y-2">
