@@ -117,7 +117,11 @@ export function HeroCarousel({
     const currentVideo = videoRefs.current.get(videos[currentIndex]?.id);
     if (currentVideo) {
       if (isPlaying && !isPaused) {
-        currentVideo.play().catch(console.warn);
+        currentVideo.play().catch(error => {
+          console.error(`Failed to play video ${videos[currentIndex]?.id}:`, error);
+          // Optionally, stop trying to play if it consistently fails
+          // setIsPlaying(false);
+        });
       } else {
         currentVideo.pause();
       }
@@ -174,6 +178,7 @@ export function HeroCarousel({
                 loop
                 playsInline
                 aria-label={video.description || video.title || `Video ${index + 1}`}
+                onError={(e) => console.error(`Video error for ${video.id}:`, e.currentTarget.error)}
               />
               
               {/* Video Overlay with Title */}

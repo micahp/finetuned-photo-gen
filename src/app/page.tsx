@@ -28,7 +28,7 @@ export default function HomePage() {
             id: 'video1',
             sources: [
               {
-                url: '/videos/wan-i2v-example.mp4',
+                url: '/videos/seedance_pro_t2v.mp4',
                 type: 'video/mp4'
               }
             ],
@@ -42,7 +42,7 @@ export default function HomePage() {
             id: 'video2',
             sources: [
               {
-                url: '/videos/kangaroo.mp4',
+                url: '/videos/director.mp4',
                 type: 'video/mp4'
               }
             ],
@@ -50,13 +50,12 @@ export default function HomePage() {
             poster: '/selfies/kangaroo-thumb.jpg',
             title: 'Kangaroo Video',
             description: 'A kangaroo in motion captured by FAL.',
-            lowQualityPlaceholder: '/selfies/kangaroo-thumb.jpg'
           },
           {
             id: 'video3',
             sources: [
               {
-                url: '/videos/framepack.mp4',
+                url: '/videos/video3.mp4',
                 type: 'video/mp4'
               }
             ],
@@ -68,7 +67,7 @@ export default function HomePage() {
           }
         ]}
         autoplayInterval={5000}
-        pauseOnHover={true}
+        // pauseOnHover={true}
         enableAutoplay={true}
         enableAdaptiveQuality={true}
         preloadStrategy="metadata"
