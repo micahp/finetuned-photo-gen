@@ -171,10 +171,13 @@ export class FalVideoService {
           // Log entire result object for debugging
           console.dir(result, { depth: 5 })
           
-          // Handle successful response
-          if (result.video && result.video.url) {
-            const videoUrl = result.video.url
-            const thumbnailUrl = result.image?.url || null
+          // Fal may return { video, image } or { data: { video, image } }
+          const videoFile = (result.video || result.data?.video) as any
+          const imageFile = (result.image || result.data?.image) as any
+
+          if (videoFile && videoFile.url) {
+            const videoUrl = videoFile.url
+            const thumbnailUrl = imageFile?.url || null
 
             // Process and upload video to CloudFlare R2
             const processedVideo = await this.processAndUploadVideo(
@@ -277,10 +280,13 @@ export class FalVideoService {
           // Log entire result object for debugging
           console.dir(result, { depth: 5 })
           
-          // Handle successful response
-          if (result.video && result.video.url) {
-            const videoUrl = result.video.url
-            const thumbnailUrl = result.image?.url || null
+          // Fal may return { video, image } or { data: { video, image } }
+          const videoFile = (result.video || result.data?.video) as any
+          const imageFile = (result.image || result.data?.image) as any
+
+          if (videoFile && videoFile.url) {
+            const videoUrl = videoFile.url
+            const thumbnailUrl = imageFile?.url || null
 
             // Process and upload video to CloudFlare R2
             const processedVideo = await this.processAndUploadVideo(
