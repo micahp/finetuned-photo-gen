@@ -86,7 +86,7 @@ export class FalVideoService {
         model: model.name,
         mode: model.mode,
         prompt: params.prompt.substring(0, 100) + '...',
-        duration: params.duration || model.defaultParams.fps,
+        duration: params.duration || 5,
         aspectRatio: params.aspectRatio || '16:9',
         hasImage: !!params.imageBuffer
       })
@@ -114,6 +114,11 @@ export class FalVideoService {
           seed: params.seed
         }
 
+        // Add aspect ratio for text-to-video models
+        if (model.mode === 'text-to-video') {
+          requestPayload.aspect_ratio = params.aspectRatio || '16:9'
+        }
+
         // For image-to-video models, handle image upload
         if (model.mode === 'image-to-video' && params.imageBuffer) {
           // Convert image buffer to base64 data URL for Fal.ai
@@ -136,74 +141,96 @@ export class FalVideoService {
           // Use async processing with webhooks
           console.log('🔗 Using async processing with webhook:', webhookUrl)
           
-          const result = await fal.subscribe(model.falModelId, {
-            input: requestPayload,
-            webhookUrl: webhookUrl,
-            onQueueUpdate: (update) => {
-              console.log('📊 Queue update:', update)
+          try {
+            const result = await fal.subscribe(model.falModelId, {
+              input: requestPayload,
+              webhookUrl: webhookUrl,
+              onQueueUpdate: (update) => {
+                console.log('📊 Queue update:', update)
+              }
+            })
+            
+            console.log('✅ Fal.ai async job submitted:', {
+              requestId: result.requestId,
+              status: 'processing'
+            })
+            
+            return {
+              id: result.requestId,
+              status: 'processing'
             }
-          })
-          
-          console.log('✅ Fal.ai async job submitted:', {
-            requestId: result.requestId,
-            status: 'processing'
-          })
-          
-          return {
-            id: result.requestId,
-            status: 'processing'
+          } catch (error) {
+            console.error('❌ Fal.ai async job submission failed:', error)
+            return {
+              id: `fal_error_${Date.now()}`,
+              status: 'failed',
+              error: `Async job submission failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+            }
           }
         } else {
           // Fallback to synchronous processing
           console.log('⚠️ No webhook URL configured, using synchronous processing')
           
-          const result = await fal.run(model.falModelId, {
-            input: requestPayload
-          }) as any
-          
-          console.log('✅ Fal.ai Seedance video generation completed:', {
-            requestId: result.request_id,
-            hasVideo: !!result.video,
-            hasImage: !!result.image,
-            seed: result.seed
-          })
-          
-          // Log entire result object for debugging
-          console.dir(result, { depth: 5 })
-          
-          // Fal may return { video, image } or { data: { video, image } }
-          const videoFile = (result.video || result.data?.video) as any
-          const imageFile = (result.image || result.data?.image) as any
+          try {
+            const result = await fal.run(model.falModelId, {
+              input: requestPayload
+            }) as any
+            
+            console.log('✅ Fal.ai Seedance video generation completed:', {
+              requestId: result.request_id,
+              hasVideo: !!result.video,
+              hasImage: !!result.image,
+              seed: result.seed
+            })
+            
+            // Log entire result object for debugging
+            console.dir(result, { depth: 5 })
+            
+            // Fal may return { video, image } or { data: { video, image } }
+            const videoFile = (result.video || result.data?.video) as any
+            const imageFile = (result.image || result.data?.image) as any
 
-          if (videoFile && videoFile.url) {
-            const videoUrl = videoFile.url
-            const thumbnailUrl = imageFile?.url || null
+            if (videoFile && videoFile.url) {
+              const videoUrl = videoFile.url
+              const thumbnailUrl = imageFile?.url || null
 
-            // Process and upload video to CloudFlare R2
-            const processedVideo = await this.processAndUploadVideo(
-              videoUrl,
-              thumbnailUrl,
-              `video_${Date.now()}.mp4`
-            )
+              // Process and upload video to CloudFlare R2
+              const processedVideo = await this.processAndUploadVideo(
+                videoUrl,
+                thumbnailUrl,
+                `video_${Date.now()}.mp4`
+              )
 
-            return {
-              id: result.request_id || `fal_seedance_${Date.now()}`,
-              status: 'completed',
-              videoUrl: processedVideo.videoUrl,
-              thumbnailUrl: processedVideo.thumbnailUrl,
-              duration: duration,
-              fileSize: processedVideo.fileSize,
-              width: 1344, // Seedance 720p default width
-              height: 768, // Seedance 720p default height
-              fps: 24 // Seedance default fps
+              if (!processedVideo.videoUrl) {
+                throw new Error('Failed to upload video to cloud storage')
+              }
+
+              return {
+                id: result.request_id || `fal_seedance_${Date.now()}`,
+                status: 'completed',
+                videoUrl: processedVideo.videoUrl,
+                thumbnailUrl: processedVideo.thumbnailUrl,
+                duration: duration,
+                fileSize: processedVideo.fileSize,
+                width: 1344, // Seedance 720p default width
+                height: 768, // Seedance 720p default height
+                fps: 24 // Seedance default fps
+              }
+            } else {
+              // Handle case where no video is returned (likely an error)
+              console.warn('⚠️ No video returned from Fal.ai Seedance generation')
+              return {
+                id: result.request_id || `fal_seedance_failed_${Date.now()}`,
+                status: 'failed',
+                error: 'No video generated by Fal.ai service'
+              }
             }
-          } else {
-            // Handle case where no video is returned (likely an error)
-            console.warn('⚠️ No video returned from Fal.ai Seedance generation')
+          } catch (error) {
+            console.error('❌ Fal.ai Seedance sync generation failed:', error)
             return {
-              id: result.request_id || `fal_seedance_failed_${Date.now()}`,
+              id: `fal_seedance_error_${Date.now()}`,
               status: 'failed',
-              error: 'No video generated by Fal.ai service'
+              error: `Seedance generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
             }
           }
         }
@@ -246,73 +273,95 @@ export class FalVideoService {
           // Use async processing with webhooks
           console.log('🔗 Using async processing with webhook:', webhookUrl)
           
-          const result = await fal.subscribe(model.falModelId, {
-            input: requestPayload,
-            webhookUrl: webhookUrl,
-            onQueueUpdate: (update) => {
-              console.log('📊 Queue update:', update)
+          try {
+            const result = await fal.subscribe(model.falModelId, {
+              input: requestPayload,
+              webhookUrl: webhookUrl,
+              onQueueUpdate: (update) => {
+                console.log('📊 Queue update:', update)
+              }
+            })
+            
+            console.log('✅ Fal.ai async job submitted:', {
+              requestId: result.requestId,
+              status: 'processing'
+            })
+            
+            return {
+              id: result.requestId,
+              status: 'processing'
             }
-          })
-          
-          console.log('✅ Fal.ai async job submitted:', {
-            requestId: result.requestId,
-            status: 'processing'
-          })
-          
-          return {
-            id: result.requestId,
-            status: 'processing'
+          } catch (error) {
+            console.error('❌ Fal.ai async job submission failed:', error)
+            return {
+              id: `fal_error_${Date.now()}`,
+              status: 'failed',
+              error: `Async job submission failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+            }
           }
         } else {
           // Fallback to synchronous processing
           console.log('⚠️ No webhook URL configured, using synchronous processing')
           
-          const result = await fal.run(model.falModelId, {
-            input: requestPayload
-          }) as any
-          
-          console.log('✅ Fal.ai video generation completed:', {
-            requestId: result.request_id,
-            hasVideo: !!result.video,
-            hasImage: !!result.image
-          })
-          
-          // Log entire result object for debugging
-          console.dir(result, { depth: 5 })
-          
-          // Fal may return { video, image } or { data: { video, image } }
-          const videoFile = (result.video || result.data?.video) as any
-          const imageFile = (result.image || result.data?.image) as any
+          try {
+            const result = await fal.run(model.falModelId, {
+              input: requestPayload
+            }) as any
+            
+            console.log('✅ Fal.ai video generation completed:', {
+              requestId: result.request_id,
+              hasVideo: !!result.video,
+              hasImage: !!result.image
+            })
+            
+            // Log entire result object for debugging
+            console.dir(result, { depth: 5 })
+            
+            // Fal may return { video, image } or { data: { video, image } }
+            const videoFile = (result.video || result.data?.video) as any
+            const imageFile = (result.image || result.data?.image) as any
 
-          if (videoFile && videoFile.url) {
-            const videoUrl = videoFile.url
-            const thumbnailUrl = imageFile?.url || null
+            if (videoFile && videoFile.url) {
+              const videoUrl = videoFile.url
+              const thumbnailUrl = imageFile?.url || null
 
-            // Process and upload video to CloudFlare R2
-            const processedVideo = await this.processAndUploadVideo(
-              videoUrl,
-              thumbnailUrl,
-              `video_${Date.now()}.mp4`
-            )
+              // Process and upload video to CloudFlare R2
+              const processedVideo = await this.processAndUploadVideo(
+                videoUrl,
+                thumbnailUrl,
+                `video_${Date.now()}.mp4`
+              )
 
-            return {
-              id: result.request_id || `fal_video_${Date.now()}`,
-              status: 'completed',
-              videoUrl: processedVideo.videoUrl,
-              thumbnailUrl: processedVideo.thumbnailUrl,
-              duration: duration,
-              fileSize: processedVideo.fileSize,
-              width: dimensions.width,
-              height: dimensions.height,
-              fps: params.fps || model.defaultParams.fps
+              if (!processedVideo.videoUrl) {
+                throw new Error('Failed to upload video to cloud storage')
+              }
+
+              return {
+                id: result.request_id || `fal_video_${Date.now()}`,
+                status: 'completed',
+                videoUrl: processedVideo.videoUrl,
+                thumbnailUrl: processedVideo.thumbnailUrl,
+                duration: duration,
+                fileSize: processedVideo.fileSize,
+                width: dimensions.width,
+                height: dimensions.height,
+                fps: params.fps || model.defaultParams.fps
+              }
+            } else {
+              // Handle case where no video is returned (likely an error)
+              console.warn('⚠️ No video returned from Fal.ai generation')
+              return {
+                id: result.request_id || `fal_failed_${Date.now()}`,
+                status: 'failed',
+                error: 'No video generated by Fal.ai service'
+              }
             }
-          } else {
-            // Handle case where no video is returned (likely an error)
-            console.warn('⚠️ No video returned from Fal.ai generation')
+          } catch (error) {
+            console.error('❌ Fal.ai sync generation failed:', error)
             return {
-              id: result.request_id || `fal_failed_${Date.now()}`,
+              id: `fal_error_${Date.now()}`,
               status: 'failed',
-              error: 'No video generated by Fal.ai service'
+              error: `Video generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
             }
           }
         }
@@ -333,14 +382,14 @@ export class FalVideoService {
    */
   async getJobStatus(jobId: string, modelId?: string): Promise<VideoGenerationResponse> {
     try {
-      // If it's our custom fallback ID (not a real Fal.ai request ID), return failed status
+      // If it's our custom fallback ID (not a real Fal.ai request ID), check database instead
       if (jobId.startsWith('fal_processing_') || jobId.startsWith('fal_error_') || jobId.startsWith('fal_video_') || 
           jobId.startsWith('fal_seedance_') || jobId.startsWith('fal_failed_')) {
-        console.log('⚠️ Custom job ID detected, marking as failed:', jobId)
+        console.log('⚠️ Custom job ID detected - this should be handled by database lookup:', jobId)
         return {
           id: jobId,
           status: 'failed',
-          error: 'Invalid job ID - video generation may have failed synchronously'
+          error: 'Custom job ID - status should be checked via database, not Fal.ai API'
         }
       }
 
@@ -437,6 +486,10 @@ export class FalVideoService {
         'video/mp4',
         { folder: 'videos' }
       )
+
+      if (!uploadResult.success || !uploadResult.url) {
+        throw new Error(`Failed to upload video: ${uploadResult.error || 'No URL returned'}`)
+      }
 
       let processedThumbnailUrl: string | undefined
 

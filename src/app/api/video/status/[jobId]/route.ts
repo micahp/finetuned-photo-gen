@@ -5,10 +5,10 @@ import { FalVideoService } from '@/lib/fal-video-service'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ jobId: string }> }
+  { params }: { params: { jobId: string } }
 ) {
   try {
-    const { jobId } = await params
+    const { jobId } = params
 
     if (!jobId) {
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 })

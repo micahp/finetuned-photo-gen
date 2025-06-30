@@ -34,10 +34,13 @@ export async function POST(request: NextRequest) {
     // Extract and validate form fields
     const prompt = formData.get('prompt') as string
     const modelId = formData.get('modelId') as string
-    const duration = parseInt(formData.get('duration') as string)
+    const durationString = formData.get('duration') as string
+    const duration = durationString ? parseInt(durationString) : undefined
     const aspectRatio = formData.get('aspectRatio') as string
-    const fps = parseInt(formData.get('fps') as string)
-    const motionLevel = parseInt(formData.get('motionLevel') as string)
+    const fpsString = formData.get('fps') as string
+    const fps = fpsString ? parseInt(fpsString) : undefined
+    const motionLevelString = formData.get('motionLevel') as string
+    const motionLevel = motionLevelString ? parseInt(motionLevelString) : undefined
     const seedString = formData.get('seed') as string
     const seed = seedString ? parseInt(seedString) : undefined
     const imageFile = formData.get('imageFile') as File | null
@@ -126,6 +129,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate duration is supported by the model
+    if (modelConfig.durationOptions && !modelConfig.durationOptions.includes(validatedData.duration)) {
+      return NextResponse.json(
+        { 
+          error: `Duration ${validatedData.duration}s not supported by ${modelConfig.name}. Supported durations: ${modelConfig.durationOptions.join(', ')}s` 
+        },
+        { status: 400 }
+      )
+    }
+
     // Calculate credit cost
     const estimatedCost = Math.ceil(falVideoService.calculateCost(validatedData.modelId, validatedData.duration))
 
@@ -170,6 +183,15 @@ export async function POST(request: NextRequest) {
       hasImage: !!validatedData.imageFile,
       estimatedCost
     })
+
+    // Deduct credits before generation
+    await CreditService.spendCredits(
+      user.id,
+      estimatedCost,
+      `Video generation: ${validatedData.prompt.substring(0, 50)}...`,
+      'video_generation' as RelatedEntityType,
+      null // Will update with video ID after creation
+    )
 
     // Convert image file to buffer if provided
     let imageBuffer: Buffer | undefined
@@ -231,15 +253,6 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      // Deduct credits immediately for processing jobs
-      await CreditService.spendCredits(
-        user.id,
-        estimatedCost,
-        `Video generation: ${validatedData.prompt.substring(0, 50)}...`,
-        'video_generation' as RelatedEntityType,
-        generatedVideo.id
-      )
-
       console.log('✅ Video generation job queued:', {
         id: generatedVideo.id,
         jobId: videoResult.id,
@@ -296,15 +309,6 @@ export async function POST(request: NextRequest) {
         generationDuration
       }
     })
-
-    // Deduct credits
-    await CreditService.spendCredits(
-      user.id,
-      estimatedCost,
-      `Video generation: ${validatedData.prompt.substring(0, 50)}...`,
-      'video_generation' as RelatedEntityType,
-      generatedVideo.id
-    )
 
     console.log('✅ Video generation completed:', {
       id: generatedVideo.id,
