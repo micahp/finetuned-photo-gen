@@ -28,7 +28,44 @@ export async function GET(
       return NextResponse.json({ error: 'Video not found' }, { status: 404 })
     }
 
-    // Return the current status
+    // If video is still processing and we have a falJobId, poll Fal.ai for an update
+    if (generatedVideo.status === 'processing' && generatedVideo.falJobId) {
+      try {
+        const falVideoService = new FalVideoService()
+        const falStatus = await falVideoService.getJobStatus(generatedVideo.falJobId)
+
+        if (falStatus.status === 'completed') {
+          // Update DB with completed info
+          await prisma.generatedVideo.update({
+            where: { id: generatedVideo.id },
+            data: {
+              status: 'completed',
+              videoUrl: falStatus.videoUrl || '',
+              thumbnailUrl: falStatus.thumbnailUrl || null,
+              fileSize: falStatus.fileSize,
+              width: falStatus.width,
+              height: falStatus.height,
+            }
+          })
+
+          generatedVideo.status = 'completed'
+          generatedVideo.videoUrl = falStatus.videoUrl || ''
+          generatedVideo.thumbnailUrl = falStatus.thumbnailUrl || null
+          generatedVideo.fileSize = falStatus.fileSize || null
+          // width/height fields may exist but not in type, ignore for response
+        } else if (falStatus.status === 'failed') {
+          await prisma.generatedVideo.update({
+            where: { id: generatedVideo.id },
+            data: { status: 'failed' }
+          })
+          generatedVideo.status = 'failed'
+        }
+      } catch (pollErr) {
+        console.error('🔴 Fal polling error:', pollErr)
+      }
+    }
+
+    // Return the (possibly updated) status
     return NextResponse.json({
       success: true,
       video: {

@@ -7,7 +7,7 @@ import { CreditService, RelatedEntityType } from '@/lib/credit-service'
 import { isPremiumUser } from '@/lib/subscription-utils'
 
 const generateVideoSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(1000, 'Prompt too long'),
+  prompt: z.string().max(1000, 'Prompt too long'),
   modelId: z.string().min(1, 'Model is required'),
   duration: z.number().min(3).max(30).default(5),
   aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3']).default('16:9'),
@@ -54,14 +54,37 @@ export async function POST(request: NextRequest) {
       imageFile: imageFile || undefined,
     })
     
+    let validatedData: any
     if (!validationResult.success) {
-      return NextResponse.json(
-        { error: 'Invalid request data', details: validationResult.error.issues },
-        { status: 400 }
-      )
+      // For image-to-video we can allow empty prompt
+      const promptIssue = validationResult.error.issues.find(i => i.path[0] === 'prompt')
+      if (promptIssue && imageFile) {
+        // Re-validate treating prompt as optional
+        const altSchema = generateVideoSchema.extend({ prompt: z.string().optional() })
+        const altValidation = altSchema.safeParse({
+          prompt,
+          modelId,
+          duration,
+          aspectRatio,
+          fps,
+          motionLevel,
+          seed,
+          imageFile: imageFile || undefined,
+        })
+        if (!altValidation.success) {
+          return NextResponse.json({ error: 'Invalid request data', details: altValidation.error.issues }, { status: 400 })
+        }
+        // Set prompt to empty string if missing
+        validatedData = { ...altValidation.data, prompt: altValidation.data.prompt || '' }
+      } else {
+        return NextResponse.json(
+          { error: 'Invalid request data', details: validationResult.error.issues },
+          { status: 400 }
+        )
+      }
+    } else {
+      validatedData = validationResult.data
     }
-
-    const validatedData = validationResult.data
 
     // Get user from database
     const user = await prisma.user.findUnique({
@@ -83,6 +106,14 @@ export async function POST(request: NextRequest) {
     if (!modelConfig) {
       return NextResponse.json(
         { error: 'Invalid model selected' },
+        { status: 400 }
+      )
+    }
+
+    // Ensure prompt is provided for text-to-video models
+    if (modelConfig.mode === 'text-to-video' && (!validatedData.prompt || validatedData.prompt.trim().length === 0)) {
+      return NextResponse.json(
+        { error: 'Prompt is required for text-to-video generation' },
         { status: 400 }
       )
     }
