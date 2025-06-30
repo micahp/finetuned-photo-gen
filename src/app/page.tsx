@@ -90,7 +90,15 @@ export default function HomePage() {
       </div>
 
       {/* Selfie Training Example Section */}
-      <SelfieTrainingSection />
+      <SelfieTrainingSection
+        inputImageUrls={[
+          '/selfies/IMG_1248.jpg',
+          '/selfies/IMG_1889.jpg',
+          '/selfies/IMG_2268.jpg',
+          '/selfies/IMG_3157.jpg'
+        ]}
+        outputImageUrl="/selfies/generated.jpeg"
+      />
 
       {/* AI Film Studio Section */}
       <FilmStudioSection />

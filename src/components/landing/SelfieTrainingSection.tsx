@@ -60,15 +60,15 @@ export function SelfieTrainingSection({
         {/* Example workflow visualization */}
         <div className="flex flex-col md:flex-row items-center justify-center gap-8">
           {/* Input selfies */}
-          <div className="flex flex-wrap justify-center md:flex-col md:justify-start md:items-end gap-4 max-w-md">
-            {inputImageUrls.slice(0, 4).map((url, i) => (
+          <div className="grid grid-cols-3 gap-4 md:grid-cols-2 md:gap-6 max-w-md">
+            {inputImageUrls.slice(0, 6).map((url, i) => (
               <Image
                 key={url}
                 src={url}
                 alt={`Training input selfie ${i + 1}`}
-                width={120}
-                height={120}
-                className="rounded-lg object-cover shadow-lg w-24 h-24 md:w-40 md:h-40 border border-gray-200"
+                width={140}
+                height={140}
+                className="rounded-lg object-cover shadow-lg w-24 h-24 md:w-36 md:h-36 border border-gray-200"
               />
             ))}
           </div>
@@ -77,9 +77,9 @@ export function SelfieTrainingSection({
           <Image
             src={arrowImageUrl}
             alt="Arrow indicating AI training"
-            width={200}
-            height={200}
-            className="hidden md:block -rotate-12 md:rotate-12"
+            width={160}
+            height={160}
+            className="hidden md:block rotate-0 md:rotate-12"
           />
 
           {/* Output image */}

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { FilmStudioMediaGallery } from './FilmStudioMediaGallery'
 
 export function FilmStudioSection() {
   return (
@@ -17,18 +18,11 @@ export function FilmStudioSection() {
             className="text-3xl md:text-5xl font-extrabold tracking-tight"
           >
             <span role="img" aria-label="clapper" className="mr-2">🎬</span>
-            The First Fully Equipped&nbsp;
-            <span className="bg-gradient-to-r from-photoai-accent-cyan to-photoai-accent-purple bg-clip-text text-transparent">
-              AI Film Studio
-            </span>
-            &nbsp;for the People
+            Your Personalized AI Film Studio
           </h2>
           <p className="italic text-lg md:text-xl text-gray-300">
-            Create scenes. Direct angles. Build your vision — no crew required.
-          </p>
-          <p className="text-gray-400 max-w-2xl mx-auto">
-            You don't need a camera. Or a cast. Or a $10k budget.<br />
-            All you need is an idea.
+          You don't need a camera. Or a cast. Or a $10k budget.<br />
+          All you need is an idea.
           </p>
         </div>
 
@@ -38,14 +32,13 @@ export function FilmStudioSection() {
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             <div className="text-5xl font-bold text-photoai-accent-cyan md:w-32 shrink-0">1.</div>
             <div className="space-y-3">
-              <h3 className="text-2xl font-semibold">Generate the World</h3>
+              <h3 className="text-2xl font-semibold">Generate a Source Image</h3>
               <p className="text-gray-400">
-                Pick your vibe — Tokyo at midnight, desert rave, apocalyptic freeway, 70s Hollywood.<br />
-                Need a character? Build one. Yourself, someone new, or someone no one's ever seen before.
+                Your very first frame sets the tone. Create a single reference image with <em>Generate</em> that defines style, environment, and the main character(s).
               </p>
               <p>
-                <span role="img" aria-label="performer">🎭</span>{' '}
-                <strong>Your film starts with a face and a feeling.</strong>
+                <span role="img" aria-label="sparkles">✨</span>{' '}
+                <strong>One picture, endless possibilities.</strong>
               </p>
             </div>
           </div>
@@ -54,14 +47,14 @@ export function FilmStudioSection() {
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             <div className="text-5xl font-bold text-photoai-accent-cyan md:w-32 shrink-0">2.</div>
             <div className="space-y-3">
-              <h3 className="text-2xl font-semibold">Edit the Storyboard</h3>
+              <h3 className="text-2xl font-semibold">Create the Storyboard</h3>
               <p className="text-gray-400">
-                Control angles, framing, lighting, and emotion.<br />
-                Shift perspectives. Try close-ups. Zoom out for the wide shot.
+                Spin up as many scenes as you like from your source image using <em>Edit</em> (powered by Flux&nbsp;Kontext).<br />
+                Vary angles, moods, and settings to map out your narrative.
               </p>
               <p>
                 <span role="img" aria-label="pencil">✏️</span>{' '}
-                <strong>Turn stills into shots. Shots into sequences.</strong>
+                <strong>Scenes become panels. Panels become your storyboard.</strong>
               </p>
             </div>
           </div>
@@ -70,23 +63,26 @@ export function FilmStudioSection() {
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             <div className="text-5xl font-bold text-photoai-accent-cyan md:w-32 shrink-0">3.</div>
             <div className="space-y-3">
-              <h3 className="text-2xl font-semibold">Bring It to Life</h3>
+              <h3 className="text-2xl font-semibold">Animate &amp; Stitch</h3>
               <p className="text-gray-400">
-                Hit <span role="img" aria-label="camera">🎥</span> Make Video. Your scenes come alive — full-motion, full-mood, AI-powered mini movies.<br />
-                <em>Coming soon: voiceovers, soundtracks, motion loops, and more.</em>
+                Turn each storyboard panel into motion with our image-to-video engine on the <em>Video</em> tab, then automatically stitch the clips together.<br />
+                <em>Your short film is ready for prime time.</em>
               </p>
             </div>
           </div>
         </div>
+
+        {/* Media Gallery */}
+        <FilmStudioMediaGallery />
 
         {/* Divider */}
         <hr className="border-gray-700" />
 
         {/* Closing copy & CTA */}
         <div className="text-center space-y-6">
-          <p className="text-xl font-medium">Welcome to your AI backlot.</p>
+          <p className="text-xl font-medium">Cast yourself in <em>any</em> movie.</p>
           <p className="text-gray-300 max-w-2xl mx-auto">
-            It's not just a film studio. It's <em>your</em> film studio — built for the internet, powered by you.
+            <em>You're</em> the main character. The only limit is your imagination.
           </p>
           <Button
             asChild

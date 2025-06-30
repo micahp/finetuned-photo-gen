@@ -134,42 +134,24 @@ export class FalVideoService {
           payload: { ...requestPayload, image_url: requestPayload.image_url ? '[IMAGE_DATA]' : undefined }
         })
 
-        // Check if webhook URL is configured for async processing
-        const webhookUrl = process.env.FAL_WEBHOOK_URL
-        
-        if (webhookUrl) {
-          // Use async processing with webhooks
-          console.log('🔗 Using async processing with webhook:', webhookUrl)
-          
-          try {
-            const result = await fal.subscribe(model.falModelId, {
-              input: requestPayload,
-              webhookUrl: webhookUrl,
-              onQueueUpdate: (update) => {
-                console.log('📊 Queue update:', update)
-              }
-            })
-            
-            console.log('✅ Fal.ai async job submitted:', {
-              requestId: result.requestId,
-              status: 'processing'
-            })
-            
-            return {
-              id: result.requestId,
-              status: 'processing'
-            }
-          } catch (error) {
-            console.error('❌ Fal.ai async job submission failed:', error)
-            return {
-              id: `fal_error_${Date.now()}`,
-              status: 'failed',
-              error: `Async job submission failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-            }
+        // Prefer asynchronous queue submission (no inbound webhook required)
+        try {
+          const submitResult = await fal.queue.submit(model.falModelId, {
+            input: requestPayload
+          }) as any
+
+          console.log('✅ Fal.ai async job submitted (queue):', {
+            requestId: submitResult.request_id || submitResult.requestId,
+            status: 'processing'
+          })
+
+          return {
+            id: submitResult.request_id || submitResult.requestId,
+            status: 'processing'
           }
-        } else {
-          // Fallback to synchronous processing
-          console.log('⚠️ No webhook URL configured, using synchronous processing')
+        } catch (queueError) {
+          console.error('❌ Fal.ai queue submission failed, falling back to synchronous run:', queueError)
+          // Fallback to synchronous processing if queue submission fails
           
           try {
             const result = await fal.run(model.falModelId, {
@@ -266,42 +248,24 @@ export class FalVideoService {
           payload: { ...requestPayload, image_url: requestPayload.image_url ? '[IMAGE_DATA]' : undefined }
         })
 
-        // Check if webhook URL is configured for async processing
-        const webhookUrl = process.env.FAL_WEBHOOK_URL
-        
-        if (webhookUrl) {
-          // Use async processing with webhooks
-          console.log('🔗 Using async processing with webhook:', webhookUrl)
-          
-          try {
-            const result = await fal.subscribe(model.falModelId, {
-              input: requestPayload,
-              webhookUrl: webhookUrl,
-              onQueueUpdate: (update) => {
-                console.log('📊 Queue update:', update)
-              }
-            })
-            
-            console.log('✅ Fal.ai async job submitted:', {
-              requestId: result.requestId,
-              status: 'processing'
-            })
-            
-            return {
-              id: result.requestId,
-              status: 'processing'
-            }
-          } catch (error) {
-            console.error('❌ Fal.ai async job submission failed:', error)
-            return {
-              id: `fal_error_${Date.now()}`,
-              status: 'failed',
-              error: `Async job submission failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-            }
+        // Prefer asynchronous queue submission (no inbound webhook required)
+        try {
+          const submitResult = await fal.queue.submit(model.falModelId, {
+            input: requestPayload
+          }) as any
+
+          console.log('✅ Fal.ai async job submitted (queue):', {
+            requestId: submitResult.request_id || submitResult.requestId,
+            status: 'processing'
+          })
+
+          return {
+            id: submitResult.request_id || submitResult.requestId,
+            status: 'processing'
           }
-        } else {
-          // Fallback to synchronous processing
-          console.log('⚠️ No webhook URL configured, using synchronous processing')
+        } catch (queueError) {
+          console.error('❌ Fal.ai queue submission failed, falling back to synchronous run:', queueError)
+          // Fallback to synchronous processing if queue submission fails
           
           try {
             const result = await fal.run(model.falModelId, {
