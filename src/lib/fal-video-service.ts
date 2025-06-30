@@ -94,105 +94,217 @@ export class FalVideoService {
       // Validate duration
       const duration = Math.min(params.duration || 5, model.maxDuration)
       
-      // Calculate dimensions based on aspect ratio
-      const dimensions = this.getDimensions(params.aspectRatio || '16:9')
-      
-      // Prepare base request payload
-      const requestPayload: any = {
-        prompt: params.prompt,
-        duration_seconds: duration,
-        aspect_ratio: params.aspectRatio || '16:9',
-        fps: params.fps || model.defaultParams.fps,
-        motion_bucket_id: params.motionLevel || model.defaultParams.motionLevel,
-        width: params.width || dimensions.width,
-        height: params.height || dimensions.height,
-        seed: params.seed
-      }
+      // For Seedance models, use different parameter structure
+      if (model.falModelId.includes('seedance')) {
+        // Enhance prompt for image-to-video if we have an image
+        let enhancedPrompt = params.prompt
+        if (model.mode === 'image-to-video' && params.imageBuffer) {
+          // Add cinematic enhancement for image-to-video
+          enhancedPrompt = params.prompt ? 
+            `${params.prompt}. Create a cinematic video with smooth motion, natural lighting, and dynamic camera movement.` :
+            'Create a cinematic video with smooth motion, natural lighting, and dynamic camera movement.'
+        }
 
-      // For image-to-video models, handle image upload
-      if (model.mode === 'image-to-video' && params.imageBuffer) {
-        // Convert image buffer to base64 data URL for Fal.ai
-        const base64Image = params.imageBuffer.toString('base64')
-        const mimeType = this.detectImageMimeType(params.imageBuffer)
-        requestPayload.image_url = `data:${mimeType};base64,${base64Image}`
-      }
+        // Seedance-specific parameters
+        const requestPayload: any = {
+          prompt: enhancedPrompt,
+          duration: duration, // Seedance expects integer: 5 or 10
+          resolution: params.width && params.width >= 1280 ? "720p" : "480p", // Default to 720p if high width requested
+          camera_fixed: false, // Required by Seedance API
+          seed: params.seed
+        }
 
-      console.log('📡 Sending request to Fal.ai:', {
-        model: model.falModelId,
-        mode: model.mode,
-        hasImage: !!requestPayload.image_url,
-        payload: { ...requestPayload, image_url: requestPayload.image_url ? '[IMAGE_DATA]' : undefined }
-      })
+        // For image-to-video models, handle image upload
+        if (model.mode === 'image-to-video' && params.imageBuffer) {
+          // Convert image buffer to base64 data URL for Fal.ai
+          const base64Image = params.imageBuffer.toString('base64')
+          const mimeType = this.detectImageMimeType(params.imageBuffer)
+          requestPayload.image_url = `data:${mimeType};base64,${base64Image}`
+        }
 
-      // Check if webhook URL is configured for async processing
-      const webhookUrl = process.env.FAL_WEBHOOK_URL
-      
-      if (webhookUrl) {
-        // Use async processing with webhooks
-        console.log('🔗 Using async processing with webhook:', webhookUrl)
+        console.log('📡 Sending request to Fal.ai Seedance:', {
+          model: model.falModelId,
+          mode: model.mode,
+          hasImage: !!requestPayload.image_url,
+          payload: { ...requestPayload, image_url: requestPayload.image_url ? '[IMAGE_DATA]' : undefined }
+        })
+
+        // Check if webhook URL is configured for async processing
+        const webhookUrl = process.env.FAL_WEBHOOK_URL
         
-        const result = await fal.subscribe(model.falModelId, {
-          input: requestPayload,
-          webhookUrl: webhookUrl,
-          onQueueUpdate: (update) => {
-            console.log('📊 Queue update:', update)
+        if (webhookUrl) {
+          // Use async processing with webhooks
+          console.log('🔗 Using async processing with webhook:', webhookUrl)
+          
+          const result = await fal.subscribe(model.falModelId, {
+            input: requestPayload,
+            webhookUrl: webhookUrl,
+            onQueueUpdate: (update) => {
+              console.log('📊 Queue update:', update)
+            }
+          })
+          
+          console.log('✅ Fal.ai async job submitted:', {
+            requestId: result.requestId,
+            status: 'processing'
+          })
+          
+          return {
+            id: result.requestId,
+            status: 'processing'
           }
-        })
-        
-        console.log('✅ Fal.ai async job submitted:', {
-          requestId: result.requestId,
-          status: 'processing'
-        })
-        
-        return {
-          id: result.requestId,
-          status: 'processing'
+        } else {
+          // Fallback to synchronous processing
+          console.log('⚠️ No webhook URL configured, using synchronous processing')
+          
+          const result = await fal.run(model.falModelId, {
+            input: requestPayload
+          }) as any
+          
+          console.log('✅ Fal.ai Seedance video generation completed:', {
+            requestId: result.request_id,
+            hasVideo: !!result.video,
+            hasImage: !!result.image,
+            seed: result.seed
+          })
+          
+          // Handle successful response
+          if (result.video && result.video.url) {
+            const videoUrl = result.video.url
+            const thumbnailUrl = result.image?.url || null
+
+            // Process and upload video to CloudFlare R2
+            const processedVideo = await this.processAndUploadVideo(
+              videoUrl,
+              thumbnailUrl,
+              `video_${Date.now()}.mp4`
+            )
+
+            return {
+              id: result.request_id || `fal_seedance_${Date.now()}`,
+              status: 'completed',
+              videoUrl: processedVideo.videoUrl,
+              thumbnailUrl: processedVideo.thumbnailUrl,
+              duration: duration,
+              fileSize: processedVideo.fileSize,
+              width: 1344, // Seedance 720p default width
+              height: 768, // Seedance 720p default height
+              fps: 24 // Seedance default fps
+            }
+          } else {
+            // Handle case where no video is returned (likely an error)
+            console.warn('⚠️ No video returned from Fal.ai Seedance generation')
+            return {
+              id: result.request_id || `fal_seedance_failed_${Date.now()}`,
+              status: 'failed',
+              error: 'No video generated by Fal.ai service'
+            }
+          }
         }
       } else {
-        // Fallback to synchronous processing
-        console.log('⚠️ No webhook URL configured, using synchronous processing')
+        // For other models, use the existing parameter structure
+        // Calculate dimensions based on aspect ratio
+        const dimensions = this.getDimensions(params.aspectRatio || '16:9')
         
-                 const result = await fal.run(model.falModelId, {
-           input: requestPayload
-         }) as any
-         
-         console.log('✅ Fal.ai video generation completed:', {
-           requestId: result.request_id,
-           hasVideo: !!result.video,
-           hasImage: !!result.image
-         })
-         
-         // Handle successful response
-         if (result.video && result.video.url) {
-           const videoUrl = result.video.url
-           const thumbnailUrl = result.image?.url || null
+        // Prepare base request payload
+        const requestPayload: any = {
+          prompt: params.prompt,
+          duration_seconds: duration,
+          aspect_ratio: params.aspectRatio || '16:9',
+          fps: params.fps || model.defaultParams.fps,
+          motion_bucket_id: params.motionLevel || model.defaultParams.motionLevel,
+          width: params.width || dimensions.width,
+          height: params.height || dimensions.height,
+          seed: params.seed
+        }
 
-           // Process and upload video to CloudFlare R2
-           const processedVideo = await this.processAndUploadVideo(
-             videoUrl,
-             thumbnailUrl,
-             `video_${Date.now()}.mp4`
-           )
+        // For image-to-video models, handle image upload
+        if (model.mode === 'image-to-video' && params.imageBuffer) {
+          // Convert image buffer to base64 data URL for Fal.ai
+          const base64Image = params.imageBuffer.toString('base64')
+          const mimeType = this.detectImageMimeType(params.imageBuffer)
+          requestPayload.image_url = `data:${mimeType};base64,${base64Image}`
+        }
 
-           return {
-             id: result.request_id || `fal_video_${Date.now()}`,
-             status: 'completed',
-             videoUrl: processedVideo.videoUrl,
-             thumbnailUrl: processedVideo.thumbnailUrl,
-             duration: duration,
-             fileSize: processedVideo.fileSize,
-             width: dimensions.width,
-             height: dimensions.height,
-             fps: params.fps || model.defaultParams.fps
-           }
-         } else {
-           // Handle async processing fallback
-           return {
-             id: result.request_id || `fal_processing_${Date.now()}`,
-             status: 'processing'
-           }
-         }
-       }
+        console.log('📡 Sending request to Fal.ai:', {
+          model: model.falModelId,
+          mode: model.mode,
+          hasImage: !!requestPayload.image_url,
+          payload: { ...requestPayload, image_url: requestPayload.image_url ? '[IMAGE_DATA]' : undefined }
+        })
+
+        // Check if webhook URL is configured for async processing
+        const webhookUrl = process.env.FAL_WEBHOOK_URL
+        
+        if (webhookUrl) {
+          // Use async processing with webhooks
+          console.log('🔗 Using async processing with webhook:', webhookUrl)
+          
+          const result = await fal.subscribe(model.falModelId, {
+            input: requestPayload,
+            webhookUrl: webhookUrl,
+            onQueueUpdate: (update) => {
+              console.log('📊 Queue update:', update)
+            }
+          })
+          
+          console.log('✅ Fal.ai async job submitted:', {
+            requestId: result.requestId,
+            status: 'processing'
+          })
+          
+          return {
+            id: result.requestId,
+            status: 'processing'
+          }
+        } else {
+          // Fallback to synchronous processing
+          console.log('⚠️ No webhook URL configured, using synchronous processing')
+          
+          const result = await fal.run(model.falModelId, {
+            input: requestPayload
+          }) as any
+          
+          console.log('✅ Fal.ai video generation completed:', {
+            requestId: result.request_id,
+            hasVideo: !!result.video,
+            hasImage: !!result.image
+          })
+          
+          // Handle successful response
+          if (result.video && result.video.url) {
+            const videoUrl = result.video.url
+            const thumbnailUrl = result.image?.url || null
+
+            // Process and upload video to CloudFlare R2
+            const processedVideo = await this.processAndUploadVideo(
+              videoUrl,
+              thumbnailUrl,
+              `video_${Date.now()}.mp4`
+            )
+
+            return {
+              id: result.request_id || `fal_video_${Date.now()}`,
+              status: 'completed',
+              videoUrl: processedVideo.videoUrl,
+              thumbnailUrl: processedVideo.thumbnailUrl,
+              duration: duration,
+              fileSize: processedVideo.fileSize,
+              width: dimensions.width,
+              height: dimensions.height,
+              fps: params.fps || model.defaultParams.fps
+            }
+          } else {
+            // Handle case where no video is returned (likely an error)
+            console.warn('⚠️ No video returned from Fal.ai generation')
+            return {
+              id: result.request_id || `fal_failed_${Date.now()}`,
+              status: 'failed',
+              error: 'No video generated by Fal.ai service'
+            }
+          }
+        }
+      }
 
     } catch (error) {
       console.error('❌ Fal.ai video generation error:', error)
@@ -207,49 +319,64 @@ export class FalVideoService {
   /**
    * Check status of async video generation
    */
-  async getJobStatus(jobId: string): Promise<VideoGenerationResponse> {
+  async getJobStatus(jobId: string, modelId?: string): Promise<VideoGenerationResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/queue/requests/${jobId}/status`, {
-        headers: {
-          'Authorization': `Key ${this.apiKey}`,
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error(`Status check failed: ${response.status}`)
-      }
-
-      const result = await response.json()
-
-      if (result.status === 'COMPLETED' && result.data?.video) {
-        const videoUrl = result.data.video.url
-        const thumbnailUrl = result.data.image?.url || null
-
-        // Process and upload video to CloudFlare R2
-        const processedVideo = await this.processAndUploadVideo(
-          videoUrl,
-          thumbnailUrl,
-          `video_${jobId}.mp4`
-        )
-
-        return {
-          id: jobId,
-          status: 'completed',
-          videoUrl: processedVideo.videoUrl,
-          thumbnailUrl: processedVideo.thumbnailUrl,
-          fileSize: processedVideo.fileSize
-        }
-      } else if (result.status === 'FAILED') {
+      // If it's our custom fallback ID (not a real Fal.ai request ID), return failed status
+      if (jobId.startsWith('fal_processing_') || jobId.startsWith('fal_error_') || jobId.startsWith('fal_video_') || 
+          jobId.startsWith('fal_seedance_') || jobId.startsWith('fal_failed_')) {
+        console.log('⚠️ Custom job ID detected, marking as failed:', jobId)
         return {
           id: jobId,
           status: 'failed',
-          error: result.error || 'Video generation failed'
+          error: 'Invalid job ID - video generation may have failed synchronously'
         }
-      } else {
-        return {
-          id: jobId,
-          status: 'processing'
+      }
+
+      // Default to Seedance model if no modelId provided (for backward compatibility)
+      const model = modelId ? this.getModelConfig(modelId) : null
+      const falModelId = model?.falModelId || 'fal-ai/bytedance/seedance/v1/lite/image-to-video'
+
+      // Use the Fal.ai client to check queue status
+      const result = await fal.queue.status(falModelId, {
+        requestId: jobId,
+        logs: true
+      })
+
+      console.log('📊 Fal.ai queue status:', result)
+
+      if (result.status === 'COMPLETED') {
+        // Get the actual result data
+        const resultData = await fal.queue.result(falModelId, {
+          requestId: jobId
+        })
+
+        console.log('📊 Fal.ai queue result:', resultData)
+
+        if (resultData.data?.video) {
+          const videoUrl = resultData.data.video.url
+          const thumbnailUrl = resultData.data.image?.url || null
+
+          // Process and upload video to CloudFlare R2
+          const processedVideo = await this.processAndUploadVideo(
+            videoUrl,
+            thumbnailUrl,
+            `video_${jobId}.mp4`
+          )
+
+          return {
+            id: jobId,
+            status: 'completed',
+            videoUrl: processedVideo.videoUrl,
+            thumbnailUrl: processedVideo.thumbnailUrl,
+            fileSize: processedVideo.fileSize
+          }
         }
+      }
+
+      // For any other status (IN_PROGRESS, IN_QUEUE) or if no video data
+      return {
+        id: jobId,
+        status: 'processing'
       }
 
     } catch (error) {

@@ -32,7 +32,7 @@ export async function GET(
     if (generatedVideo.status === 'processing' && generatedVideo.falJobId) {
       try {
         const falVideoService = new FalVideoService()
-        const falStatus = await falVideoService.getJobStatus(generatedVideo.falJobId)
+        const falStatus = await falVideoService.getJobStatus(generatedVideo.falJobId, generatedVideo.modelId)
 
         if (falStatus.status === 'completed') {
           // Update DB with completed info
