@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { PRICING_PLANS } from '@/lib/stripe/pricing'
 import { Navbar } from '@/components/navigation/navbar'
 import { Footer } from '@/components/navigation/footer'
+import { DemoLibrarySection } from '@/components/landing/DemoLibrarySection'
+import { SelfieTrainingSection } from '@/components/landing/SelfieTrainingSection'
+import { FilmStudioSection } from '@/components/landing/FilmStudioSection'
 import Image from 'next/image'
 
 export default function HomePage() {
@@ -86,6 +89,15 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Selfie Training Example Section */}
+      <SelfieTrainingSection />
+
+      {/* AI Film Studio Section */}
+      <FilmStudioSection />
+
+      {/* Demo Library Section */}
+      <DemoLibrarySection />
+
       {/* Pricing Preview */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
@@ -106,8 +118,10 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="text-xl">{plan.name}</CardTitle>
                 <div className="text-3xl font-bold">
-                  {plan.monthlyCredits} credits
-                  <span className="text-sm text-gray-500">/month</span>
+                  {plan.credits} credits
+                  {plan.id !== 'free' && (
+                    <span className="text-sm text-gray-500">/month</span>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>

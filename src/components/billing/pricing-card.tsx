@@ -94,7 +94,7 @@ export function PricingCard({ plan, currentPlan, onSubscribe, loading = false }:
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span>Monthly Credits</span>
+            <span>{isFreePlan ? 'Free Credits' : 'Monthly Credits'}</span>
             <span className="font-semibold">{plan.credits.toLocaleString()}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
