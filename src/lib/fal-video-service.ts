@@ -108,9 +108,9 @@ export class FalVideoService {
         // Seedance-specific parameters
         const requestPayload: any = {
           prompt: enhancedPrompt,
-          duration: duration, // Seedance expects integer: 5 or 10
+          duration: duration.toString(), // Seedance expects string "5" or "10"
           resolution: params.width && params.width >= 1280 ? "720p" : "480p", // Default to 720p if high width requested
-          camera_fixed: false, // Required by Seedance API
+          camera_fixed: false, // Optional, but keep for now
           seed: params.seed
         }
 
@@ -167,6 +167,9 @@ export class FalVideoService {
             hasImage: !!result.image,
             seed: result.seed
           })
+          
+          // Log entire result object for debugging
+          console.dir(result, { depth: 5 })
           
           // Handle successful response
           if (result.video && result.video.url) {
@@ -270,6 +273,9 @@ export class FalVideoService {
             hasVideo: !!result.video,
             hasImage: !!result.image
           })
+          
+          // Log entire result object for debugging
+          console.dir(result, { depth: 5 })
           
           // Handle successful response
           if (result.video && result.video.url) {
