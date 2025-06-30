@@ -9,7 +9,15 @@ import { Badge } from '@/components/ui/badge'
 
 interface ImageUploadProps {
   onImagesUploaded: (files: File[]) => void
+  /**
+   * Maximum number of files allowed. Defaults to 20.
+   */
   maxFiles?: number
+  /**
+   * Minimum number of files required. Defaults to 5 (used for model training).
+   * Set to 1 for single-image use-cases like image-to-video.
+   */
+  minFiles?: number
   className?: string
 }
 
@@ -31,10 +39,10 @@ interface ValidationSummary {
 // Enhanced validation configuration matching server-side requirements
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/tiff']
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB (aligned with server)
-const MIN_FILES = 5 // minimum for training
+const DEFAULT_MIN_FILES = 5 // legacy default for training flows
 const MAX_FILES = 20
 
-export function ImageUpload({ onImagesUploaded, maxFiles = MAX_FILES, className }: ImageUploadProps) {
+export function ImageUpload({ onImagesUploaded, maxFiles = MAX_FILES, minFiles = DEFAULT_MIN_FILES, className }: ImageUploadProps) {
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([])
   const [validation, setValidation] = useState<ValidationSummary | null>(null)
   const [isValidating, setIsValidating] = useState(false)
@@ -50,9 +58,9 @@ export function ImageUpload({ onImagesUploaded, maxFiles = MAX_FILES, className 
       errors.push(`Too many files. Maximum ${maxFiles} images allowed.`)
     }
 
-    if (files.length < MIN_FILES) {
-      if (files.length > 0) {
-        warnings.push(`Consider uploading at least ${MIN_FILES} images for better training results.`)
+    if (files.length < minFiles) {
+      if (files.length > 0 && minFiles > 1) {
+        warnings.push(`Consider uploading at least ${minFiles} images for better results.`)
       }
     }
 
@@ -83,13 +91,13 @@ export function ImageUpload({ onImagesUploaded, maxFiles = MAX_FILES, className 
     }
 
     return {
-      isValid: errors.length === 0 && files.length >= MIN_FILES && files.length <= maxFiles,
+      isValid: errors.length === 0 && files.length >= minFiles && files.length <= maxFiles,
       errors,
       warnings,
       totalFiles: files.length,
       validFiles
     }
-  }, [maxFiles])
+  }, [maxFiles, minFiles])
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     setIsValidating(true)
@@ -207,7 +215,7 @@ export function ImageUpload({ onImagesUploaded, maxFiles = MAX_FILES, className 
                   {isValidating ? 'Validating images...' : 'Drag & drop images here, or click to select'}
                 </p>
                 <p className="text-sm text-gray-500">
-                  JPEG, PNG, WebP, TIFF • Max 10MB each • {MIN_FILES}-{maxFiles} images required
+                  JPEG, PNG, WebP, TIFF • Max 10MB each • {minFiles === maxFiles ? `${minFiles} image${minFiles === 1 ? '' : 's'} required` : `${minFiles}-${maxFiles} images allowed`}
                 </p>
               </div>
             )}
@@ -228,12 +236,7 @@ export function ImageUpload({ onImagesUploaded, maxFiles = MAX_FILES, className 
                 <Info className="h-4 w-4 text-amber-600" />
               )}
               <span className="font-medium">
-                {validation.isValid 
-                  ? 'Images Ready for Training' 
-                  : validation.errors.length > 0 
-                    ? 'Validation Issues' 
-                    : 'Upload Status'
-                }
+                {validation.isValid ? 'Images Ready' : validation.errors.length > 0 ? 'Validation Issues' : 'Upload Status'}
               </span>
               <Badge variant={validation.isValid ? 'default' : 'secondary'}>
                 {validation.validFiles}/{validation.totalFiles} valid

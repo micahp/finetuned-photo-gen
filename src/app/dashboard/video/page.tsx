@@ -508,6 +508,7 @@ export default function VideoGenerationPage() {
                           <ImageUpload
                             onImagesUploaded={handleImagesUploaded}
                             maxFiles={1}
+                            minFiles={1}
                             className="mb-4"
                           />
                           <FormDescription>
