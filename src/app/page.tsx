@@ -11,6 +11,11 @@ import { FilmStudioSection } from '@/components/landing/FilmStudioSection'
 import Image from 'next/image'
 
 export default function HomePage() {
+  // Randomly select between two output images for the SelfieTrainingSection
+  const outputImages = ['/selfies/generated.jpeg', '/selfies/generated-2.png']
+  const randomIndex = Math.floor(Math.random() * outputImages.length)
+  const randomOutputImage = outputImages[randomIndex]
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100">
       <Navbar />
@@ -97,7 +102,7 @@ export default function HomePage() {
           '/selfies/IMG_2268.jpg',
           '/selfies/IMG_3157.jpg'
         ]}
-        outputImageUrl="/selfies/generated.jpeg"
+        outputImageUrl={randomOutputImage}
       />
 
       {/* AI Film Studio Section */}
