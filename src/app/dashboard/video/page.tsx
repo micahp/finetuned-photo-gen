@@ -29,13 +29,14 @@ import {
   Monitor,
   Smartphone,
   Film,
-  Camera,
+  Clapperboard,
   Sparkles,
   ExternalLink,
   Image as ImageIcon,
   Volume2,
   VolumeX,
-  Info
+  Info,
+  Square
 } from 'lucide-react'
 import { isPremiumUser } from '@/lib/subscription-utils'
 import { VIDEO_MODELS as AVAILABLE_VIDEO_MODELS, VideoModel } from '@/lib/video-models'
@@ -47,7 +48,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 const videoGenerationSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(1000, 'Prompt too long'),
   modelId: z.string().min(1, 'Model is required'),
-  duration: z.number().min(3).max(30),
+  duration: z.number().min(3).max(60),
   aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3']),
   fps: z.number().min(12).max(30),
   motionLevel: z.number().min(1).max(10),
@@ -281,12 +282,23 @@ export default function VideoGenerationPage() {
             </Link>
           </div>
         )
+        setIsGenerating(false)
         return
       }
 
       // For image-to-video mode, ensure an image is uploaded
       if (activeMode === 'image-to-video' && !data.imageFile) {
         setError('Please upload an image for image-to-video generation')
+        setIsGenerating(false)
+        return
+      }
+
+      // NEW: Dynamic validation for model-specific max duration
+      if (selectedModel && data.duration > selectedModel.maxDuration) {
+        setError(
+          `The selected model ( ${selectedModel.name} ) only supports a maximum duration of ${selectedModel.maxDuration} seconds. Please adjust your duration.`
+        )
+        setIsGenerating(false)
         return
       }
 
@@ -372,7 +384,7 @@ export default function VideoGenerationPage() {
       case '3:4':
         return <Smartphone className="h-4 w-4" />
       case '1:1':
-        return <Camera className="h-4 w-4" />
+        return <Square className="h-4 w-4" />
       default:
         return <Video className="h-4 w-4" />
     }
@@ -423,7 +435,7 @@ export default function VideoGenerationPage() {
                               <Info className="h-4 w-4 text-gray-400 hover:text-gray-600" />
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs">
-                              <div className="space-y-2">
+                              <div className="space-y-4">
                                 <p className="font-medium">Audio Support:</p>
                                 <div className="flex items-center gap-2 text-sm">
                                   <Volume2 className="h-3 w-3 text-green-600" />
@@ -432,6 +444,27 @@ export default function VideoGenerationPage() {
                                 <div className="flex items-center gap-2 text-sm">
                                   <VolumeX className="h-3 w-3 text-gray-500" />
                                   <span>All other models: Video only (no audio)</span>
+                                </div>
+
+                                <p className="font-medium">Camera Controls:</p>
+                                <div className="space-y-1 text-sm">
+                                  <div>Presets: <code>down_back</code>, <code>forward_up</code>, <code>right_turn_forward</code>, <code>left_turn_forward</code></div>
+                                  <div>Advanced: <code>horizontal</code>, <code>vertical</code>, <code>pan</code>, <code>tilt</code>, <code>roll</code>, <code>zoom</code> via <code>advanced_camera_control</code></div>
+                                  <div>Natural-language (Hailuo, Veo, Wan, etc.): "zoom in/out", "truck left/right", "tilt up/down", "orbit", etc.</div>
+                                </div>
+
+                                <p className="font-medium">Key-frame Support:</p>
+                                <div className="space-y-1 text-sm">
+                                  <div>Kling 2.1/2.0 Pro: <code>image_url</code> + <code>tail_image_url</code> for start/end frames</div>
+                                  <div>Kling 1.6: multiple <code>input_image_urls</code> for key-frame sequence</div>
+                                  <div>Other models: no native support; stitch clips externally</div>
+                                </div>
+
+                                <p className="font-medium">Supported Models:</p>
+                                <div className="space-y-1 text-sm">
+                                  <span>Kling 2.1/2.0/1.6</span>
+                                  <span>MiniMax Hailuo-01 "Director"</span>
+                                  <span>Veo 2/3, Wan-2.1, Seedance 1.0, Phantom</span>
                                 </div>
                               </div>
                             </TooltipContent>
@@ -459,10 +492,11 @@ export default function VideoGenerationPage() {
                                       <div className="flex items-center gap-2">
                                         <span className="font-medium">{model.name}</span>
                                         <div className="flex items-center gap-1">
-                                          {model.hasAudio ? (
+                                          {model.hasAudio && (
                                             <Volume2 className="h-3 w-3 text-green-600" />
-                                          ) : (
-                                            <VolumeX className="h-3 w-3 text-gray-400" />
+                                          )}
+                                          {model.falModelId.includes('kling-video') && (
+                                            <Clapperboard className="h-3 w-3 text-blue-600" />
                                           )}
                                           <Crown className="h-3 w-3 text-yellow-500" />
                                         </div>
@@ -487,6 +521,23 @@ export default function VideoGenerationPage() {
                               <span className="font-medium">Cost:</span> {selectedModel.costPerSecond} credits/sec
                             </div>
                           </div>
+                          {(selectedModel.hasAudio || selectedModel.falModelId.includes('kling-video')) && (
+                            <div className="mt-3 space-y-1 text-sm">
+                              <p className="font-medium">Supports:</p>
+                              <div className="flex flex-wrap gap-2">
+
+                                {selectedModel.falModelId.includes('kling-video') && (
+                                  <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded">Camera Presets</span>
+                                )}
+                                {selectedModel.falModelId.includes('kling-video') && (
+                                  <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded">Advanced Camera Control</span>
+                                )}
+                                {selectedModel.falModelId.includes('kling-video') && (
+                                  <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded">Start & End Frames</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                           {selectedModel.hasAudio && (
                             <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm">
                               <div className="flex items-center gap-2 text-green-700">
@@ -695,6 +746,7 @@ export default function VideoGenerationPage() {
                       )}
                     </CardContent>
                   </Card>
+
 
                   {/* Generate Button */}
                   <Button

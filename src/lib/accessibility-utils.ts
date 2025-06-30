@@ -133,7 +133,7 @@ export function getVideoAccessibilityAttributes(
 ): Record<string, string> {
   const attributes: Record<string, string> = {
     'aria-label': video.getAttribute('aria-label') || 'Video content',
-    'tabindex': '0',
+    tabIndex: '0',
   };
 
   // Add description if available

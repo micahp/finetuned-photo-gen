@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
       estimatedCost,
       `Video generation: ${validatedData.prompt.substring(0, 50)}...`,
       'video_generation' as RelatedEntityType,
-      null // Will update with video ID after creation
+      undefined // Will update with video ID after creation
     )
 
     // Convert image file to buffer if provided
