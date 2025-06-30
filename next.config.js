@@ -13,6 +13,27 @@ const nextConfig = {
   // Server configuration - Only keep server-side packages that don't conflict
   serverExternalPackages: ['bcryptjs'],
   
+  // Allow remote images used in landing sections
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'photoai.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'r2-us-west.photoai.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        pathname: '/**',
+      },
+    ],
+  },
+  
   // Development optimizations to prevent CSS issues
   experimental: {
     turbo: {

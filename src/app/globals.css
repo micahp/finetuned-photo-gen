@@ -199,6 +199,16 @@
     animation: scale-in 0.2s ease-out;
   }
   
+  /* Hide scrollbars utility */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
   /* Screen reader only - visually hidden but accessible to assistive technologies */
   .sr-only {
     position: absolute;
