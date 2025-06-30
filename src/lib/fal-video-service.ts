@@ -64,6 +64,14 @@ export class FalVideoService {
   }
 
   /**
+   * Check if a given aspect ratio is supported by a specific model.
+   */
+  isAspectRatioSupported(modelId: string, aspectRatio: string): boolean {
+    const model = this.getModelConfig(modelId);
+    return model ? model.supportedAspectRatios.includes(aspectRatio) : false;
+  }
+
+  /**
    * Calculate cost for video generation
    */
   calculateCost(modelId: string, duration: number): number {
@@ -342,79 +350,6 @@ export class FalVideoService {
   }
 
   /**
-   * Check status of async video generation
-   */
-  async getJobStatus(jobId: string, modelId?: string): Promise<VideoGenerationResponse> {
-    try {
-      // If it's our custom fallback ID (not a real Fal.ai request ID), check database instead
-      if (jobId.startsWith('fal_processing_') || jobId.startsWith('fal_error_') || jobId.startsWith('fal_video_') || 
-          jobId.startsWith('fal_seedance_') || jobId.startsWith('fal_failed_')) {
-        console.log('⚠️ Custom job ID detected - this should be handled by database lookup:', jobId)
-        return {
-          id: jobId,
-          status: 'failed',
-          error: 'Custom job ID - status should be checked via database, not Fal.ai API'
-        }
-      }
-
-      // Default to Seedance model if no modelId provided (for backward compatibility)
-      const model = modelId ? this.getModelConfig(modelId) : null
-      const falModelId = model?.falModelId || 'fal-ai/bytedance/seedance/v1/lite/image-to-video'
-
-      // Use the Fal.ai client to check queue status
-      const result = await fal.queue.status(falModelId, {
-        requestId: jobId,
-        logs: true
-      })
-
-      console.log('📊 Fal.ai queue status:', result)
-
-      if (result.status === 'COMPLETED') {
-        // Get the actual result data
-        const resultData = await fal.queue.result(falModelId, {
-          requestId: jobId
-        })
-
-        console.log('📊 Fal.ai queue result:', resultData)
-
-        if (resultData.data?.video) {
-          const videoUrl = resultData.data.video.url
-          const thumbnailUrl = resultData.data.image?.url || null
-
-          // Process and upload video to CloudFlare R2
-          const processedVideo = await this.processAndUploadVideo(
-            videoUrl,
-            thumbnailUrl,
-            `video_${jobId}.mp4`
-          )
-
-          return {
-            id: jobId,
-            status: 'completed',
-            videoUrl: processedVideo.videoUrl,
-            thumbnailUrl: processedVideo.thumbnailUrl,
-            fileSize: processedVideo.fileSize
-          }
-        }
-      }
-
-      // For any other status (IN_PROGRESS, IN_QUEUE) or if no video data
-      return {
-        id: jobId,
-        status: 'processing'
-      }
-
-    } catch (error) {
-      console.error('❌ Fal.ai job status check error:', error)
-      return {
-        id: jobId,
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Status check failed'
-      }
-    }
-  }
-
-  /**
    * Process video and upload to CloudFlare R2
    */
   async processAndUploadVideo(
@@ -521,37 +456,92 @@ export class FalVideoService {
   }
 
   /**
-   * Validate model supports aspect ratio
-   */
-  isAspectRatioSupported(modelId: string, aspectRatio: string): boolean {
-    const model = this.getModelConfig(modelId)
-    return model ? model.supportedAspectRatios.includes(aspectRatio) : false
-  }
-
-  /**
    * Detect MIME type from image buffer
    */
   private detectImageMimeType(buffer: Buffer): string {
-    // Check for JPEG
-    if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xD8) {
-      return 'image/jpeg'
+    const header = buffer.toString('hex', 0, 4);
+
+    if (header.startsWith('89504e47')) {
+      return 'image/png';
+    } else if (header.startsWith('ffd8ff')) {
+      return 'image/jpeg';
+    } else if (header.startsWith('47494638')) {
+      return 'image/gif';
+    } else {
+      return 'application/octet-stream'; // Default or unknown
     }
-    // Check for PNG
-    if (buffer.length >= 8 && 
-        buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
-      return 'image/png'
+  }
+
+  /**
+   * Check status of async video generation
+   */
+  async getJobStatus(jobId: string, modelId?: string): Promise<VideoGenerationResponse> {
+    try {
+      // If it's our custom fallback ID (not a real Fal.ai request ID), check database instead
+      if (jobId.startsWith('fal_processing_') || jobId.startsWith('fal_error_') || jobId.startsWith('fal_video_') || 
+          jobId.startsWith('fal_seedance_') || jobId.startsWith('fal_failed_')) {
+        console.log('⚠️ Custom job ID detected - this should be handled by database lookup:', jobId)
+        return {
+          id: jobId,
+          status: 'failed',
+          error: 'Custom job ID - status should be checked via database, not Fal.ai API'
+        }
+      }
+
+      // Default to Seedance model if no modelId provided (for backward compatibility)
+      const model = modelId ? this.getModelConfig(modelId) : null
+      const falModelId = model?.falModelId || 'fal-ai/bytedance/seedance/v1/lite/image-to-video'
+
+      // Use the Fal.ai client to check queue status
+      const result = await fal.queue.status(falModelId, {
+        requestId: jobId,
+        logs: true
+      })
+
+      console.log('📊 Fal.ai queue status:', result)
+
+      if (result.status === 'COMPLETED') {
+        // Get the actual result data
+        const resultData = await fal.queue.result(falModelId, {
+          requestId: jobId
+        })
+
+        console.log('📊 Fal.ai queue result:', resultData)
+
+        if (resultData.data?.video) {
+          const videoUrl = resultData.data.video.url
+          const thumbnailUrl = resultData.data.image?.url || null
+
+          // Process and upload video to CloudFlare R2
+          const processedVideo = await this.processAndUploadVideo(
+            videoUrl,
+            thumbnailUrl,
+            `video_${jobId}.mp4`
+          )
+
+          return {
+            id: jobId,
+            status: 'completed',
+            videoUrl: processedVideo.videoUrl,
+            thumbnailUrl: processedVideo.thumbnailUrl,
+            fileSize: processedVideo.fileSize
+          }
+        }
+      }
+
+      // For any other status (IN_PROGRESS, IN_QUEUE) or if no video data
+      return {
+        id: jobId,
+        status: 'processing'
+      }
+
+    } catch (error) {
+      console.error('❌ Fal.ai job status check error:', error)
+      return {
+        id: jobId,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Status check failed'
+      }
     }
-    // Check for WebP
-    if (buffer.length >= 12 && 
-        buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) {
-      return 'image/webp'
-    }
-    // Check for TIFF
-    if (buffer.length >= 4 && 
-        ((buffer[0] === 0x49 && buffer[1] === 0x49) || (buffer[0] === 0x4D && buffer[1] === 0x4D))) {
-      return 'image/tiff'
-    }
-    // Default to JPEG
-    return 'image/jpeg'
   }
 } 
