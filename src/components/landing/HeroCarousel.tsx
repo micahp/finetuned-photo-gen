@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Play, Pause } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Pause, ChevronDown, ChevronUp } from 'lucide-react';
 import { VideoSource } from '@/lib/video-optimization';
+import { Button } from '@/components/ui/button';
 
 interface HeroCarouselProps {
   videos?: Array<{
@@ -14,6 +15,7 @@ interface HeroCarouselProps {
     poster?: string;
     lowQualityPlaceholder?: string;
     description?: string;
+    fullPrompt?: string;
     transcript?: string;
   }>;
   autoplayInterval?: number;
@@ -38,6 +40,7 @@ export function HeroCarousel({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
+  const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set());
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
 
@@ -110,6 +113,19 @@ export function HeroCarousel({
     } else {
       videoRefs.current.delete(id);
     }
+  }, []);
+
+  // Toggle prompt expansion
+  const togglePromptExpansion = useCallback((videoId: string) => {
+    setExpandedPrompts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(videoId)) {
+        newSet.delete(videoId);
+      } else {
+        newSet.add(videoId);
+      }
+      return newSet;
+    });
   }, []);
 
   // Control video playback
@@ -187,7 +203,34 @@ export function HeroCarousel({
                   <div className="bg-black/50 backdrop-blur-sm rounded-lg px-6 py-4">
                     <h2 className="text-white text-2xl font-bold">{video.title}</h2>
                     {video.description && (
-                      <p className="text-white/80 mt-2">{video.description}</p>
+                      <div className="mt-2">
+                        <p className="text-white/80">
+                          {expandedPrompts.has(video.id) && video.fullPrompt 
+                            ? video.fullPrompt 
+                            : video.description
+                          }
+                        </p>
+                        {video.fullPrompt && video.fullPrompt !== video.description && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => togglePromptExpansion(video.id)}
+                            className="mt-2 text-white/70 hover:text-white hover:bg-white/10 p-2 h-auto text-sm"
+                          >
+                            {expandedPrompts.has(video.id) ? (
+                              <>
+                                <ChevronUp className="w-4 h-4 mr-1" />
+                                Hide full prompt
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="w-4 h-4 mr-1" />
+                                See full prompt
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
