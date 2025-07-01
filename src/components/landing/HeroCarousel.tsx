@@ -27,7 +27,7 @@ interface HeroCarouselProps {
 
 export function HeroCarousel({
   videos = [],
-  autoplayInterval = 8000,
+  autoplayInterval = 30000,
   className = '',
   pauseOnHover = true,
   enableAutoplay = true,
