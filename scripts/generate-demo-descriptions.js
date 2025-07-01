@@ -187,8 +187,12 @@ async function generateDescriptions() {
           model: 'meta-llama/Llama-3.2-3B-Instruct-Turbo'
         })
         
-        // Clean up the response (remove quotes if present)
-        const cleanDescription = newDescription.replace(/^["']|["']$/g, '').trim()
+        // Clean up the response (remove quotes if present and fix apostrophes)
+        const cleanDescription = newDescription
+          .replace(/^["']|["']$/g, '') // Remove wrapping quotes
+          .replace(/['']/g, "'") // Replace curly apostrophes with straight ones
+          .replace(/[""]/g, '"') // Replace curly quotes with straight ones
+          .trim()
         
         updatedItems.push({
           ...item,
