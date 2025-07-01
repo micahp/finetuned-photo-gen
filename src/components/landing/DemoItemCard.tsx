@@ -33,9 +33,6 @@ export function DemoItemCard({ item, onClick }: DemoItemCardProps) {
       />
       {/* Overlay */}
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300" />
-      <span className="absolute bottom-2 left-2 text-xs font-semibold bg-photoai-accent-cyan text-black px-2 py-1 rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-        {item.category}
-      </span>
     </div>
   )
 } 

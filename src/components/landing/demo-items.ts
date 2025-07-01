@@ -39,27 +39,27 @@ export const demoItems: DemoItem[] = [
   },
   {
     id: '6',
-    src: 'https://images.unsplash.com/photo-1531177071257-596346bd3ef6?auto=format&fit=crop&w=800&q=60',
-    alt: 'Studio lighting fashion portrait',
-    category: 'studio'
-  },
-  {
-    id: '7',
     src: 'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=800&q=60',
     alt: 'Outdoor adventure scene',
     category: 'outdoor'
   },
   {
-    id: '8',
+    id: '7',
     src: 'https://images.unsplash.com/photo-1454023492550-5696f8ff10e1?auto=format&fit=crop&w=800&q=60',
     alt: 'Vintage cinematic still',
     category: 'vintage'
   },
   {
+    id: '8',
+    src: '/images/flux-dev.webp',
+    alt: 'Flux Dev Model',
+    category: 'featured'
+  },
+  {
     id: '9',
-    src: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=800&q=60',
-    alt: 'Modern minimalist portrait',
-    category: 'modern'
+    src: '/images/flux-pro-ultra.webp',
+    alt: 'Flux Pro Ultra Model',
+    category: 'featured'
   },
   {
     id: '10',
