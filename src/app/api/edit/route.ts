@@ -9,7 +9,7 @@ import { CreditService } from '@/lib/credit-service'
 import { isPremiumUser } from '@/lib/subscription-utils'
 
 const editImageSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
+  prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
   imageUrl: z.string().url('Valid image URL is required'),
   seed: z.number().optional(),
 })

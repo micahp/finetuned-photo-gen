@@ -10,7 +10,7 @@ import { CreditService } from '@/lib/credit-service'
 import { isPremiumUser, isPremiumModel } from '@/lib/subscription-utils'
 
 const generateImageSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
+  prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
   modelId: z.string().optional(),
   style: z.string().optional(),
   aspectRatio: z.enum(['1:1', '16:9', '9:16', '3:4', '4:3']).default('1:1'),

@@ -7,7 +7,7 @@ import { CreditService, RelatedEntityType } from '@/lib/credit-service'
 import { isPremiumUser } from '@/lib/subscription-utils'
 
 const generateVideoSchema = z.object({
-  prompt: z.string().max(1000, 'Prompt too long'),
+  prompt: z.string().max(2000, 'Prompt too long'),
   modelId: z.string().min(1, 'Model is required'),
   duration: z.number().min(3).max(30).default(5),
   aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3']).default('16:9'),
