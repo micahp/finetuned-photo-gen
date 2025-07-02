@@ -176,7 +176,7 @@ export function HeroCarousel({
         {/* Global Tagline */}
         <div className="absolute top-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none text-center px-4">
           <h1
-            className="text-white font-bold drop-shadow-lg text-2xl sm:text-3xl md:text-4xl lg:text-5xl"
+            className="font-bold drop-shadow-lg text-2xl sm:text-3xl md:text-4xl lg:text-5xl bg-gradient-to-r from-brand-blue to-brand-purple bg-clip-text text-transparent"
             aria-label="Cast yourself in any movie"
           >
             Cast yourself in any movie.
