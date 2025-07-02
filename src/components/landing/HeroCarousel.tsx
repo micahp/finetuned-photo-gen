@@ -274,7 +274,7 @@ export function HeroCarousel({
       {/* Play/Pause Button */}
       <button
         onClick={() => setIsPlaying(prev => !prev)}
-        className="absolute bottom-8 right-8 z-30 bg-black/30 hover:bg-black/50 text-white p-3 rounded-full transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/50"
+        className="absolute bottom-4 right-8 z-30 bg-black/30 hover:bg-black/50 text-white p-3 rounded-full transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/50"
         aria-label={isPlaying ? 'Pause video' : 'Play video'}
       >
         {isPlaying && !isPaused ? (

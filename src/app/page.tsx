@@ -77,6 +77,17 @@ export default function HomePage() {
         ariaLabel="Hero Carousel"
       />
 
+      {/* Selfie Training Example Section */}
+      <SelfieTrainingSection
+        inputImageUrls={[
+          '/selfies/IMG_1248.jpg',
+          '/selfies/IMG_1889.jpg',
+          '/selfies/IMG_2268.jpg',
+          '/selfies/IMG_3157.jpg'
+        ]}
+        outputImageUrl={randomOutputImage}
+      />
+
       {/* Features Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
@@ -121,17 +132,6 @@ export default function HomePage() {
           </Card>
         </div>
       </div>
-
-      {/* Selfie Training Example Section */}
-      <SelfieTrainingSection
-        inputImageUrls={[
-          '/selfies/IMG_1248.jpg',
-          '/selfies/IMG_1889.jpg',
-          '/selfies/IMG_2268.jpg',
-          '/selfies/IMG_3157.jpg'
-        ]}
-        outputImageUrl={randomOutputImage}
-      />
 
       {/* AI Film Studio Section */}
       <FilmStudioSection />
