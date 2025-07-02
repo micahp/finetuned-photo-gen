@@ -78,49 +78,51 @@ export default function HomePage() {
       />
 
       {/* Features Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-          How It Works
-        </h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <Card>
-            <CardHeader>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-                <span className="text-2xl font-bold text-blue-600">1</span>
-              </div>
-              <CardTitle>Upload Your Photos</CardTitle>
-              <CardDescription>
-                Upload 10-20 high-quality photos of yourself to train your personalized AI model
-              </CardDescription>
-            </CardHeader>
-          </Card>
+      <section className="w-full bg-gray-900 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <h2 className="text-3xl font-bold text-center mb-12">
+            How It Works
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <Card className="bg-gray-800 text-white border-gray-700">
+              <CardHeader>
+                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                  <span className="text-2xl font-bold text-blue-600">1</span>
+                </div>
+                <CardTitle>Upload Your Photos</CardTitle>
+                <CardDescription className="text-gray-300">
+                  Upload 10-20 high-quality photos of yourself to train your personalized AI model
+                </CardDescription>
+              </CardHeader>
+            </Card>
 
-          <Card>
-            <CardHeader>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-                <span className="text-2xl font-bold text-green-600">2</span>
-              </div>
-              <CardTitle>Train Your Model</CardTitle>
-              <CardDescription>
-                Our AI analyzes your photos and creates a custom FLUX model that understands your unique features
-              </CardDescription>
-            </CardHeader>
-          </Card>
+            <Card className="bg-gray-800 text-white border-gray-700">
+              <CardHeader>
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                  <span className="text-2xl font-bold text-green-600">2</span>
+                </div>
+                <CardTitle>Train Your Model</CardTitle>
+                <CardDescription className="text-gray-300">
+                  Our AI analyzes your photos and creates a custom FLUX model that understands your unique features
+                </CardDescription>
+              </CardHeader>
+            </Card>
 
-          <Card>
-            <CardHeader>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-                <span className="text-2xl font-bold text-purple-600">3</span>
-              </div>
-              <CardTitle>Generate Images</CardTitle>
-              <CardDescription>
-                Create unlimited personalized images with custom prompts - from professional headshots to creative art
-              </CardDescription>
-            </CardHeader>
-          </Card>
+            <Card className="bg-gray-800 text-white border-gray-700">
+              <CardHeader>
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                  <span className="text-2xl font-bold text-purple-600">3</span>
+                </div>
+                <CardTitle>Generate Images</CardTitle>
+                <CardDescription className="text-gray-300">
+                  Create unlimited personalized images with custom prompts - from professional headshots to creative art
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </div>
         </div>
-      </div>
+      </section>
 
       {/* Selfie Training Example Section */}
       <SelfieTrainingSection
@@ -140,49 +142,55 @@ export default function HomePage() {
       <DemoLibrarySection />
 
       {/* Pricing Preview */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-          Simple Pricing
-        </h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-          {PRICING_PLANS.map((plan, index) => (
-            <Card 
-              key={plan.id} 
-              className={`relative ${index === 1 ? 'border-blue-500 border-2 shadow-lg' : ''}`}
-            >
-              {index === 1 && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <Badge className="bg-brand-blue text-white">Most Popular</Badge>
-                </div>
-              )}
-              <CardHeader>
-                <CardTitle className="text-xl">{plan.name}</CardTitle>
-                <div className="text-3xl font-bold">
-                  {plan.credits} credits
-                  {plan.id !== 'free' && (
-                    <span className="text-sm text-gray-500">/month</span>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600 mb-4">
-                  Perfect for {plan.id === 'free' ? 'trying out' : plan.id === 'starter' ? 'getting started' : plan.id === 'creator' ? 'regular use' : 'power users'}
-                </p>
-                <Button 
-                  asChild 
-                  className={`w-full ${index === 1 ? 'bg-brand-blue hover:bg-blue-700' : ''}`}
-                  variant={index === 1 ? 'default' : 'outline'}
-                >
-                  <Link href="/register">
-                    Get Started
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+      <section className="w-full bg-gray-900 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <h2 className="text-3xl font-bold text-center mb-12">
+            Simple Pricing
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+            {PRICING_PLANS.map((plan, index) => (
+              <Card 
+                key={plan.id} 
+                className={`relative bg-gray-800 text-white border-gray-700 ${index === 1 ? 'border-blue-500 border-2 shadow-lg' : ''}`}
+              >
+                {index === 1 && (
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                    <Badge className="bg-brand-blue text-white">Most Popular</Badge>
+                  </div>
+                )}
+                <CardHeader>
+                  <CardTitle className="text-xl">{plan.name}</CardTitle>
+                  <div className="text-3xl font-bold">
+                    {plan.credits} credits
+                    {plan.id !== 'free' && (
+                      <span className="text-sm text-gray-300">/month</span>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-300 mb-4">
+                    Perfect for {plan.id === 'free' ? 'trying out' : plan.id === 'starter' ? 'getting started' : plan.id === 'creator' ? 'regular use' : 'power users'}
+                  </p>
+                  <Button 
+                    asChild 
+                    className={`w-full ${
+                      index === 1
+                        ? 'bg-brand-blue hover:bg-blue-700'
+                        : 'border-gray-600 text-white bg-gray-800 hover:bg-gray-700 hover:text-white'
+                    }`}
+                    variant={index === 1 ? 'default' : 'outline'}
+                  >
+                    <Link href="/register">
+                      Get Started
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
-      </div>
+      </section>
 
       {/* CTA Section */}
       <div className="bg-gradient-to-r from-brand-blue via-brand-purple to-brand-cyan text-white py-16">
