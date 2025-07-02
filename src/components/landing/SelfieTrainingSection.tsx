@@ -46,7 +46,7 @@ export function SelfieTrainingSection({
   return (
     <section
       id="selfies"
-      className="w-full py-16 px-4 sm:px-6 lg:px-8"
+      className="w-full py-16 pb-0 px-4 sm:px-6 lg:px-8"
       aria-labelledby="selfies-heading"
     >
       <div className="max-w-7xl mx-auto text-center">

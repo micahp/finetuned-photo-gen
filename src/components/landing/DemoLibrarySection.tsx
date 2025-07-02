@@ -7,7 +7,7 @@ import { demoItems } from './demo-items'
 export function DemoLibrarySection() {
   return (
     <section 
-      className="w-full py-16 px-4 sm:px-6 lg:px-8"
+      className="w-full py-16 pb-0 px-4 sm:px-6 lg:px-8"
       aria-labelledby="demo-library-heading"
     >
       <div className="max-w-7xl mx-auto">
