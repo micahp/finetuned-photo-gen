@@ -173,6 +173,16 @@ export function HeroCarousel({
     >
       {/* Video Display */}
       <div className="relative w-full h-full">
+        {/* Global Tagline */}
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none text-center px-4">
+          <h1
+            className="text-white font-bold drop-shadow-lg text-2xl sm:text-3xl md:text-4xl lg:text-5xl"
+            aria-label="Cast yourself in any movie"
+          >
+            Cast yourself in any movie.
+          </h1>
+        </div>
+
         {videos.map((video, index) => {
           const isActive = index === currentIndex;
           const videoSrc = video.sources?.[0]?.url || video.url || '';

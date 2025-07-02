@@ -141,6 +141,20 @@ export function HeroSection({ videos, className = '' }: HeroSectionProps) {
             of Yourself
           </motion.h1>
 
+          {/* Secondary Tagline */}
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.8 }}
+            className={`font-semibold text-photoai-accent-cyan ${
+              isMobile && deviceOrientation === 'landscape'
+                ? 'text-lg'
+                : 'text-xl sm:text-2xl md:text-3xl'
+            }`}
+          >
+            Cast yourself in any movie.
+          </motion.h2>
+
           {/* Sub-headline */}
           <motion.p
             initial={{ opacity: 0, y: 20 }}
