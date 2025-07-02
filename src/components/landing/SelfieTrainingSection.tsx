@@ -39,8 +39,7 @@ export function SelfieTrainingSection({
   ],
   outputImageUrl =
     'https://photoai.com/cdn-cgi/image/format=jpeg,width=1000,quality=50/https://r2-us-west.photoai.com/1723596600-599fad91c8823eedc9646f3b6dec2c4e-1.png?1723596599',
-  arrowImageUrl =
-    'https://photoai.com/cdn-cgi/image/format=auto,fit=cover,height=400,quality=75/assets/pencil-arrow.png?25',
+  arrowImageUrl = '/swirly-arrow.svg',
   outputLink = 'https://x.com/levelsio'
 }: SelfieTrainingSectionProps) {
   return (
@@ -77,9 +76,9 @@ export function SelfieTrainingSection({
           <Image
             src={arrowImageUrl}
             alt="Arrow indicating AI training"
-            width={160}
-            height={160}
-            className="hidden md:block rotate-0 md:rotate-12"
+            width={120}
+            height={120}
+            className="hidden md:block -rotate-12 transform"
           />
 
           {/* Output image */}

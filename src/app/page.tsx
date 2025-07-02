@@ -32,8 +32,7 @@ export default function HomePage() {
                 type: 'video/mp4'
               }
             ],
-            thumbnail: '/selfies/wan-i2v-thumb.jpg',
-            poster: '/selfies/wan-i2v-thumb.jpg',
+            thumbnail: '/thumbnails/seedance_pro_t2v-thumb.jpg',
             title: 'Seedance Pro',
             description: 'A bright blue race car speeds along a snowy racetrack...',
             fullPrompt: 'A bright blue race car speeds along a snowy racetrack. [Low-angle shot] Captures several cars speeding along the racetrack through a harsh snowstorm. [Overhead shot] The camera gradually pulls upward, revealing the full race scene illuminated by storm lights',
@@ -47,8 +46,7 @@ export default function HomePage() {
                 type: 'video/mp4'
               }
             ],
-            thumbnail: '/selfies/kangaroo-thumb.jpg',
-            poster: '/selfies/kangaroo-thumb.jpg',
+            thumbnail: '/thumbnails/director-thumb.jpg',
             title: 'Hailuo 2 w/ Camera Control Prompt',
             description: '[Push in]Close up of a tense woman looks to the left, startled by a sound...',
             fullPrompt: '[Push in]Close up of a tense woman looks to the left, startled by a sound, in a darkened kitchen, Pots and pans hang ominously, the window in the kitchen is open and the wind softly blows the pans and creates an ominous mood. [Shake]the woman\'s shock turns to fear. Black-and-white film noir shot dimly lit, 1950s-style, with dramatic, high-contrast shadows. The overall atmosphere is reminiscent of Alfred Hitchcock\'s suspenseful storytelling, evoking a looming sense of dread with stark chiaroscuro lighting and a slight film-grain texture.',
@@ -61,8 +59,7 @@ export default function HomePage() {
                 type: 'video/mp4'
               }
             ],
-            thumbnail: '/selfies/framepack-thumb.jpg',
-            poster: '/selfies/framepack-thumb.jpg',
+            thumbnail: '/thumbnails/video3-thumb.jpg',
             title: 'Hailuo 2',
             description: 'A Galactic Smuggler is a rogue figure with a cybernetic arm and a well-worn coat that hints at many dangerous...',
             fullPrompt: 'A Galactic Smuggler is a rogue figure with a cybernetic arm and a well-worn coat that hints at many dangerous escapades across the galaxy. Their ship is filled with rare and exotic treasures from distant planets, concealed in hidden compartments, showing their expertise in illicit trade. Their belt is adorned with energy-based weapons, ready to be drawn at any moment to protect themselves or escape from tight situations. This character thrives in the shadows of space, navigating between the law and chaos with stealth and wit, always seeking the next big score while evading bounty hunters and law enforcement. The rogue\'s ship, rugged yet efficient, serves as both a home and a tool for their dangerous lifestyle. The treasures they collect reflect the diverse and intriguing worlds they\'ve encountered—alien artifacts, rare minerals, and artifacts of unknown origin. Their reputation precedes them, with whispers of their dealings and the deadly encounters that often follow. A master of negotiation and deception, the Galactic Smuggler navigates the cosmos with an eye on the horizon, always one step ahead of those who pursue them.',

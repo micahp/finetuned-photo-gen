@@ -12,7 +12,6 @@ interface HeroCarouselProps {
     url?: string;
     thumbnail: string;
     title?: string;
-    poster?: string;
     lowQualityPlaceholder?: string;
     description?: string;
     fullPrompt?: string;
@@ -197,7 +196,7 @@ export function HeroCarousel({
               <video
                 ref={(el) => setVideoRef(video.id, el)}
                 src={videoSrc}
-                poster={video.poster || video.thumbnail}
+                poster={video.thumbnail}
                 className="w-full h-full object-cover"
                 preload={preloadStrategy}
                 muted
