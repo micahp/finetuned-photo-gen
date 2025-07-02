@@ -17,10 +17,10 @@ export function DemoLibrarySection() {
             id="demo-library-heading"
             className="text-4xl md:text-5xl font-bold text-gray-900 mb-6"
           >
-            Infinite Demo Library
+            Demo Library
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Explore endless possibilities with our curated collection of AI-generated content across different themes and styles.
+            Explore possibilities with our curated collection of AI-generated content across different themes and styles.
           </p>
         </div>
 
