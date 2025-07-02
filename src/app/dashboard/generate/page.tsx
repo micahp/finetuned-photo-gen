@@ -22,6 +22,7 @@ import { SmartImage } from '@/components/ui/smart-image'
 import { isPremiumUser, isPremiumModel, getPremiumFeatures } from '@/lib/subscription-utils'
 import { PremiumModelBadge } from '@/components/ui/premium-model-badge'
 import Link from 'next/link'
+import { CREDIT_COSTS } from '@/lib/credits/constants'
 
 const generateSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
@@ -243,7 +244,7 @@ export default function GeneratePage() {
   }
 
   const onSubmit = async (data: GenerateFormData) => {
-    if (creditsRemaining < 1) {
+    if (creditsRemaining < CREDIT_COSTS.photo) {
       setError('Insufficient credits. Please upgrade your plan.')
       return
     }
@@ -887,7 +888,7 @@ export default function GeneratePage() {
 
               <Button 
                 type="submit" 
-                disabled={isGenerating || creditsRemaining < 1} 
+                disabled={isGenerating || creditsRemaining < CREDIT_COSTS.photo} 
                 className="w-full"
                 size="lg"
               >
@@ -899,7 +900,7 @@ export default function GeneratePage() {
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Generate Image (1 credit)
+                    Generate Image ({CREDIT_COSTS.photo} credits)
                   </>
                 )}
               </Button>

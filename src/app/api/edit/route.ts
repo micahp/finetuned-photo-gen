@@ -6,6 +6,7 @@ import { ReplicateService } from '@/lib/replicate-service'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
 import { ImageProcessingService } from '@/lib/image-processing-service'
 import { CreditService } from '@/lib/credit-service'
+import { CREDIT_COSTS } from '@/lib/credits/constants'
 import { isPremiumUser } from '@/lib/subscription-utils'
 
 const editImageSchema = z.object({
@@ -51,7 +52,8 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    if (!user || user.credits < 1) {
+    const EDIT_CREDIT_COST = CREDIT_COSTS.edit;
+    if (!user || user.credits < EDIT_CREDIT_COST) {
       return NextResponse.json(
         { error: 'Insufficient credits' },
         { status: 400 }
@@ -122,7 +124,7 @@ export async function POST(request: NextRequest) {
       // Deduct credit using CreditService for proper transaction logging
       const creditResult = await CreditService.spendCredits(
         session.user.id,
-        1,
+        EDIT_CREDIT_COST,
         `Image edit: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`,
         'image_edit',
         undefined, // Will be set to edited image ID after creation
@@ -219,7 +221,7 @@ export async function POST(request: NextRequest) {
           cloudflareImageId,
           seed: seed,
           processingTimeMs: editDuration,
-          creditsUsed: 1,
+          creditsUsed: EDIT_CREDIT_COST,
           metadata: {
             model: 'black-forest-labs/flux-kontext-pro',
             provider: 'replicate',
@@ -287,7 +289,7 @@ export async function POST(request: NextRequest) {
         height: savedImage.height,
         createdAt: savedImage.createdAt,
         creditsUsed: savedImage.creditsUsed,
-        remainingCredits: user.credits - 1
+        remainingCredits: creditResult.newBalance
       })
     }
 

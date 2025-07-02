@@ -17,6 +17,7 @@ import { isPremiumUser } from '@/lib/subscription-utils'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { CreditCostHint } from '@/components/credits/CreditCostHint'
+import { CREDIT_COSTS } from '@/lib/credits/constants'
 
 const editSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
@@ -204,7 +205,7 @@ export default function EditPage() {
       return
     }
     
-    if (creditsRemaining < 1) {
+    if (creditsRemaining < CREDIT_COSTS.edit) {
       setError('Insufficient credits. Please upgrade your plan.')
       return
     }
@@ -572,7 +573,7 @@ export default function EditPage() {
               {hasPremiumAccess && (
                 <Button 
                   type="submit" 
-                  disabled={isEditing || creditsRemaining < 1 || !sourceImage} 
+                  disabled={isEditing || creditsRemaining < CREDIT_COSTS.edit || !sourceImage} 
                   className="w-full"
                   size="lg"
                 >
@@ -584,7 +585,7 @@ export default function EditPage() {
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Edit Image (1 credit)
+                      Edit Image ({CREDIT_COSTS.edit} credits)
                     </>
                   )}
                 </Button>
