@@ -46,7 +46,7 @@ import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const videoGenerationSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(1000, 'Prompt too long'),
+  prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
   modelId: z.string().min(1, 'Model is required'),
   duration: z.number().min(3).max(60),
   aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3']),
@@ -627,8 +627,8 @@ export default function VideoGenerationPage() {
                             </FormControl>
                             <FormDescription>
                               {activeMode === 'text-to-video'
-                                ? "Be specific about camera movements, lighting, and desired actions. Max 1000 characters."
-                                : "Describe the motion and animation you want applied to your image. Max 1000 characters."
+                                ? "Be specific about camera movements, lighting, and desired actions. Max 2000 characters."
+                                : "Describe the motion and animation you want applied to your image. Max 2000 characters."
                               }
                             </FormDescription>
                             <FormMessage />

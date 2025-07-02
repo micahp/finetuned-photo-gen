@@ -19,7 +19,7 @@ import { toast } from 'sonner'
 import { CreditCostHint } from '@/components/credits/CreditCostHint'
 
 const editSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
+  prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
   seed: z.number().optional(),
 })
 
