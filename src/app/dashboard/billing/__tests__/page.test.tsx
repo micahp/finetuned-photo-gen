@@ -157,8 +157,8 @@ describe('BillingPage', () => {
       })
     })
 
-    // Should NOT trigger session update (to avoid infinite reload bug)
-    expect(mockUpdate).not.toHaveBeenCalled()
+    // Should trigger a session update to refresh billing info
+    expect(mockUpdate).toHaveBeenCalled()
   })
 
   it('should show cancel toast when returning from canceled checkout', () => {
@@ -234,7 +234,7 @@ describe('BillingPage', () => {
       subscriptionStatus: 'active',
       subscriptionPlan: 'creator',
       stripeCustomerId: 'cus_test_123',
-      credits: 100,
+      credits: 200,
     })
 
     mockUseSession.mockReturnValue({
@@ -278,9 +278,9 @@ describe('BillingPage', () => {
   it('should show correct credit display for different subscription plans', () => {
     const testCases = [
       { plan: 'free', credits: 10, expectedMonthlyCredits: '10' },
-      { plan: 'starter', credits: 100, expectedMonthlyCredits: '100' },
-      { plan: 'creator', credits: 500, expectedMonthlyCredits: '500' },
-      { plan: 'pro', credits: 2000, expectedMonthlyCredits: '2,000' },
+      { plan: 'creator', credits: 200, expectedMonthlyCredits: '200' },
+      { plan: 'pro', credits: 1000, expectedMonthlyCredits: '1,000' },
+      { plan: 'ultra', credits: 5000, expectedMonthlyCredits: '5,000' },
     ]
 
     testCases.forEach(({ plan, credits, expectedMonthlyCredits }) => {
@@ -324,7 +324,7 @@ describe('BillingPage', () => {
     const updatedSession = createMockSession({
       subscriptionStatus: 'active',
       subscriptionPlan: 'creator',
-      credits: 500, // Credits added by webhook
+      credits: 200, // Credits added by webhook
     })
 
     mockUseSession.mockReturnValue({
@@ -352,8 +352,46 @@ describe('BillingPage', () => {
 
     // Should now show updated credits and plan
     expect(screen.getByText('Credits Remaining')).toBeInTheDocument()
-    const updatedCreditElements = screen.getAllByText('500')
+    const updatedCreditElements = screen.getAllByText('200')
     expect(updatedCreditElements.length).toBeGreaterThan(0)
     expect(screen.getByText('Creator Plan')).toBeInTheDocument()
+  })
+
+  it('should render credit costs table with correct rows', () => {
+    const mockSession = createMockSession({
+      subscriptionStatus: 'free',
+      subscriptionPlan: null,
+      credits: 3,
+    })
+
+    mockUseSession.mockReturnValue({
+      data: mockSession,
+      status: 'authenticated',
+      update: jest.fn(),
+    })
+
+    render(<BillingPage />)
+
+    // Heading exists
+    expect(screen.getByText('Credit Costs (per action)')).toBeInTheDocument()
+
+    const expectedRows = [
+      { action: 'photo', costText: '1' },
+      { action: 'video', costText: 'from 5' },
+      { action: 'edit', costText: '1' },
+      { action: 'model train', costText: '100' },
+      { action: 'model upload', costText: '10' },
+    ]
+
+    expectedRows.forEach(({ action, costText }) => {
+      const actionCell = screen.getByText(new RegExp(`^${action}$`, 'i'))
+      expect(actionCell).toBeInTheDocument()
+
+      const row = actionCell.closest('tr') as HTMLElement
+      expect(row).not.toBeNull()
+
+      // Ensure the cost cell contains the expected text
+      expect(row).toHaveTextContent(new RegExp(costText))
+    })
   })
 }) 

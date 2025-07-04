@@ -18,6 +18,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { SessionRefresher } from '@/components/auth/SessionRefresher'
+import { CREDIT_COSTS } from '@/lib/credits/constants'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -318,13 +319,9 @@ export default function BillingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold">{currentPlan.name} Plan</h3>
-                <p className="text-gray-600">{currentPlan.description}</p>
+                <p className="text-gray-600">{currentPlan.credits.toLocaleString()} credits / month</p>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold">
-                  ${currentPlan.price}
-                  {currentPlan.price > 0 && <span className="text-sm text-gray-500">/month</span>}
-                </div>
                 <Badge variant={isSubscribed ? 'default' : 'secondary'}>
                   {session.user.subscriptionStatus === 'active' ? 'Active' : 'Free'}
                 </Badge>
@@ -333,7 +330,7 @@ export default function BillingPage() {
 
             <hr className="border-gray-200" />
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">
                   {session.user.credits?.toLocaleString() || 0}
@@ -345,12 +342,6 @@ export default function BillingPage() {
                   {currentPlan.credits.toLocaleString()}
                 </div>
                 <div className="text-sm text-gray-600">Monthly Credits</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">
-                  {currentPlan.maxModels}
-                </div>
-                <div className="text-sm text-gray-600">Model Slots</div>
               </div>
             </div>
 
@@ -385,6 +376,38 @@ export default function BillingPage() {
             ))}
           </div>
         </div>
+        
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Credit Costs (per action)
+            </CardTitle>
+            <CardDescription>
+              Current credit pricing for each paid action
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead>
+                  <tr>
+                    <th scope="col" className="px-4 py-2 text-left font-medium text-gray-700">Action</th>
+                    <th scope="col" className="px-4 py-2 text-left font-medium text-gray-700">Credits</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {Object.entries(CREDIT_COSTS).map(([key, value]) => (
+                    <tr key={key}>
+                      <td className="px-4 py-2 capitalize">{key.replace('_', ' ')}</td>
+                      <td className="px-4 py-2">{key === 'video' ? `from ${value}` : value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
         
         <Card>
           <CardHeader>

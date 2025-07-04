@@ -8,7 +8,7 @@ import { ImageProcessingService } from '@/lib/image-processing-service'
 import { CreditService } from '@/lib/credit-service'
 
 const batchGenerateSchema = z.object({
-  prompts: z.array(z.string().min(1, 'Prompt cannot be empty').max(500, 'Prompt too long'))
+  prompts: z.array(z.string().min(1, 'Prompt cannot be empty').max(2000, 'Prompt too long'))
     .min(1, 'At least one prompt is required')
     .max(10, 'Maximum 10 prompts allowed per batch'),
   modelId: z.string().optional(),

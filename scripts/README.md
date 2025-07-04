@@ -91,6 +91,37 @@ When adding new debug/maintenance scripts:
 4. Use descriptive names and include error handling
 5. Add the standard dotenv config: `require('dotenv').config();`
 
+## 🎨 Content Generation Scripts
+
+### `generate-demo-descriptions.js`
+**Purpose**: Generate AI-powered descriptions for demo library images using Together AI's text generation API.
+
+**When to use**:
+- When updating demo images and need better alt text
+- Improving accessibility with more descriptive image descriptions
+- Creating more inspiring demo content for the landing page
+
+**Usage**:
+```bash
+node scripts/generate-demo-descriptions.js
+```
+
+**Requirements**:
+- `TOGETHER_API_KEY` environment variable must be set
+- Internet connection for API calls
+
+**What it does**:
+- Reads current demo items from `src/components/landing/demo-items.ts`
+- Uses Together AI's text generation to create better descriptions
+- Updates the file with new, more descriptive alt text
+- Handles special cases for local Flux model images
+- Includes error handling and fallback to original descriptions
+
+**Notes**:
+- Each API call has a 1-second delay to be respectful to rate limits
+- Generates 8-12 word descriptions optimized for accessibility
+- Preserves all other fields (id, src, category)
+
 ## ⚠️ Safety Notes
 
 - Always backup your database before running maintenance scripts

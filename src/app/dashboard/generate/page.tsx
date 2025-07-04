@@ -16,14 +16,16 @@ import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2, ChevronRight } from 'lucide-react'
+import { CreditCostHint } from '@/components/credits/CreditCostHint'
 import { TogetherAIService } from '@/lib/together-ai'
 import { SmartImage } from '@/components/ui/smart-image'
 import { isPremiumUser, isPremiumModel, getPremiumFeatures } from '@/lib/subscription-utils'
 import { PremiumModelBadge } from '@/components/ui/premium-model-badge'
 import Link from 'next/link'
+import { CREDIT_COSTS } from '@/lib/credits/constants'
 
 const generateSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
+  prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
   modelId: z.string().min(1, 'Model is required'),
   style: z.string().min(1, 'Style is required'),
   aspectRatio: z.enum(['1:1', '16:9', '9:16', '3:4', '4:3']),
@@ -242,7 +244,7 @@ export default function GeneratePage() {
   }
 
   const onSubmit = async (data: GenerateFormData) => {
-    if (creditsRemaining < 1) {
+    if (creditsRemaining < CREDIT_COSTS.photo) {
       setError('Insufficient credits. Please upgrade your plan.')
       return
     }
@@ -440,7 +442,7 @@ export default function GeneratePage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Generate Images</h1>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center">Generate Images <CreditCostHint action="photo" /></h1>
           <p className="text-gray-600 mt-2">
             Create stunning AI-generated images with FLUX models
           </p>
@@ -886,7 +888,7 @@ export default function GeneratePage() {
 
               <Button 
                 type="submit" 
-                disabled={isGenerating || creditsRemaining < 1} 
+                disabled={isGenerating || creditsRemaining < CREDIT_COSTS.photo} 
                 className="w-full"
                 size="lg"
               >
@@ -898,7 +900,7 @@ export default function GeneratePage() {
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Generate Image (1 credit)
+                    Generate Image ({CREDIT_COSTS.photo} credits)
                   </>
                 )}
               </Button>

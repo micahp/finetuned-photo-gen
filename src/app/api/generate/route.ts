@@ -8,9 +8,10 @@ import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
 import { ImageProcessingService } from '@/lib/image-processing-service'
 import { CreditService } from '@/lib/credit-service'
 import { isPremiumUser, isPremiumModel } from '@/lib/subscription-utils'
+import { CREDIT_COSTS } from '@/lib/credits/constants'
 
 const generateImageSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
+  prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
   modelId: z.string().optional(),
   style: z.string().optional(),
   aspectRatio: z.enum(['1:1', '16:9', '9:16', '3:4', '4:3']).default('1:1'),
@@ -64,8 +65,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const PHOTO_CREDIT_COST = CREDIT_COSTS.photo;
     // Check if user has enough credits
-    if (user.credits < 1) {
+    if (user.credits < PHOTO_CREDIT_COST) {
       return NextResponse.json(
         { error: 'Insufficient credits' },
         { status: 400 }
@@ -85,13 +87,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check premium model access
+    // Check premium model access (DEV bypass)
+    const isDev = process.env.NODE_ENV === 'development'
     if (modelId && isPremiumModel(modelId)) {
       const hasPremiumAccess = isPremiumUser(user.subscriptionPlan, user.subscriptionStatus)
-      
-      if (!hasPremiumAccess) {
+
+      if (!hasPremiumAccess && !isDev) {
         return NextResponse.json(
-          { 
+          {
             error: 'Premium model access required. Please upgrade your subscription to use FLUX Pro models.',
             upgradeRequired: true
           },
@@ -241,7 +244,7 @@ export async function POST(request: NextRequest) {
       // Deduct credit using CreditService for proper transaction logging
       const creditResult = await CreditService.spendCredits(
         session.user.id,
-        1,
+        PHOTO_CREDIT_COST,
         `Image generation: ${fullPrompt.substring(0, 100)}${fullPrompt.length > 100 ? '...' : ''}`,
         'image_generation',
         undefined, // Will be set to generated image ID after creation
@@ -425,7 +428,7 @@ export async function POST(request: NextRequest) {
               triggerWord: selectedUserModel.triggerWord
             } : undefined
           },
-          creditsUsed: 1
+          creditsUsed: PHOTO_CREDIT_COST
         }
       })
 

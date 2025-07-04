@@ -924,7 +924,7 @@ describe('Edit Page - Comprehensive Tests', () => {
 
       await waitFor(() => {
         const promptTextarea = screen.getByPlaceholderText(/Describe how you want to edit/i)
-        const longPrompt = 'a'.repeat(501) // Over 500 character limit
+        const longPrompt = 'a'.repeat(2001) // Over 2000 character limit
         fireEvent.change(promptTextarea, { target: { value: longPrompt } })
       })
 

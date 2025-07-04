@@ -16,6 +16,7 @@ export type RelatedEntityType =
   | 'model_training' 
   | 'subscription' 
   | 'admin_action'
+  | 'video_generation'
 
 export interface CreditTransactionData {
   userId: string
@@ -535,15 +536,19 @@ export class CreditService {
       where: { userId }
     })
 
+    // Import MAX_MODELS_PER_PLAN from our new constants
+    const { MAX_MODELS_PER_PLAN } = await import('./credits/constants')
+    const maxModelsForPlan = MAX_MODELS_PER_PLAN[currentPlan.id as keyof typeof MAX_MODELS_PER_PLAN] || 0
+
     const warningThreshold = Math.floor(currentPlan.credits * 0.1) // 10% of monthly credits
     const isNearLimit = user.credits <= warningThreshold
 
     return {
       maxCreditsPerMonth: currentPlan.credits,
-      maxModels: currentPlan.maxModels,
+      maxModels: maxModelsForPlan,
       currentCredits: user.credits,
       currentModels,
-      canCreateModel: currentModels < currentPlan.maxModels,
+      canCreateModel: currentModels < maxModelsForPlan,
       canGenerateImage: user.credits > 0,
       warningThreshold,
       isNearLimit
