@@ -149,67 +149,16 @@ services:
 
   # Automated backup service
   backup:
-    image: postgres:15.8-alpine
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB:-finetuned_photo_gen}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - PGPASSWORD=${POSTGRES_PASSWORD}      # ← add this line
-      - BACKUP_RETENTION_DAYS=30
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finetuned_photo_gen}
-    volumes:
-      - ./backups:/backups
-      - backup_scripts:/scripts
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - app-network
-    restart: unless-stopped
-    # Resource limits for backup service
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.1'
-          memory: 128M
-    # Security enhancements
-    security_opt:
-      - no-new-privileges:true
+    image: postgres:15-alpine      # still contains pg_dump
+    entrypoint: ["sh", "-c"]       # <-- prevents server startup
     command: >
-      sh -c "
-        echo '📦 Backup service starting...' &&
-        cat > /scripts/backup.sh << 'EOF'
-        #!/bin/sh
-        set -e
-        TIMESTAMP=$$(date +%Y%m%d_%H%M%S)
-        BACKUP_FILE=\"/backups/backup_$${TIMESTAMP}.sql\"
-        echo \"🔄 Creating backup: $$BACKUP_FILE\"
-        pg_dump -h db -U $$POSTGRES_USER -d $$POSTGRES_DB > $$BACKUP_FILE
-        gzip $$BACKUP_FILE
-        echo \"✅ Backup completed: $${BACKUP_FILE}.gz\"
-        find /backups -name \"backup_*.sql.gz\" -mtime +$$BACKUP_RETENTION_DAYS -delete
-        echo \"🧹 Old backups cleaned up\"
-        EOF
-        chmod +x /scripts/backup.sh &&
-        while true; do
-          /scripts/backup.sh
-          sleep 86400  # 24 hours (once daily)
-        done
-      "
-
-volumes:
-  postgres_data:
-    driver: local
-  backup_scripts:
-    driver: local
-
-networks:
-  app-network:
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.20.0.0/16 
+      while true; do
+        echo '📦 Starting backup…';
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S);
+        BACKUP_FILE="/backups/backup_${TIMESTAMP}.sql";
+        pg_dump -h db -U "$POSTGRES_USER" -d "$POSTGRES_DB" > "$BACKUP_FILE";
+        gzip "$BACKUP_FILE";
+        echo "✅ Backup done: ${BACKUP_FILE}.gz";
+        find /backups -name "backup_*.sql.gz" -mtime +"$BACKUP_RETENTION_DAYS" -delete;
+        sleep 86400;               # wait 24 h
+      done
