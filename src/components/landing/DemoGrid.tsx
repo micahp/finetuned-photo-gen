@@ -104,14 +104,14 @@ export function DemoGrid({
             transition={{ duration: 0.3, delay: index * 0.05 }}
             onClick={() => onItemClick?.(item)}
           >
-            <div className="relative overflow-hidden rounded-lg bg-photoai-dark-lighter aspect-square">
+            <div className="relative overflow-hidden rounded-lg bg-fine-dark-lighter aspect-square">
               {/* Placeholder Content */}
               {item.url ? (
-                <div className="w-full h-full bg-gradient-to-br from-photoai-accent-cyan/20 to-photoai-accent-purple/20">
+                <div className="w-full h-full bg-gradient-to-br from-fine-accent-cyan/20 to-fine-accent-purple/20">
                   {/* Actual image/video would go here */}
                 </div>
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-photoai-accent-cyan/10 to-photoai-accent-purple/10 flex items-center justify-center">
+                <div className="w-full h-full bg-gradient-to-br from-fine-accent-cyan/10 to-fine-accent-purple/10 flex items-center justify-center">
                   <div className="text-center space-y-2">
                     <div className="w-12 h-12 mx-auto bg-white/10 rounded-lg flex items-center justify-center">
                       {item.type === 'video' ? (
@@ -163,7 +163,7 @@ export function DemoGrid({
       <div ref={loadMoreRef} className="h-20 flex items-center justify-center mt-8">
         {loading && (
           <div className="flex items-center space-x-2 text-white/60">
-            <div className="w-4 h-4 border-2 border-photoai-accent-cyan border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-4 h-4 border-2 border-fine-accent-cyan border-t-transparent rounded-full animate-spin"></div>
             <span className="text-sm">Loading more...</span>
           </div>
         )}

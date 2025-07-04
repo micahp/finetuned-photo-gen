@@ -33,7 +33,7 @@ export function FloatingFooter({
     <>
       {/* Floating Footer Strip */}
       <motion.div
-        className={`fixed bottom-0 left-0 right-0 z-40 bg-photoai-dark/90 backdrop-blur-md border-t border-white/10 ${className}`}
+        className={`fixed bottom-0 left-0 right-0 z-40 bg-fine-dark/90 backdrop-blur-md border-t border-white/10 ${className}`}
         initial={{ y: 100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.5, delay: 1 }}
@@ -48,7 +48,7 @@ export function FloatingFooter({
                   href={displayCreator.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center space-x-2 text-white hover:text-photoai-accent-cyan transition-colors"
+                  className="flex items-center space-x-2 text-white hover:text-fine-accent-cyan transition-colors"
                 >
                   {displayCreator.avatar ? (
                     <img 
@@ -57,7 +57,7 @@ export function FloatingFooter({
                       className="w-6 h-6 rounded-full"
                     />
                   ) : (
-                    <div className="w-6 h-6 bg-photoai-gradient rounded-full flex items-center justify-center text-white text-xs font-bold">
+                    <div className="w-6 h-6 bg-fine-gradient rounded-full flex items-center justify-center text-white text-xs font-bold">
                       {displayCreator.avatar || displayCreator.name.charAt(0)}
                     </div>
                   )}
@@ -106,7 +106,7 @@ export function FloatingFooter({
             {/* Feedback Button */}
             <motion.button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="w-12 h-12 bg-photoai-gradient rounded-full shadow-lg flex items-center justify-center photoai-hover-glow"
+              className="w-12 h-12 bg-fine-gradient rounded-full shadow-lg flex items-center justify-center fine-hover-glow"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -151,12 +151,12 @@ export function FloatingFooter({
                   {/* Text Input */}
                   <textarea
                     placeholder="Tell us more... (optional)"
-                    className="w-full bg-white/10 text-white placeholder-white/40 text-xs p-2 rounded border border-white/20 focus:border-photoai-accent-cyan focus:outline-none resize-none"
+                    className="w-full bg-white/10 text-white placeholder-white/40 text-xs p-2 rounded border border-white/20 focus:border-fine-accent-cyan focus:outline-none resize-none"
                     rows={3}
                   />
 
                   {/* Submit Button */}
-                  <button className="w-full bg-photoai-gradient text-white text-xs py-2 rounded font-medium photoai-hover-glow">
+                  <button className="w-full bg-fine-gradient text-white text-xs py-2 rounded font-medium fine-hover-glow">
                     Send Feedback
                   </button>
                 </div>

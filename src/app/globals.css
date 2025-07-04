@@ -57,15 +57,15 @@
 
     --radius: 0.5rem;
     
-    /* PhotoAI-inspired design tokens */
-    --photoai-neon-cyan: #00FFFF;
-    --photoai-neon-purple: #B347FF;
-    --photoai-neon-pink: #FF47B3;
-    --photoai-dark: #0A0A0A;
-    --photoai-dark-lighter: #1A1A1A;
-    --photoai-accent-cyan: #00DFD8;
-    --photoai-accent-purple: #8A2BE2;
-    --photoai-text-muted: #888888;
+    /* FineGen design tokens */
+    --fine-neon-cyan: #00FFFF;
+    --fine-neon-purple: #B347FF;
+    --fine-neon-pink: #FF47B3;
+    --fine-dark: #0A0A0A;
+    --fine-dark-lighter: #1A1A1A;
+    --fine-accent-cyan: #00DFD8;
+    --fine-accent-purple: #8A2BE2;
+    --fine-text-muted: #888888;
   }
   .dark {
 
@@ -131,23 +131,23 @@
 }
 
 @layer components {
-  /* PhotoAI-inspired component classes */
+  /* FineGen component classes */
   .neon-label {
     @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
-    @apply bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20;
+    @apply bg-fine-neon-cyan/10 text-fine-neon-cyan border border-fine-neon-cyan/20;
     @apply animate-glow-pulse;
   }
   
   .neon-label-purple {
-    @apply bg-neon-purple/10 text-neon-purple border-neon-purple/20;
+    @apply bg-fine-neon-purple/10 text-fine-neon-purple border-fine-neon-purple/20;
   }
   
   .neon-label-pink {
-    @apply bg-neon-pink/10 text-neon-pink border-neon-pink/20;
+    @apply bg-fine-neon-pink/10 text-fine-neon-pink border-fine-neon-pink/20;
   }
   
   .glass-panel {
-    @apply bg-photoai-dark-glass backdrop-blur-glass border border-white/10;
+    @apply bg-fine-dark-glass backdrop-blur-glass border border-white/10;
     @apply rounded-lg shadow-2xl;
   }
   
@@ -157,23 +157,22 @@
     -webkit-backdrop-filter: blur(16px);
   }
   
-  .photoai-gradient {
-    background: linear-gradient(135deg, var(--photoai-accent-cyan), var(--photoai-accent-purple));
+  .fine-gradient {
+    background: linear-gradient(135deg, var(--fine-accent-cyan), var(--fine-accent-purple));
   }
-  
-  .photoai-gradient-text {
-    background: linear-gradient(135deg, var(--photoai-accent-cyan), var(--photoai-accent-purple));
+  .fine-gradient-text {
+    background: linear-gradient(135deg, var(--fine-accent-cyan), var(--fine-accent-purple));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
   
-  .photoai-hover-glow {
+  .fine-hover-glow {
     transition: box-shadow 0.3s ease;
   }
   
-  .photoai-hover-glow:hover {
-    box-shadow: 0 0 20px var(--photoai-accent-cyan), 0 0 40px var(--photoai-accent-cyan);
+  .fine-hover-glow:hover {
+    box-shadow: 0 0 20px var(--fine-accent-cyan), 0 0 40px var(--fine-accent-cyan);
   }
 }
 
@@ -224,7 +223,7 @@
   
   /* Focus visible utilities for accessibility */
   .focus-visible:focus-visible {
-    outline: 2px solid var(--photoai-accent-cyan);
+    outline: 2px solid var(--fine-accent-cyan);
     outline-offset: 2px;
     border-radius: 4px;
   }

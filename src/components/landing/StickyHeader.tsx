@@ -243,7 +243,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
     if (textColorMode === 'light') {
       return `${baseClasses} text-white${opacity ? `/${opacity}` : ''}`;
     } else {
-      return `${baseClasses} text-photoai-dark${opacity ? `/${opacity}` : ''} dark:text-white${opacity ? `/${opacity}` : ''}`;
+      return `${baseClasses} text-fine-dark${opacity ? `/${opacity}` : ''} dark:text-white${opacity ? `/${opacity}` : ''}`;
     }
   };
 
@@ -252,7 +252,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
       <motion.header
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
           isScrolled 
-            ? 'bg-photoai-dark/90 backdrop-blur-md border-b border-white/10' 
+            ? 'bg-fine-dark/90 backdrop-blur-md border-b border-white/10' 
             : 'bg-transparent'
         } ${className}`}
         initial={{ y: -100 }}
@@ -294,7 +294,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
                   <div key={item.href} className="flex items-center space-x-2">
                     <Link 
                       href={item.href} 
-                      className={`font-medium transition-colors hover:text-photoai-accent-cyan focus:text-photoai-accent-cyan focus:outline-none ${getTextColorClasses()}`}
+                      className={`font-medium transition-colors hover:text-fine-accent-cyan focus:text-fine-accent-cyan focus:outline-none ${getTextColorClasses()}`}
                       title={item.description}
                     >
                       {item.label}
@@ -318,7 +318,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`text-sm font-medium transition-colors hover:text-photoai-accent-cyan focus:text-photoai-accent-cyan focus:outline-none flex items-center space-x-1 ${getTextColorClasses('60')}`}
+                    className={`text-sm font-medium transition-colors hover:text-fine-accent-cyan focus:text-fine-accent-cyan focus:outline-none flex items-center space-x-1 ${getTextColorClasses('60')}`}
                     title={item.description}
                   >
                     {Icon && <Icon className="w-4 h-4" />}
@@ -331,7 +331,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button
                   asChild
-                  className="bg-photoai-gradient text-white px-4 py-2 rounded-lg font-medium text-sm photoai-hover-glow border-0"
+                  className="bg-fine-gradient text-white px-4 py-2 rounded-lg font-medium text-sm fine-hover-glow border-0"
                 >
                   <Link href={isAuthenticated ? "/dashboard/generate" : "/register"}>
                     {isAuthenticated ? "Generate" : "Start Free"}
@@ -359,7 +359,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
 
         {/* Scroll Progress Indicator */}
         <motion.div
-          className="absolute bottom-0 left-0 h-0.5 bg-photoai-accent-cyan"
+          className="absolute bottom-0 left-0 h-0.5 bg-fine-accent-cyan"
           style={{
             width: typeof window !== 'undefined' 
               ? `${Math.min((scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100, 100)}%`
@@ -387,7 +387,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
             {/* Mobile Menu Panel */}
             <motion.div
               id="mobile-menu"
-              className="fixed top-16 right-0 w-80 h-[calc(100vh-4rem)] bg-photoai-dark/95 backdrop-blur-md border-l border-white/10 z-50 md:hidden"
+              className="fixed top-16 right-0 w-80 h-[calc(100vh-4rem)] bg-fine-dark/95 backdrop-blur-md border-l border-white/10 z-50 md:hidden"
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
@@ -400,7 +400,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
                 {isAuthenticated && session?.user && (
                   <div className="p-4 bg-white/5 rounded-lg border border-white/10">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-photoai-gradient rounded-full flex items-center justify-center text-white font-semibold">
+                      <div className="w-10 h-10 bg-fine-gradient rounded-full flex items-center justify-center text-white font-semibold">
                         {session.user.name?.charAt(0) || session.user.email?.charAt(0) || 'U'}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -408,7 +408,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
                           <p className="font-medium text-white truncate">{session.user.name}</p>
                         )}
                         <p className="text-sm text-white/60 truncate">{session.user.email}</p>
-                        <p className="text-sm text-photoai-accent-cyan">
+                        <p className="text-sm text-fine-accent-cyan">
                           {session.user.credits || 0} credits
                         </p>
                       </div>
@@ -470,7 +470,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
                 <div className="pt-4 border-t border-white/10">
                   <Button
                     asChild
-                    className="w-full bg-photoai-gradient text-white py-3 px-6 rounded-lg font-medium photoai-hover-glow border-0"
+                    className="w-full bg-fine-gradient text-white py-3 px-6 rounded-lg font-medium fine-hover-glow border-0"
                   >
                     <Link 
                       href={isAuthenticated ? "/dashboard/generate" : "/register"}

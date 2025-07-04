@@ -294,7 +294,7 @@ describe('StickyHeader Accessibility Tests', () => {
       );
 
       // Should find the progress indicator element
-      const progressIndicator = document.querySelector('.bg-photoai-accent-cyan');
+      const progressIndicator = document.querySelector('.bg-fine-accent-cyan');
       expect(progressIndicator).toBeInTheDocument();
     });
   });

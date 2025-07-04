@@ -168,7 +168,7 @@ export function MediaModal({
               <div className="flex-1 flex items-center justify-center p-8">
                 <div className="relative w-full h-full max-w-4xl">
                   {item.type === 'video' ? (
-                    <div className="w-full h-full bg-gradient-to-br from-photoai-accent-cyan/20 to-photoai-accent-purple/20 rounded-lg flex items-center justify-center">
+                    <div className="w-full h-full bg-gradient-to-br from-fine-accent-cyan/20 to-fine-accent-purple/20 rounded-lg flex items-center justify-center">
                       <div className="text-center space-y-4">
                         <div className="w-24 h-24 mx-auto bg-white/10 rounded-full flex items-center justify-center">
                           <div className="w-0 h-0 border-l-12 border-l-white border-t-8 border-t-transparent border-b-8 border-b-transparent ml-2" />
@@ -178,7 +178,7 @@ export function MediaModal({
                       </div>
                     </div>
                   ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-photoai-accent-cyan/20 to-photoai-accent-purple/20 rounded-lg flex items-center justify-center">
+                    <div className="w-full h-full bg-gradient-to-br from-fine-accent-cyan/20 to-fine-accent-purple/20 rounded-lg flex items-center justify-center">
                       <div className="text-center space-y-4">
                         <div className="w-24 h-24 mx-auto bg-white/10 rounded-lg flex items-center justify-center">
                           <div className="w-12 h-12 bg-white/50 rounded"></div>
@@ -211,7 +211,7 @@ export function MediaModal({
                   <div className="space-y-3">
                     <motion.button
                       onClick={() => onAction?.('recreate', item)}
-                      className="w-full bg-photoai-gradient text-white py-3 px-4 rounded-lg font-medium flex items-center justify-between photoai-hover-glow"
+                      className="w-full bg-fine-gradient text-white py-3 px-4 rounded-lg font-medium flex items-center justify-between fine-hover-glow"
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >

@@ -39,12 +39,12 @@ export default function TestContrastPage() {
         </div>
       </section>
 
-      {/* Test Section 4: PhotoAI Gradient Background */}
-      <section className="h-screen bg-photoai-gradient flex items-center justify-center">
+      {/* Test Section 4: FineGen Gradient Background */}
+      <section className="h-screen bg-fine-gradient flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-white mb-4">PhotoAI Gradient</h1>
+          <h1 className="text-4xl font-bold text-white mb-4">FineGen Gradient</h1>
           <p className="text-gray-100 max-w-md">
-            Testing with the PhotoAI brand gradient.
+            Testing with the FineGen brand gradient.
             Header should use appropriate contrast for the sampled gradient colors.
           </p>
         </div>
@@ -85,7 +85,7 @@ export default function TestContrastPage() {
         <div className="text-center">
           <h1 className="text-4xl font-bold text-white mb-4">Purple Background</h1>
           <p className="text-purple-100 max-w-md">
-            Deep purple background - testing with PhotoAI accent colors.
+            Deep purple background - testing with FineGen accent colors.
           </p>
         </div>
       </section>
@@ -95,7 +95,7 @@ export default function TestContrastPage() {
         <div className="text-center">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">Cyan Background</h1>
           <p className="text-gray-800 max-w-md">
-            Bright cyan background similar to PhotoAI accent color.
+            Bright cyan background similar to FineGen accent color.
           </p>
         </div>
       </section>

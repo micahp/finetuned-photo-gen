@@ -1,5 +1,6 @@
 import NextAuth from 'next-auth'
 import { NextAuthConfig } from 'next-auth'
+import { NextResponse } from 'next/server'
 
 // Minimal auth config for middleware - no server-side imports
 const authConfig: NextAuthConfig = {
@@ -9,19 +10,26 @@ const authConfig: NextAuthConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isProtectedRoute = nextUrl.pathname.startsWith('/dashboard');
-      const isAuthRoute = 
-        nextUrl.pathname.startsWith('/login') || 
-        nextUrl.pathname.startsWith('/register');
+      const pathname = nextUrl.pathname;
 
+      const isProtectedRoute = pathname.startsWith('/dashboard');
+      const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register');
+
+      // Redirect unauthenticated users trying to access protected routes
       if (isProtectedRoute && !isLoggedIn) {
-        return false; // Redirect unauthenticated users to login page
+        // Build a safe callbackUrl using only local path + query to avoid open redirects
+        const callbackUrl = `${pathname}${nextUrl.search}`;
+        const loginUrl = new URL('/login', nextUrl);
+        loginUrl.searchParams.set('callbackUrl', callbackUrl);
+        return NextResponse.redirect(loginUrl);
       }
 
+      // Prevent authenticated users from visiting auth routes
       if (isAuthRoute && isLoggedIn) {
-        return Response.redirect(new URL('/dashboard', nextUrl));
+        return NextResponse.redirect(new URL('/dashboard', nextUrl));
       }
 
+      // Allow all other cases to proceed
       return true;
     },
   },

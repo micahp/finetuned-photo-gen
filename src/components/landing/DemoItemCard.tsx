@@ -10,7 +10,7 @@ interface DemoItemCardProps {
 export function DemoItemCard({ item, onClick }: DemoItemCardProps) {
   return (
     <div
-      className="relative w-full mb-4 break-inside-avoid cursor-pointer group focus:outline-none focus:ring-2 focus:ring-photoai-accent-cyan rounded-lg overflow-hidden"
+      className="relative w-full mb-4 break-inside-avoid cursor-pointer group focus:outline-none focus:ring-2 focus:ring-fine-accent-cyan rounded-lg overflow-hidden"
       tabIndex={0}
       aria-label={`${item.alt}. Click to view details`}
       role="button"

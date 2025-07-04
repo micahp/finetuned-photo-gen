@@ -23,10 +23,6 @@ export default {
     'transition-opacity',
     'truncate',
     'leading-tight',
-    // PhotoAI-inspired classes
-    {
-      pattern: /^(bg|text|border|shadow)-(neon|photoai)-(cyan|purple|pink|blue|green)(-.*)?$/,
-    },
     'backdrop-blur-glass',
     'bg-dark-glass',
   ],
@@ -38,16 +34,14 @@ export default {
           purple: '#8A2BE2',
           cyan: '#00DFD8',
         },
-        // PhotoAI-inspired neon colors
-        neon: {
-          cyan: '#00FFFF',
-          purple: '#B347FF',
-          pink: '#FF47B3',
-          blue: '#4747FF',
-          green: '#47FF47',
-        },
-        // PhotoAI dark theme colors
-        photoai: {
+        // FineGen custom colors
+        'fine-neon-cyan': '#00FFFF',
+        'fine-neon-purple': '#B347FF',
+        'fine-neon-pink': '#FF47B3',
+        'fine-neon-blue': '#4747FF',
+        'fine-neon-green': '#47FF47',
+
+        fine: {
           dark: '#0A0A0A',
           'dark-lighter': '#1A1A1A',
           'dark-glass': 'rgba(10, 10, 10, 0.8)',
@@ -96,7 +90,6 @@ export default {
   				'5': 'hsl(var(--chart-5))'
   			}
   		},
-      // PhotoAI-inspired animations and effects
       animation: {
         'float': 'float 6s ease-in-out infinite',
         'glow-pulse': 'glow-pulse 2s ease-in-out infinite alternate',

@@ -107,7 +107,7 @@ export function CreditPopup({
             <div className="text-center space-y-6">
               {/* Icon */}
               <motion.div
-                className="w-16 h-16 mx-auto bg-photoai-gradient rounded-full flex items-center justify-center"
+                className="w-16 h-16 mx-auto bg-fine-gradient rounded-full flex items-center justify-center"
                 animate={{ rotate: [0, 5, -5, 0] }}
                 transition={{ duration: 2, repeat: Infinity }}
               >
@@ -130,8 +130,8 @@ export function CreditPopup({
               {/* Benefits */}
               <div className="space-y-3">
                 <div className="flex items-center space-x-3 text-left">
-                  <div className="w-8 h-8 bg-photoai-accent-cyan/20 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="w-4 h-4 text-photoai-accent-cyan" />
+                  <div className="w-8 h-8 bg-fine-accent-cyan/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-4 h-4 text-fine-accent-cyan" />
                   </div>
                   <div>
                     <div className="text-white text-sm font-medium">Generate {Math.floor(credits / 2)} images</div>
@@ -140,8 +140,8 @@ export function CreditPopup({
                 </div>
                 
                 <div className="flex items-center space-x-3 text-left">
-                  <div className="w-8 h-8 bg-photoai-accent-purple/20 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Clock className="w-4 h-4 text-photoai-accent-purple" />
+                  <div className="w-8 h-8 bg-fine-accent-purple/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Clock className="w-4 h-4 text-fine-accent-purple" />
                   </div>
                   <div>
                     <div className="text-white text-sm font-medium">No expiration</div>
@@ -158,7 +158,7 @@ export function CreditPopup({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email address"
-                    className="w-full bg-white/10 text-white placeholder-white/50 px-4 py-3 rounded-lg border border-white/20 focus:border-photoai-accent-cyan focus:outline-none transition-colors"
+                    className="w-full bg-white/10 text-white placeholder-white/50 px-4 py-3 rounded-lg border border-white/20 focus:border-fine-accent-cyan focus:outline-none transition-colors"
                     required
                   />
                 </div>
@@ -166,7 +166,7 @@ export function CreditPopup({
                 <motion.button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full bg-photoai-gradient text-white py-3 px-6 rounded-lg font-semibold photoai-hover-glow disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-fine-gradient text-white py-3 px-6 rounded-lg font-semibold fine-hover-glow disabled:opacity-50 disabled:cursor-not-allowed"
                   whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
                   whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
                 >

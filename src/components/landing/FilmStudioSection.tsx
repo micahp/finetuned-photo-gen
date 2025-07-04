@@ -30,7 +30,7 @@ export function FilmStudioSection() {
         <div className="space-y-10">
           {/* Step 1 */}
           <div className="flex flex-col md:flex-row md:items-start gap-6">
-            <div className="text-5xl font-bold text-photoai-accent-cyan md:w-32 shrink-0">1.</div>
+            <div className="text-5xl font-bold text-fine-accent-cyan md:w-32 shrink-0">1.</div>
             <div className="space-y-3">
               <h3 className="text-2xl font-semibold">Generate a Source Image</h3>
               <p className="text-gray-400">
@@ -45,7 +45,7 @@ export function FilmStudioSection() {
 
           {/* Step 2 */}
           <div className="flex flex-col md:flex-row md:items-start gap-6">
-            <div className="text-5xl font-bold text-photoai-accent-cyan md:w-32 shrink-0">2.</div>
+            <div className="text-5xl font-bold text-fine-accent-cyan md:w-32 shrink-0">2.</div>
             <div className="space-y-3">
               <h3 className="text-2xl font-semibold">Create the Storyboard</h3>
               <p className="text-gray-400">
@@ -61,7 +61,7 @@ export function FilmStudioSection() {
 
           {/* Step 3 */}
           <div className="flex flex-col md:flex-row md:items-start gap-6">
-            <div className="text-5xl font-bold text-photoai-accent-cyan md:w-32 shrink-0">3.</div>
+            <div className="text-5xl font-bold text-fine-accent-cyan md:w-32 shrink-0">3.</div>
             <div className="space-y-3">
               <h3 className="text-2xl font-semibold">Animate &amp; Stitch</h3>
               <p className="text-gray-400">
@@ -87,7 +87,7 @@ export function FilmStudioSection() {
           <Button
             asChild
             size="lg"
-            className="bg-photoai-accent-cyan hover:bg-photoai-accent-cyan/90 text-black font-semibold px-8 py-4"
+            className="bg-fine-accent-cyan hover:bg-fine-accent-cyan/90 text-black font-semibold px-8 py-4"
           >
             <Link href="/register">
               <span role="img" aria-label="film">🎞️</span> Start your first scene &rarr;

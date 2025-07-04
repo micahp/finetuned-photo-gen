@@ -134,7 +134,7 @@ export function HeroSection({ videos, className = '' }: HeroSectionProps) {
             }`}
           >
             Create Stunning{' '}
-            <span className="bg-gradient-to-r from-photoai-accent-cyan to-photoai-accent-purple bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-fine-accent-cyan to-fine-accent-purple bg-clip-text text-transparent">
               AI Photos
             </span>
             <br />
@@ -146,7 +146,7 @@ export function HeroSection({ videos, className = '' }: HeroSectionProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5, duration: 0.8 }}
-            className={`font-semibold text-photoai-accent-cyan ${
+            className={`font-semibold text-fine-accent-cyan ${
               isMobile && deviceOrientation === 'landscape'
                 ? 'text-lg'
                 : 'text-xl sm:text-2xl md:text-3xl'
@@ -184,7 +184,7 @@ export function HeroSection({ videos, className = '' }: HeroSectionProps) {
             <Button 
               asChild 
               size={isMobile && deviceOrientation === 'landscape' ? "default" : "lg"}
-              className={`bg-photoai-accent-cyan hover:bg-photoai-accent-cyan/90 text-black font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-photoai-accent-cyan/25 ${
+              className={`bg-fine-accent-cyan hover:bg-fine-accent-cyan/90 text-black font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-fine-accent-cyan/25 ${
                 isMobile && deviceOrientation === 'landscape' 
                   ? 'px-6 py-2 text-base min-h-[44px] min-w-[120px]' 
                   : 'px-8 py-3 text-lg'
