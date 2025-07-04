@@ -66,7 +66,7 @@ export const generateImageSchema = z.object({
   prompt: z
     .string()
     .min(1, 'Prompt is required')
-    .max(500, 'Prompt must be less than 500 characters'),
+    .max(2000, 'Prompt must be less than 2000 characters'),
   modelId: z
     .string()
     .min(1, 'Model selection is required'),

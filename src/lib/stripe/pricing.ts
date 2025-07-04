@@ -32,7 +32,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     credits: 10,
     maxModels: 0,
     features: [
-      '10 AI generations per month',
       '0 personalized model slot',
       'Upload 10-20 training photos',
       'Basic style presets',
@@ -50,7 +49,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     credits: 200,
     maxModels: 3,
     features: [
-      '200 AI generations per month',
       '3 personalized models slots',
       'All style presets & filters',
       'Priority generation queue',
@@ -70,7 +68,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     credits: 1000,
     maxModels: 10,
     features: [
-      '1000 AI generations per month',
       '10 personalized models slots',
       'Advanced style customization',
       'Fastest generation speed',
@@ -91,7 +88,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     credits: 5000,
     maxModels: 25,
     features: [
-      '5000 AI generations per month',
       '25 personalized models slots',
       'Advanced style customization',
       'Fastest generation speed',

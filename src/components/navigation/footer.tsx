@@ -22,7 +22,10 @@ export function Footer() {
             <ul className="space-y-2 text-sm text-gray-300">
               <li><Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link></li>
               <li><Link href="/dashboard/generate" className="hover:text-white transition-colors">Generate Images</Link></li>
+              <li><Link href="/dashboard/edit" className="hover:text-white transition-colors">Edit Images</Link></li>
+              <li><Link href="/dashboard/video" className="hover:text-white transition-colors">Video Generation</Link></li>
               <li><Link href="/dashboard/models" className="hover:text-white transition-colors">My Models</Link></li>
+              <li><Link href="/dashboard/training" className="hover:text-white transition-colors">Training</Link></li>
               <li><Link href="/dashboard/gallery" className="hover:text-white transition-colors">Gallery</Link></li>
             </ul>
           </div>

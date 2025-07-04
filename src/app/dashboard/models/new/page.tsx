@@ -14,6 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, ArrowRight, Check, Upload, Loader2, Settings, Info } from 'lucide-react'
 import { ImageUpload } from '@/components/upload/ImageUpload'
+import { CreditCostHint } from '@/components/credits/CreditCostHint'
 
 const modelSchema = z.object({
   name: z.string()
@@ -225,7 +226,7 @@ export default function NewModelPage() {
           </Button>
         </div>
         
-        <h1 className="text-3xl font-bold text-gray-900">Create New Model</h1>
+        <h1 className="text-3xl font-bold text-gray-900 flex items-center">Create New Model <CreditCostHint action="model_train" /></h1>
         <p className="text-gray-600 mt-2">
           Train a custom AI model with your own images using advanced FLUX LoRA training
         </p>

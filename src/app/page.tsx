@@ -6,40 +6,84 @@ import { PRICING_PLANS } from '@/lib/stripe/pricing'
 import { Navbar } from '@/components/navigation/navbar'
 import { Footer } from '@/components/navigation/footer'
 import Image from 'next/image'
+import { HeroCarousel } from '@/components/landing/HeroCarousel'
+import { DemoLibrarySection } from '@/components/landing/DemoLibrarySection'
+import { SelfieTrainingSection } from '@/components/landing/SelfieTrainingSection'
+import { FilmStudioSection } from '@/components/landing/FilmStudioSection'
 
 export default function HomePage() {
+  // Randomly select between two output images for the SelfieTrainingSection
+  const outputImages = ['/selfies/generated.jpeg', '/selfies/generated-2.png']
+  const randomIndex = Math.floor(Math.random() * outputImages.length)
+  const randomOutputImage = outputImages[randomIndex]
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100">
       <Navbar />
       
-      {/* Hero Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <div className="text-center">
-          <div className="flex justify-center items-center mb-6">
-            <Image src="/favicon-transparent.png" alt="Fine Photo Gen Logo" width={128} height={128} className="mr-4" />
-            <h1 className="text-5xl font-bold text-gray-900">
-              Fine Photo Gen
-            </h1>
-          </div>
-          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-            Create personalized AI images by training custom FLUX models with your own photos. 
-            Upload 10-20 images of yourself and generate unlimited unique, personalized content.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild size="lg" className="px-8">
-              <Link href="/register">
-                Start Creating
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="px-8">
-              <Link href="/login">
-                Sign In
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </div>
+      {/* Hero Carousel */}
+      <HeroCarousel
+        videos={[
+          {
+            id: 'video1',
+            sources: [
+              {
+                url: '/videos/seedance_pro_t2v.mp4',
+                type: 'video/mp4'
+              }
+            ],
+            thumbnail: '/thumbnails/seedance_pro_t2v-thumb.jpg',
+            title: 'Seedance Pro',
+            description: 'A bright blue race car speeds along a snowy racetrack...',
+            fullPrompt: 'A bright blue race car speeds along a snowy racetrack. [Low-angle shot] Captures several cars speeding along the racetrack through a harsh snowstorm. [Overhead shot] The camera gradually pulls upward, revealing the full race scene illuminated by storm lights',
+            lowQualityPlaceholder: '/selfies/wan-i2v-thumb.jpg'
+          },
+          {
+            id: 'video2',
+            sources: [
+              {
+                url: '/videos/director.mp4',
+                type: 'video/mp4'
+              }
+            ],
+            thumbnail: '/thumbnails/director-thumb.jpg',
+            title: 'Hailuo 2 w/ Camera Control Prompt',
+            description: '[Push in]Close up of a tense woman looks to the left, startled by a sound...',
+            fullPrompt: '[Push in]Close up of a tense woman looks to the left, startled by a sound, in a darkened kitchen, Pots and pans hang ominously, the window in the kitchen is open and the wind softly blows the pans and creates an ominous mood. [Shake]the woman\'s shock turns to fear. Black-and-white film noir shot dimly lit, 1950s-style, with dramatic, high-contrast shadows. The overall atmosphere is reminiscent of Alfred Hitchcock\'s suspenseful storytelling, evoking a looming sense of dread with stark chiaroscuro lighting and a slight film-grain texture.',
+          },
+          {
+            id: 'video3',
+            sources: [
+              {
+                url: '/videos/video3.mp4',
+                type: 'video/mp4'
+              }
+            ],
+            thumbnail: '/thumbnails/video3-thumb.jpg',
+            title: 'Hailuo 2',
+            description: 'A Galactic Smuggler is a rogue figure with a cybernetic arm and a well-worn coat that hints at many dangerous...',
+            fullPrompt: 'A Galactic Smuggler is a rogue figure with a cybernetic arm and a well-worn coat that hints at many dangerous escapades across the galaxy. Their ship is filled with rare and exotic treasures from distant planets, concealed in hidden compartments, showing their expertise in illicit trade. Their belt is adorned with energy-based weapons, ready to be drawn at any moment to protect themselves or escape from tight situations. This character thrives in the shadows of space, navigating between the law and chaos with stealth and wit, always seeking the next big score while evading bounty hunters and law enforcement. The rogue\'s ship, rugged yet efficient, serves as both a home and a tool for their dangerous lifestyle. The treasures they collect reflect the diverse and intriguing worlds they\'ve encountered—alien artifacts, rare minerals, and artifacts of unknown origin. Their reputation precedes them, with whispers of their dealings and the deadly encounters that often follow. A master of negotiation and deception, the Galactic Smuggler navigates the cosmos with an eye on the horizon, always one step ahead of those who pursue them.',
+            lowQualityPlaceholder: '/selfies/framepack-thumb.jpg'
+          }
+        ]}
+        autoplayInterval={5000}
+        pauseOnHover={false}
+        enableAutoplay={true}
+        enableAdaptiveQuality={true}
+        preloadStrategy="metadata"
+        ariaLabel="Hero Carousel"
+      />
+
+      {/* Selfie Training Example Section */}
+      <SelfieTrainingSection
+        inputImageUrls={[
+          '/selfies/IMG_1248.jpg',
+          '/selfies/IMG_1889.jpg',
+          '/selfies/IMG_2268.jpg',
+          '/selfies/IMG_3157.jpg'
+        ]}
+        outputImageUrl={randomOutputImage}
+      />
 
       {/* Features Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -86,6 +130,12 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* AI Film Studio Section */}
+      <FilmStudioSection />
+
+      {/* Demo Library Section */}
+      <DemoLibrarySection />
+
       {/* Pricing Preview */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
@@ -93,39 +143,36 @@ export default function HomePage() {
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-          {PRICING_PLANS.map((plan) => (
+          {PRICING_PLANS.map((plan, index) => (
             <Card 
               key={plan.id} 
-              className={`relative ${plan.popular ? 'border-blue-500 border-2 shadow-lg' : ''}`}
+              className={`relative ${index === 1 ? 'border-blue-500 border-2 shadow-lg' : ''}`}
             >
-              {plan.popular && (
+              {index === 1 && (
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                   <Badge className="bg-brand-blue text-white">Most Popular</Badge>
                 </div>
               )}
               <CardHeader>
                 <CardTitle className="text-xl">{plan.name}</CardTitle>
-                <CardDescription className="text-sm">{plan.description}</CardDescription>
                 <div className="text-3xl font-bold">
-                  ${plan.price}
-                  {plan.price > 0 && <span className="text-sm text-gray-500">/month</span>}
+                  {plan.credits} credits
+                  {plan.id !== 'free' && (
+                    <span className="text-sm text-gray-500">/month</span>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2 text-sm">
-                  <li>✓ {plan.credits} AI generations per month</li>
-                  <li>✓ {plan.maxModels} personalized model{plan.maxModels !== 1 ? 's' : ''}</li>
-                  {plan.features.slice(2, 5).map((feature, index) => (
-                    <li key={index}>✓ {feature}</li>
-                  ))}
-                </ul>
+                <p className="text-sm text-gray-600 mb-4">
+                  Perfect for {plan.id === 'free' ? 'trying out' : plan.id === 'starter' ? 'getting started' : plan.id === 'creator' ? 'regular use' : 'power users'}
+                </p>
                 <Button 
                   asChild 
-                  className={`w-full mt-4 ${plan.popular ? 'bg-brand-blue hover:bg-blue-700' : ''}`}
-                  variant={plan.popular ? 'default' : 'outline'}
+                  className={`w-full ${index === 1 ? 'bg-brand-blue hover:bg-blue-700' : ''}`}
+                  variant={index === 1 ? 'default' : 'outline'}
                 >
                   <Link href="/register">
-                    {plan.buttonText}
+                    Get Started
                   </Link>
                 </Button>
               </CardContent>

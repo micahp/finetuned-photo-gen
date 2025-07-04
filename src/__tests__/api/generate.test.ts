@@ -284,7 +284,7 @@ describe('/api/generate', () => {
 
     it('should return 400 when prompt is too long', async () => {
       // Arrange
-      const longPrompt = 'a'.repeat(501) // Exceeds 500 char limit
+      const longPrompt = 'a'.repeat(2001) // Exceeds 2000 char limit
       const request = new Request('http://localhost:3000/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -230,7 +230,7 @@ describe('/api/edit', () => {
     it('should return 400 when prompt is too long', async () => {
       // Arrange
       const invalidRequest = {
-        prompt: 'a'.repeat(501), // Over 500 character limit
+        prompt: 'a'.repeat(2001), // Over 2000 character limit
         imageUrl: 'https://example.com/test-image.jpg',
       }
 

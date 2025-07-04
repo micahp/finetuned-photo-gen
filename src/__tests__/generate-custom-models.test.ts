@@ -716,7 +716,7 @@ describe('Custom Model Generation API', () => {
     })
 
     it('should validate prompt length', async () => {
-      const longPrompt = 'a'.repeat(501)
+      const longPrompt = 'a'.repeat(2001)
       
       const request = new Request('http://localhost:3000/api/generate', {
         method: 'POST',

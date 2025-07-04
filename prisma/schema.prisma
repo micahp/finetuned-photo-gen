@@ -36,6 +36,7 @@ model User {
   jobQueue                 JobQueue[]
   subscriptions            Subscription[]
   userModels               UserModel[]
+  generatedVideos          GeneratedVideo[]
 
   @@map("users")
 }
@@ -197,10 +198,36 @@ enum CreditTransactionType {
   manual_adjustment
 }
 
+model GeneratedVideo {
+  id                 String   @id @default(cuid())
+  userId             String   @map("user_id")
+  prompt             String
+  videoUrl           String   @map("video_url")
+  thumbnailUrl       String?  @map("thumbnail_url")
+  modelId            String   @map("model_id")
+  duration           Int      // Duration in seconds
+  aspectRatio        String   @map("aspect_ratio")
+  fps                Int      @default(24)
+  motionLevel        Int?     @map("motion_level")
+  width              Int?
+  height             Int?
+  fileSize           Int?     @map("file_size")
+  generationParams   Json?    @map("generation_params")
+  creditsUsed        Int      @default(5) @map("credits_used")
+  status             String   @default("completed") // processing, completed, failed
+  falJobId           String?  @map("fal_job_id")
+  generationDuration Int?     @map("generation_duration") // Generation time in milliseconds
+  createdAt          DateTime @default(now()) @map("created_at")
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("generated_videos")
+}
+
 enum RelatedEntityType {
   image_generation
   image_edit
   model_training
   subscription
   admin_action
+  video_generation
 }
