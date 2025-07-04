@@ -22,7 +22,7 @@ if (!STRIPE_SECRET_KEY) {
 // However, actual API calls would fail, which is expected if the key is missing.
 
 export const stripe = new Stripe(STRIPE_SECRET_KEY || 'sk_test_DUMMYKEYFORDEVELOPMENT12345', {
-  apiVersion: '2025-04-30.basil', // Use the specific API version expected by the installed SDK
+  apiVersion: '2025-06-30.basil', // Use the specific API version expected by the installed SDK
   typescript: true, // Enable TypeScript support
   // Optionally, you can configure other settings like httpProxy, timeout, etc.
 });
