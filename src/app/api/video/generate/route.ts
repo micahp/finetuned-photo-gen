@@ -6,6 +6,18 @@ import { FalVideoService } from '@/lib/fal-video-service'
 import { CreditService, RelatedEntityType } from '@/lib/credit-service'
 import { isPremiumUser } from '@/lib/subscription-utils'
 
+// ------------------------------------------------------
+//  🛡️  File constructor may not exist in the Node runtime
+//  (it does in Edge Runtime / browsers). Guard against
+//  `ReferenceError: File is not defined` during build-time
+//  execution of API routes.
+// ------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore – `typeof File` may be undefined in Node
+const FileConstructor: typeof File | (new () => unknown) =
+  typeof File === 'undefined' ? (class DummyFile {}) : File
+
 const generateVideoSchema = z.object({
   prompt: z.string().max(2000, 'Prompt too long'),
   modelId: z.string().min(1, 'Model is required'),
@@ -14,7 +26,8 @@ const generateVideoSchema = z.object({
   fps: z.number().min(12).max(30).default(24),
   motionLevel: z.number().min(1).max(10).default(5),
   seed: z.number().optional(),
-  imageFile: z.instanceof(File).optional(),
+  // Use safe File constructor fallback for server build
+  imageFile: z.instanceof(FileConstructor as any).optional(),
 })
 
 export async function POST(request: NextRequest) {
