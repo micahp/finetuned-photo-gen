@@ -151,7 +151,7 @@ services:
   backup:
     image: postgres:15-alpine      # still contains pg_dump
     entrypoint: ["sh", "-c"]       # <-- prevents server startup
-    command: >
+    command: |
       while true; do
         echo '📦 Starting backup…';
         TIMESTAMP=$$(date +%Y%m%d_%H%M%S);
@@ -160,7 +160,7 @@ services:
         gzip "$$BACKUP_FILE";
         echo "✅ Backup done: $${BACKUP_FILE}.gz";
         find /backups -name "backup_*.sql.gz" -mtime +"$$BACKUP_RETENTION_DAYS" -delete;
-        sleep 86400;               # wait 24 h
+        sleep 86400  # wait 24 h
       done
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-finetuned_photo_gen}
