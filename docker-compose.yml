@@ -154,11 +154,37 @@ services:
     command: >
       while true; do
         echo '📦 Starting backup…';
-        TIMESTAMP=$(date +%Y%m%d_%H%M%S);
-        BACKUP_FILE="/backups/backup_${TIMESTAMP}.sql";
-        pg_dump -h db -U "$POSTGRES_USER" -d "$POSTGRES_DB" > "$BACKUP_FILE";
-        gzip "$BACKUP_FILE";
-        echo "✅ Backup done: ${BACKUP_FILE}.gz";
-        find /backups -name "backup_*.sql.gz" -mtime +"$BACKUP_RETENTION_DAYS" -delete;
+        TIMESTAMP=$$(date +%Y%m%d_%H%M%S);
+        BACKUP_FILE="/backups/backup_$${TIMESTAMP}.sql";
+        pg_dump -h db -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" > "$$BACKUP_FILE";
+        gzip "$$BACKUP_FILE";
+        echo "✅ Backup done: $${BACKUP_FILE}.gz";
+        find /backups -name "backup_*.sql.gz" -mtime +"$$BACKUP_RETENTION_DAYS" -delete;
         sleep 86400;               # wait 24 h
       done
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-finetuned_photo_gen}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+      - BACKUP_RETENTION_DAYS=30
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
