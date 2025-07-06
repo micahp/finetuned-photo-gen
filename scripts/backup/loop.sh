@@ -1,18 +1,14 @@
-backup:
-  image: alpine:3.20          # client-only, no server
-  entrypoint: ["/bin/sh","/scripts/loop.sh"]
-  volumes:
-    - ./backups:/backups
-    - ./scripts/backup:/scripts:ro   # ← mounts the loop
-  environment:
-    - POSTGRES_DB=${POSTGRES_DB:-finetuned_photo_gen}
-    - POSTGRES_USER=${POSTGRES_USER:-postgres}
-    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    - PGPASSWORD=${POSTGRES_PASSWORD}
-    - BACKUP_RETENTION_DAYS=30
-  depends_on:
-    db:
-      condition: service_healthy
-  networks:
-    - app-network
-  restart: unless-stopped
+#!/bin/sh
+set -e
+
+while true; do
+  echo "📦 Starting backup…"
+  ts=$(date +%Y%m%d_%H%M%S)
+  apk add --no-cache postgresql15-client
+  pg_dump -h db -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+          > /backups/backup_"$ts".sql
+  gzip /backups/backup_"$ts".sql
+  echo "✅ Backup done: backup_${ts}.sql.gz"
+  find /backups -name 'backup_*.sql.gz' -mtime +"${BACKUP_RETENTION_DAYS:-30}" -delete
+  sleep 86400
+done
