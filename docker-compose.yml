@@ -149,10 +149,12 @@ services:
 
   # Automated backup service
   backup:
-    image: postgres:15-alpine      # still contains pg_dump
-    entrypoint: ["sh", "-c"]       # <-- prevents server startup
-    command: >-
-      while true; do echo '📦 Starting backup…'; TIMESTAMP=$$(date +%Y%m%d_%H%M%S); BACKUP_FILE="/backups/backup_$${TIMESTAMP}.sql"; pg_dump -h db -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" > "$$BACKUP_FILE"; gzip "$$BACKUP_FILE"; echo "✅ Backup done: $${BACKUP_FILE}.gz"; find /backups -name "backup_*.sql.gz" -mtime +"$$BACKUP_RETENTION_DAYS" -delete; sleep 86400; done
+    image: alpine:3.20          # client-only, no server
+    entrypoint: ["/bin/sh","-c"]
+    command:
+      - |
+        echo "👀 RAW_CMD: $*"; set -x
+        while true; do echo alive; sleep 5; done
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-finetuned_photo_gen}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
@@ -161,6 +163,7 @@ services:
       - BACKUP_RETENTION_DAYS=30
     volumes:
       - ./backups:/backups
+      - ./scripts/backup:/scripts:ro   # ← mounts the loop
     depends_on:
       db:
         condition: service_healthy
