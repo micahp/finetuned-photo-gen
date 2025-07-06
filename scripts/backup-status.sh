@@ -25,18 +25,19 @@ echo "📁 Backup Files Status"
 echo "======================"
 
 if [ -d "backups" ]; then
-    BACKUP_COUNT=$(ls -1 backups/backup_*.sql.gz 2>/dev/null | wc -l | tr -d ' ')
+    BACKUP_COUNT=$(ls -1 backups/{backup,manual_backup}_*.sql.gz 2>/dev/null | wc -l | tr -d ' ')
+    BACKUP_COUNT=${BACKUP_COUNT:-0}
     echo "Total backups: $BACKUP_COUNT"
     
     if [ "$BACKUP_COUNT" -gt 0 ]; then
         echo ""
         echo "Recent backups:"
-        ls -lah backups/backup_*.sql.gz 2>/dev/null | tail -5 | while read line; do
+        ls -lah backups/{backup,manual_backup}_*.sql.gz 2>/dev/null | tail -5 | while read line; do
             echo "  $line"
         done
         
         # Check backup age
-        LATEST_BACKUP=$(ls -t backups/backup_*.sql.gz 2>/dev/null | head -1)
+        LATEST_BACKUP=$(ls -t backups/{backup,manual_backup}_*.sql.gz 2>/dev/null | head -1)
         if [ -n "$LATEST_BACKUP" ]; then
             LATEST_AGE=$(find "$LATEST_BACKUP" -mmin +1500 2>/dev/null)
             if [ -n "$LATEST_AGE" ]; then
@@ -57,6 +58,7 @@ if [ -d "backups" ]; then
         
         # Check for very old backups that should have been cleaned
         OLD_BACKUPS=$(find backups -name "backup_*.sql.gz" -mtime +30 2>/dev/null | wc -l | tr -d ' ')
+        OLD_BACKUPS=${OLD_BACKUPS:-0}
         if [ "$OLD_BACKUPS" -gt 0 ]; then
             echo "⚠️  Found $OLD_BACKUPS backup(s) older than 30 days (cleanup may have failed)"
         fi
