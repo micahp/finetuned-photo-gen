@@ -9,6 +9,7 @@ import { ImageProcessingService } from '@/lib/image-processing-service'
 import { CreditService } from '@/lib/credit-service'
 import { isPremiumUser, isPremiumModel } from '@/lib/subscription-utils'
 import { CREDIT_COSTS } from '@/lib/credits/constants'
+import { tryConsumeDailyFreeGeneration } from '@/lib/free-generation'
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
@@ -53,7 +54,9 @@ export async function POST(request: NextRequest) {
       select: { 
         credits: true,
         subscriptionPlan: true,
-        subscriptionStatus: true
+        subscriptionStatus: true,
+        dailyFreeGenerations: true,
+        lastFreeGenerationDate: true,
       }
     })
 
@@ -66,8 +69,22 @@ export async function POST(request: NextRequest) {
     }
 
     const PHOTO_CREDIT_COST = CREDIT_COSTS.photo;
+    const FREE_MODEL_ID = 'black-forest-labs/FLUX.1-schnell-Free'
+    const isFreeTogetherModel = (modelId || FREE_MODEL_ID) === FREE_MODEL_ID
+
+    // Determine if user still has daily free allowance (without mutating state)
+    let hasFreeAllowance = false
+    if (isFreeTogetherModel) {
+      const todayUtc = new Date().toISOString().split('T')[0]
+      const lastDateUtc = user.lastFreeGenerationDate
+        ? user.lastFreeGenerationDate.toISOString().split('T')[0]
+        : null
+      const counterToday = lastDateUtc === todayUtc ? user.dailyFreeGenerations : 0
+      hasFreeAllowance = counterToday < 5
+    }
+
     // Check if user has enough credits
-    if (user.credits < PHOTO_CREDIT_COST) {
+    if (user.credits < PHOTO_CREDIT_COST && !(isFreeTogetherModel && hasFreeAllowance)) {
       return NextResponse.json(
         { error: 'Insufficient credits' },
         { status: 400 }
@@ -241,29 +258,42 @@ export async function POST(request: NextRequest) {
 
     // Only deduct credits and save if generation succeeded
     if (result.status === 'completed' && result.images?.[0]) {
-      // Deduct credit using CreditService for proper transaction logging
-      const creditResult = await CreditService.spendCredits(
-        session.user.id,
-        PHOTO_CREDIT_COST,
-        `Image generation: ${fullPrompt.substring(0, 100)}${fullPrompt.length > 100 ? '...' : ''}`,
-        'image_generation',
-        undefined, // Will be set to generated image ID after creation
-        {
-          prompt: fullPrompt,
-          model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
-          provider: actualProvider,
-          aspectRatio,
-          steps: selectedUserModel ? (steps || 28) : steps,
-          seed,
-          style
-        }
-      )
+      let creditResult: { success: boolean; newBalance: number; error?: string } = { success: true, newBalance: user.credits }
+      let usedFreeAllowance = false
 
-      if (!creditResult.success) {
-        return NextResponse.json(
-          { error: creditResult.error || 'Failed to process credit transaction' },
-          { status: 400 }
+      if (isFreeTogetherModel) {
+        // Attempt to consume daily free allowance atomically
+        const consumed = await tryConsumeDailyFreeGeneration(session.user.id)
+        if (consumed) {
+          usedFreeAllowance = true
+          creditResult = { success: true, newBalance: user.credits } // credits unchanged
+        }
+      }
+
+      if (!usedFreeAllowance) {
+        creditResult = await CreditService.spendCredits(
+          session.user.id,
+          PHOTO_CREDIT_COST,
+          `Image generation: ${fullPrompt.substring(0, 100)}${fullPrompt.length > 100 ? '...' : ''}`,
+          'image_generation',
+          undefined,
+          {
+            prompt: fullPrompt,
+            model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || FREE_MODEL_ID),
+            provider: actualProvider,
+            aspectRatio,
+            steps: selectedUserModel ? (steps || 28) : steps,
+            seed,
+            style
+          }
         )
+
+        if (!creditResult.success) {
+          return NextResponse.json(
+            { error: creditResult.error || 'Failed to process credit transaction' },
+            { status: 400 }
+          )
+        }
       }
 
       // Extract image metadata from generation result
@@ -428,7 +458,7 @@ export async function POST(request: NextRequest) {
               triggerWord: selectedUserModel.triggerWord
             } : undefined
           },
-          creditsUsed: PHOTO_CREDIT_COST
+          creditsUsed: usedFreeAllowance ? 0 : PHOTO_CREDIT_COST
         }
       })
 
