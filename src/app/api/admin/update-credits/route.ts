@@ -19,10 +19,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Update user credits
+    // Update user credits and trigger a session refresh by bumping sessionInvalidatedAt
     const user = await prisma.user.update({
       where: { email: email.toLowerCase() },
-      data: { credits },
+      data: {
+        credits,
+        // Flag client to refresh its JWT
+        sessionInvalidatedAt: new Date(),
+      },
       select: {
         id: true,
         email: true,
