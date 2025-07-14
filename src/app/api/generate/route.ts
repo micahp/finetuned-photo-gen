@@ -10,6 +10,7 @@ import { CreditService } from '@/lib/credit-service'
 import { isPremiumUser, isPremiumModel } from '@/lib/subscription-utils'
 import { CREDIT_COSTS } from '@/lib/credits/constants'
 import { tryConsumeDailyFreeGeneration } from '@/lib/free-generation'
+import { applyWatermark } from '@/lib/watermark'
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
@@ -338,9 +339,19 @@ export async function POST(request: NextRequest) {
             break // Don't retry if processing failed
           }
 
-          // Upload processed image buffer instead of URL
+          // Apply watermark if free allowance or user free plan
+          let uploadBuffer = processingResult.buffer!
+          if (usedFreeAllowance || user.subscriptionPlan === 'free') {
+            try {
+              uploadBuffer = await applyWatermark(uploadBuffer)
+            } catch (wmErr) {
+              console.warn('⚠️ Failed to apply watermark:', wmErr)
+            }
+          }
+
+          // Upload processed (and possibly watermarked) buffer instead of URL
           uploadResult = await cfImagesService.uploadImageFromBuffer(
-            processingResult.buffer!,
+            uploadBuffer,
             `generated-${Date.now()}.jpg`,
             {
               originalPrompt: fullPrompt,
