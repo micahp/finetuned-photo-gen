@@ -162,6 +162,13 @@ export default function VideoGenerationPage() {
     }
   }, [selectedModel, watchedDuration])
 
+  // Keep local creditsRemaining in sync with session once it loads/updates
+  useEffect(() => {
+    if (session?.user?.credits !== undefined && session.user.credits !== creditsRemaining) {
+      setCreditsRemaining(session.user.credits)
+    }
+  }, [session?.user?.credits])
+
   useEffect(() => {
     if (session && !isDev && !hasPremiumAccess) {
       router.replace('/dashboard/billing?upgradeRequired=video')
