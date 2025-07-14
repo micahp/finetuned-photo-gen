@@ -53,6 +53,8 @@ export async function createUser(email: string, password: string, name?: string)
         subscriptionPlan: true,
         stripeCustomerId: true,
         credits: true,
+        dailyFreeGenerations: true,
+        lastFreeGenerationDate: true,
         createdAt: true,
         updatedAt: true,
         stripeSubscriptionId: true,
