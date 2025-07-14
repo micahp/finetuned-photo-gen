@@ -22,6 +22,8 @@ model User {
   isAdmin                  Boolean             @default(false) @map("is_admin")
   adminNotes               String?
   apiCallCount             Int                 @default(0)
+  dailyFreeGenerations     Int                 @default(0) @map("daily_free_generations")
+  lastFreeGenerationDate   DateTime?           @map("last_free_generation_date")
   emailPreferences         Json?               @default("{\"marketing\": true, \"transactional\": true, \"usage_reports\": false}")
   lastApiCallAt            DateTime?
   purchasedCreditPacks     Json?               @default("[]")

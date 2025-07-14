@@ -32,12 +32,17 @@ export async function createUser(email: string, password: string, name?: string)
     // Hash password
     const hashedPassword = await hashPassword(password);
 
-    // Create user
+    // Import pricing constants here (local import to avoid circular deps)
+    const { PRICING_PLANS } = await import('./stripe/pricing')
+    const freePlanCredits = PRICING_PLANS[0]?.credits ?? 50
+
+    // Create user with initial free-plan credits
     const user = await prisma.user.create({
       data: {
         email: normalizedEmail,
         password: hashedPassword,
         name,
+        credits: freePlanCredits,
       },
       select: {
         id: true,
