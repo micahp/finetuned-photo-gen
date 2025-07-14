@@ -95,6 +95,13 @@ export default function EditPage() {
     checkForStripeReturn()
   }, [update])
 
+  // Keep local creditsRemaining in sync with session updates
+  useEffect(() => {
+    if (session?.user?.credits !== undefined && session.user.credits !== creditsRemaining) {
+      setCreditsRemaining(session.user.credits)
+    }
+  }, [session?.user?.credits])
+
   // Preset editing prompts
   const presetPrompts = [
     { label: 'Change Background', prompt: 'Change the background to a professional studio setting', emoji: '🖼️' },

@@ -81,6 +81,13 @@ export default function GeneratePage() {
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false)
   const [generatingPrompt, setGeneratingPrompt] = useState(false)
 
+  // Keep local creditsRemaining in sync with session changes
+  useEffect(() => {
+    if (session?.user?.credits !== undefined && session.user.credits !== creditsRemaining) {
+      setCreditsRemaining(session.user.credits)
+    }
+  }, [session?.user?.credits])
+
   // Initialize service without API key on client side (will be handled by API route)
   const getTogetherService = () => {
     try {
