@@ -172,3 +172,28 @@ SSL       : disable (local only)
 ---
 
 > **Tip:** Keep this file open while working; 95 % of live-DB issues are solved with the commands above. 🚀 
+
+---
+
+## 11  Debugging “Can’t Log In” After a Rebuild
+
+If the sign-in page just reloads or you get a 401/500 in `/api/auth/*`, use the checklist below. Run everything from the project root unless noted.
+
+| Step | What to Do | Copy-Paste Command |
+| --- | --- | --- |
+| 1 | **Verify critical env vars are present in the running container.** | `docker compose exec app env | egrep 'NEXTAUTH_(URL|SECRET)|DATABASE_URL'` |
+| 2 | **Watch real-time app logs while you click Log In.** | `docker compose logs -f app` |
+| 3 | **Confirm the database URL actually works from inside the app container.** | `docker compose exec app npx prisma db push --skip-generate` (should exit 0) |
+| 4 | **See if any users exist (the volume may have been wiped).** | `docker compose exec db psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT id,email FROM users LIMIT 5;"` |
+| 5 | **Patch a test password (credential flow only).** | <details><summary>Commands</summary>
+
+```bash
+HASH=$(docker compose exec -T app node -e "console.log(require('bcryptjs').hashSync('test1234',10))")
+docker compose exec db psql -U $POSTGRES_USER -d $POSTGRES_DB -c \
+  "UPDATE users SET password='${HASH}' WHERE email='you@example.com';"
+``` 
+</details> |
+| 6 | **Cookie / hostname mismatch?** Make sure `NEXTAUTH_URL` matches exactly the URL you browse at (incl. http/https & port). | — |
+| 7 | **OAuth provider keys** present? Check env for `GOOGLE_CLIENT_ID` etc. | `docker compose exec app env | grep CLIENT_ID` |
+
+> **Tip:** Almost every login failure after a fresh `docker compose up --build` is one of these: missing `NEXTAUTH_SECRET`, empty `users` table, or hostname mismatch in `NEXTAUTH_URL`. 
