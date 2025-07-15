@@ -34,6 +34,13 @@ export class FalVideoService {
   private apiKey: string
   private baseUrl = 'https://fal.run'
   private cloudStorage: CloudStorageService
+  /**
+   * When FAL_ENABLE_SAFETY_CHECKER is set to "false" we will disable the
+   * built-in NSFW checker by passing `enable_safety_checker: false` in every
+   * request.  Defaults to true to keep the current, safe behaviour unless the
+   * environment variable explicitly opts out.
+   */
+  private readonly enableSafetyChecker: boolean
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.FAL_API_TOKEN || ''
@@ -47,6 +54,12 @@ export class FalVideoService {
     })
     
     this.cloudStorage = new CloudStorageService()
+
+    // Evaluate env flag once during construction for minimal overhead.
+    // Any value other than the explicit string "false" (case-insensitive)
+    // keeps the checker ON.
+    const envFlag = process.env.FAL_ENABLE_SAFETY_CHECKER?.toLowerCase() || 'false'
+    this.enableSafetyChecker = envFlag !== 'false'
   }
 
   /**
@@ -119,7 +132,9 @@ export class FalVideoService {
           duration: duration.toString(), // Seedance expects string "5" or "10"
           resolution: params.width && params.width >= 1280 ? "720p" : "480p", // Default to 720p if high width requested
           camera_fixed: false, // Optional, but keep for now
-          seed: params.seed
+          seed: params.seed,
+          // Disable NSFW checker only when explicitly opted-out via env flag
+          enable_safety_checker: this.enableSafetyChecker
         }
 
         // Add aspect ratio for text-to-video models
@@ -238,7 +253,9 @@ export class FalVideoService {
           motion_bucket_id: params.motionLevel || model.defaultParams.motionLevel,
           width: params.width || dimensions.width,
           height: params.height || dimensions.height,
-          seed: params.seed
+          seed: params.seed,
+          // Disable NSFW checker only when explicitly opted-out via env flag
+          enable_safety_checker: this.enableSafetyChecker
         }
 
         // For image-to-video models, handle image upload
