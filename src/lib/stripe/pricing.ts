@@ -32,8 +32,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     credits: 50,
     maxModels: 0,
     features: [
-      '0 personalized model slot',
-      'Upload 10-20 training photos',
+      '5 free images per day',
+      '0 personalized model slots',
       'Basic style presets',
       'Standard generation speed',
       'Download in standard quality'
