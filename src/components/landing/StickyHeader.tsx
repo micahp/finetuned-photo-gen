@@ -387,7 +387,7 @@ export function StickyHeader({ className = '' }: StickyHeaderProps) {
             {/* Mobile Menu Panel */}
             <motion.div
               id="mobile-menu"
-              className="fixed top-16 right-0 w-80 h-[calc(100vh-4rem)] bg-fine-dark/95 backdrop-blur-md border-l border-white/10 z-50 md:hidden"
+              className="fixed top-16 right-0 w-80 h-[calc(100vh-4rem)] overflow-y-auto bg-fine-dark/95 backdrop-blur-md border-l border-white/10 z-50 md:hidden"
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
