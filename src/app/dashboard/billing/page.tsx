@@ -376,38 +376,7 @@ export default function BillingPage() {
             ))}
           </div>
         </div>
-        
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Credit Costs (per action)
-            </CardTitle>
-            <CardDescription>
-              Current credit pricing for each paid action
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead>
-                  <tr>
-                    <th scope="col" className="px-4 py-2 text-left font-medium text-gray-700">Action</th>
-                    <th scope="col" className="px-4 py-2 text-left font-medium text-gray-700">Credits</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {Object.entries(CREDIT_COSTS).map(([key, value]) => (
-                    <tr key={key}>
-                      <td className="px-4 py-2 capitalize">{key.replace('_', ' ')}</td>
-                      <td className="px-4 py-2">{key === 'video' ? `from ${value}` : value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+      
         
         <Card>
           <CardHeader>
