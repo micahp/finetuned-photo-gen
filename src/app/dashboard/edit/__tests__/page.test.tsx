@@ -229,7 +229,7 @@ describe('Edit Page - Comprehensive Tests', () => {
       })
 
       // Click edit button - using more specific selector
-      const editButton = screen.getByRole('button', { name: /edit image \(1 credit\)/i })
+      const editButton = screen.getByRole('button', { name: /edit image/i })
       expect(editButton).not.toBeDisabled()
       fireEvent.click(editButton)
 
@@ -502,7 +502,7 @@ describe('Edit Page - Comprehensive Tests', () => {
       })
 
       // Click edit button
-      const editButton = screen.getByRole('button', { name: /edit image \(1 credit\)/i })
+      const editButton = screen.getByRole('button', { name: /edit image/i })
       expect(editButton).not.toBeDisabled()
       fireEvent.click(editButton)
 
@@ -583,7 +583,7 @@ describe('Edit Page - Comprehensive Tests', () => {
         expect(promptTextarea).toHaveValue('Make sky blue')
       })
 
-      const editButton = screen.getByRole('button', { name: /edit image \(1 credit\)/i })
+      const editButton = screen.getByRole('button', { name: /edit image/i })
       expect(editButton).not.toBeDisabled()
       fireEvent.click(editButton)
 
