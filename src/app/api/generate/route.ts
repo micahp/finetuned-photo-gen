@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
+import { randomBytes } from 'crypto'
 import { TogetherAIService } from '@/lib/together-ai'
 import { ReplicateService } from '@/lib/replicate-service'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
@@ -13,13 +14,27 @@ import { tryConsumeDailyFreeGeneration } from '@/lib/free-generation'
 import { FREE_MODEL_ID } from '@/lib/models/constants'
 import { applyWatermark } from '@/lib/watermark'
 
-const generateImageSchema = z.object({
+// Utility: coerce numeric-like values to numbers, otherwise leave untouched
+const coerceNumber = (val: unknown) => {
+  if (typeof val === 'string' && val.trim() !== '') {
+    const parsed = Number(val)
+    return Number.isNaN(parsed) ? val : parsed
+  }
+  return val
+}
+
+const UINT32_MAX = 2 ** 32 - 1
+
+export const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
   modelId: z.string().optional(),
   style: z.string().optional(),
   aspectRatio: z.enum(['1:1', '16:9', '9:16', '3:4', '4:3']).default('1:1'),
   steps: z.number().min(1).max(50).optional(),
-  seed: z.number().optional(),
+  // Accept numeric strings & ensure 0 <= seed <= UINT32_MAX
+  seed: z
+    .preprocess(coerceNumber, z.number().int().min(0).max(UINT32_MAX))
+    .optional(),
   userModelId: z.string().optional(), // For custom trained models
 })
 
@@ -51,10 +66,10 @@ export async function POST(request: NextRequest) {
     const { prompt, modelId, style, aspectRatio, steps, seed, userModelId } = validation.data
 
     // Ensure every generation has a deterministic seed.
-    // If the client did not provide one, generate a random 32-bit integer.
+    // If the client did not provide one, generate a cryptographically secure random 32-bit integer.
     const effectiveSeed = typeof seed === 'number'
       ? seed
-      : Math.floor(Math.random() * 2 ** 32)
+      : randomBytes(4).readUInt32BE(0)
 
     // Check if user has enough credits and active subscription
     const user = await prisma.user.findUnique({
@@ -183,7 +198,8 @@ export async function POST(request: NextRequest) {
         replicateModelId: selectedUserModel.replicateModelId,
         triggerWord: selectedUserModel.triggerWord,
         prompt: fullPrompt,
-        steps: steps || 28
+        steps: steps || 28,
+        seed: effectiveSeed
       })
 
       actualProvider = 'replicate'
@@ -214,7 +230,8 @@ export async function POST(request: NextRequest) {
         model: modelId || FREE_MODEL_ID,
         provider: actualProvider,
         prompt: fullPrompt,
-        steps
+        steps,
+        seed: effectiveSeed
       })
 
       // Use base model generation (TogetherAI service will route to Replicate if needed)
@@ -236,6 +253,7 @@ export async function POST(request: NextRequest) {
       hasImages: !!result.images,
       imageCount: result.images?.length || 0,
       error: result.error,
+      seed: effectiveSeed,
       resultKeys: Object.keys(result),
       firstImageUrl: result.images?.[0]?.url,
       generationDuration
