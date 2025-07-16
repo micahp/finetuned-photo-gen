@@ -73,24 +73,10 @@ export async function POST(request: NextRequest) {
     const FREE_MODEL_ID = 'black-forest-labs/FLUX.1-schnell-Free'
     const isFreeTogetherModel = (modelId || FREE_MODEL_ID) === FREE_MODEL_ID
 
-    // Determine if user still has daily free allowance (without mutating state)
-    let hasFreeAllowance = false
-    if (isFreeTogetherModel) {
-      const todayUtc = new Date().toISOString().split('T')[0]
-      const lastDateUtc = user.lastFreeGenerationDate
-        ? user.lastFreeGenerationDate.toISOString().split('T')[0]
-        : null
-      const counterToday = lastDateUtc === todayUtc ? user.dailyFreeGenerations : 0
-      hasFreeAllowance = counterToday < 5
-    }
+    // We no longer check free allowance optimistically here; the atomic helper handles it.
 
-    // Check if user has enough credits
-    if (user.credits < PHOTO_CREDIT_COST && !(isFreeTogetherModel && hasFreeAllowance)) {
-      return NextResponse.json(
-        { error: 'Insufficient credits' },
-        { status: 400 }
-      )
-    }
+    // NOTE: Early credit guard removed to avoid race with atomic free-allowance consumption.
+    // Credit sufficiency is now enforced right before spending credits.
 
     // Check if subscription has been canceled but user trying to use premium features
     if (user.subscriptionStatus === 'canceled' && user.subscriptionPlan) {
@@ -339,9 +325,10 @@ export async function POST(request: NextRequest) {
             break // Don't retry if processing failed
           }
 
-          // Apply watermark if free allowance or user free plan
+          // Apply watermark only when free allowance was used AND the user does not have an active paid subscription
           let uploadBuffer = processingResult.buffer!
-          if (usedFreeAllowance || user.subscriptionPlan === 'free') {
+          const shouldWatermark = usedFreeAllowance && user.subscriptionStatus !== 'active'
+          if (shouldWatermark) {
             try {
               uploadBuffer = await applyWatermark(uploadBuffer)
             } catch (wmErr) {
