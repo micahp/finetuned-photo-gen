@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Plus, Image, Calendar, Loader2, ExternalLink, DollarSign, Clock, Users, Zap, Activity, AlertCircle, Trash2, RefreshCw } from 'lucide-react'
+import { Plus, Image, Calendar, Loader2, ExternalLink, DollarSign, Clock, Users, Zap, Activity, AlertCircle, Trash2, RefreshCw, Crown, CheckCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { 
@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { isPremiumUser } from '@/lib/subscription-utils'
 
 interface Model {
   id: string
@@ -71,6 +72,12 @@ export default function ModelsPage() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [deletePreview, setDeletePreview] = useState<DeletePreview | null>(null)
   const [retryingUpload, setRetryingUpload] = useState<string | null>(null)
+  const [hasPremiumAccess, setHasPremiumAccess] = useState(false)
+  const [isSubscribing, setIsSubscribing] = useState(false)
+
+  useEffect(() => {
+    setHasPremiumAccess(isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus))
+  }, [session?.user?.subscriptionPlan, session?.user?.subscriptionStatus])
 
   useEffect(() => {
     fetchModels()
@@ -242,6 +249,42 @@ export default function ModelsPage() {
     return `${minutes}m`
   }
 
+  const startSubscriptionCheckout = async () => {
+    try {
+      setIsSubscribing(true)
+      setError(null)
+
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          priceId: 'creator', // plan id resolves to correct price id server-side
+          mode: 'subscription',
+          quantity: 1,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create checkout session')
+      }
+
+      const { url, sessionId } = await response.json()
+      if (url) {
+        if (sessionId) {
+          localStorage.setItem('stripe_checkout_session', sessionId)
+          localStorage.setItem('checkout_return_time', Date.now().toString())
+        }
+        window.location.replace(url)
+      } else {
+        throw new Error('No checkout URL returned')
+      }
+    } catch (err) {
+      console.error('Failed to create checkout session:', err)
+      setError('Failed to start checkout process. Please try again.')
+      setIsSubscribing(false)
+    }
+  }
+
   if (!session) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -263,18 +306,40 @@ export default function ModelsPage() {
             </p>
           </div>
           <div className="flex gap-3">
-            <Link href="/dashboard/training">
-              <Button variant="outline" className="flex items-center gap-2">
-                <Activity className="h-4 w-4" />
-                Training Dashboard
+            {hasPremiumAccess ? (
+              <>
+                <Link href="/dashboard/training">
+                  <Button variant="outline" className="flex items-center gap-2">
+                    <Activity className="h-4 w-4" />
+                    Training Dashboard
+                  </Button>
+                </Link>
+                <Link href="/dashboard/models/new">
+                  <Button className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Create New Model
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <Button
+                onClick={startSubscriptionCheckout}
+                disabled={isSubscribing}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isSubscribing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Redirecting...
+                  </>
+                ) : (
+                  <>
+                    <Crown className="h-4 w-4" />
+                    Subscribe to Create Your First Model
+                  </>
+                )}
               </Button>
-            </Link>
-            <Link href="/dashboard/models/new">
-              <Button className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Create New Model
-              </Button>
-            </Link>
+            )}
           </div>
         </div>
 
@@ -304,19 +369,166 @@ export default function ModelsPage() {
           </div>
         ) : models.length === 0 ? (
           <div className="text-center py-12">
-            <div className="max-w-md mx-auto">
-              <Image className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No models yet</h3>
-              <p className="text-gray-600 mb-6">
-                Create your first custom model to start generating personalized images
-              </p>
-              <Link href="/dashboard/models/new">
-                <Button className="flex items-center gap-2 mx-auto">
-                  <Plus className="h-4 w-4" />
-                  Create Your First Model
-                </Button>
-              </Link>
-            </div>
+            {hasPremiumAccess ? (
+              <div className="max-w-md mx-auto">
+                <Image className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No models yet</h3>
+                <p className="text-gray-600 mb-6">
+                  Create your first custom model to start generating personalized images
+                </p>
+                <Link href="/dashboard/models/new">
+                  <Button className="flex items-center gap-2 mx-auto">
+                    <Plus className="h-4 w-4" />
+                    Create Your First Model
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="max-w-2xl mx-auto">
+                <Card className="border-2 border-blue-200 shadow-md">
+                  <CardHeader className="border-b border-blue-200 bg-blue-100/50">
+                    <CardTitle className="flex items-center text-blue-800">
+                      <Crown className="h-5 w-5 mr-2" />
+                      Unlock Custom AI Models
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <div className="space-y-6">
+                      <div className="flex flex-col items-center text-center">
+                        <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+                          <Image className="h-10 w-10 text-purple-600" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Create Your Personal AI Models</h3>
+                        <p className="text-gray-600 mb-4">
+                          Upgrade to premium and unlock the ability to train custom AI models with your own photos.
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex items-center p-3 border border-blue-200 rounded-md bg-white">
+                          <div className="mr-3 text-xl opacity-70">📸</div>
+                          <div className="text-sm font-medium text-gray-700">Train with your photos</div>
+                        </div>
+                        <div className="flex items-center p-3 border border-blue-200 rounded-md bg-white">
+                          <div className="mr-3 text-xl opacity-70">🎯</div>
+                          <div className="text-sm font-medium text-gray-700">Personalized results</div>
+                        </div>
+                        <div className="flex items-center p-3 border border-blue-200 rounded-md bg-white">
+                          <div className="mr-3 text-xl opacity-70">⚡</div>
+                          <div className="text-sm font-medium text-gray-700">Fast training</div>
+                        </div>
+                        <div className="flex items-center p-3 border border-blue-200 rounded-md bg-white">
+                          <div className="mr-3 text-xl opacity-70">🎨</div>
+                          <div className="text-sm font-medium text-gray-700">Multiple styles</div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gradient-to-b from-blue-50 to-white p-6 rounded-lg border border-blue-200 shadow-sm">
+                        <div className="flex items-center justify-center mb-4">
+                          <Badge className="bg-blue-100 text-blue-800 border-none">Most Popular</Badge>
+                        </div>
+                        <div className="text-center">
+                          <h3 className="text-lg font-semibold text-gray-900">Creator Plan</h3>
+                          <div className="mt-2 mb-1">
+                            <span className="text-3xl font-bold text-blue-600">$20</span>
+                            <span className="text-gray-500">/month</span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-4">200 credits monthly</p>
+                        </div>
+                        
+                        <h4 className="font-medium text-gray-900 mb-3">Model Training Features:</h4>
+                        <ul className="space-y-2 mb-6">
+                          <li className="flex items-center text-sm">
+                            <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0">
+                              <CheckCircle className="h-3 w-3 text-blue-600" />
+                            </div>
+                            <span className="text-gray-600">Train up to 3 custom models</span>
+                          </li>
+                          <li className="flex items-center text-sm">
+                            <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0">
+                              <CheckCircle className="h-3 w-3 text-blue-600" />
+                            </div>
+                            <span className="text-gray-600">High-quality training with 20-30 photos</span>
+                          </li>
+                          <li className="flex items-center text-sm">
+                            <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0">
+                              <CheckCircle className="h-3 w-3 text-blue-600" />
+                            </div>
+                            <span className="text-gray-600">Fast training completion (15-30 minutes)</span>
+                          </li>
+                          <li className="flex items-center text-sm">
+                            <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center mr-2 flex-shrink-0">
+                              <CheckCircle className="h-3 w-3 text-blue-600" />
+                            </div>
+                            <span className="text-gray-600">Priority training queue</span>
+                          </li>
+                        </ul>
+                        
+                        <Button 
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
+                          size="lg"
+                          onClick={async () => {
+                            try {
+                              setIsSubscribing(true)
+                              setError(null)
+                              
+                              const response = await fetch('/api/stripe/create-checkout-session', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                  priceId: process.env.NEXT_PUBLIC_STRIPE_CREATOR_PLAN_PRICE_ID || 'price_creator',
+                                  mode: 'subscription',
+                                  quantity: 1
+                                }),
+                              })
+                              
+                              if (!response.ok) {
+                                throw new Error('Failed to create checkout session')
+                              }
+                              
+                              const { url, sessionId } = await response.json()
+                              
+                              if (url) {
+                                if (sessionId) {
+                                  localStorage.setItem('stripe_checkout_session', sessionId)
+                                  localStorage.setItem('checkout_return_time', Date.now().toString())
+                                }
+                                window.location.replace(url)
+                              } else {
+                                throw new Error('No checkout URL returned')
+                              }
+                            } catch (error) {
+                              console.error('Failed to create checkout session:', error)
+                              setError('Failed to start checkout process. Please try again.')
+                              setIsSubscribing(false)
+                            }
+                          }}
+                          disabled={isSubscribing}
+                        >
+                          {isSubscribing ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Redirecting...
+                            </>
+                          ) : (
+                            <>
+                              <Crown className="h-4 w-4 mr-2" />
+                              Subscribe to Create Your First Model
+                            </>
+                          )}
+                        </Button>
+                        
+                        <p className="text-xs text-center text-gray-500 mt-3">
+                          Cancel anytime with no hidden fees
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -511,4 +723,4 @@ export default function ModelsPage() {
       </div>
     </TooltipProvider>
   )
-} 
+}
