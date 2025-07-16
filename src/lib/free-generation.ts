@@ -23,31 +23,22 @@ export async function tryConsumeDailyFreeGeneration(userId: string): Promise<boo
 
     if (!user) return { allowed: false }
 
+    // Determine the counter value for today
     const lastDateUtc = user.lastFreeGenerationDate
       ? user.lastFreeGenerationDate.toISOString().split('T')[0]
       : null
 
-    // If last generation was on a different day, reset the counter
-    if (lastDateUtc !== todayUtc) {
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          dailyFreeGenerations: 0,
-          lastFreeGenerationDate: new Date(),
-        },
-      })
-      user.dailyFreeGenerations = 0
-    }
+    const counterToday = lastDateUtc === todayUtc ? user.dailyFreeGenerations : 0
 
-    if (user.dailyFreeGenerations >= 5) {
+    if (counterToday >= 5) {
       return { allowed: false }
     }
 
-    // Increment counter atomically
+    // Single atomic update – reset (if needed) and increment in one write
     await tx.user.update({
       where: { id: userId },
       data: {
-        dailyFreeGenerations: { increment: 1 },
+        dailyFreeGenerations: counterToday + 1,
         lastFreeGenerationDate: new Date(),
       },
     })
