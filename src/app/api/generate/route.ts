@@ -73,6 +73,14 @@ export async function POST(request: NextRequest) {
     const PHOTO_CREDIT_COST = CREDIT_COSTS.photo;
     const isFreeTogetherModel = (modelId || FREE_MODEL_ID) === FREE_MODEL_ID
 
+    // Additional validation: the free FLUX.1 Schnell model only supports 1-4 steps
+    if (isFreeTogetherModel && typeof steps === 'number' && (steps < 1 || steps > 4)) {
+      return NextResponse.json(
+        { error: 'For FLUX.1 Schnell (Free), steps must be between 1 and 4' },
+        { status: 400 }
+      )
+    }
+
     // We no longer check free allowance optimistically here; the atomic helper handles it.
 
     // NOTE: Early credit guard removed to avoid race with atomic free-allowance consumption.
