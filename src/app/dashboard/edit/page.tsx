@@ -319,11 +319,11 @@ export default function EditPage() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        <div className="bg-gray-100 rounded-lg overflow-hidden">
                           <SmartImage
                             src={sourceImage}
                             alt="Source image"
-                            className="w-full h-full object-cover"
+                            className="w-full h-auto object-contain"
                           />
                         </div>
                         <Button 
@@ -618,11 +618,11 @@ export default function EditPage() {
               <CardContent>
                 {editedImage ? (
                   <div className="space-y-4">
-                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                    <div className="bg-gray-100 rounded-lg overflow-hidden">
                       <SmartImage
                         src={editedImage.url}
                         alt="Edited image"
-                        className="w-full h-full object-cover"
+                        className="w-full h-auto object-contain"
                       />
                     </div>
                     <div className="space-y-3">
