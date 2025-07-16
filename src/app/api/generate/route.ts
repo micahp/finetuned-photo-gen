@@ -50,6 +50,12 @@ export async function POST(request: NextRequest) {
 
     const { prompt, modelId, style, aspectRatio, steps, seed, userModelId } = validation.data
 
+    // Ensure every generation has a deterministic seed.
+    // If the client did not provide one, generate a random 32-bit integer.
+    const effectiveSeed = typeof seed === 'number'
+      ? seed
+      : Math.floor(Math.random() * 2 ** 32)
+
     // Check if user has enough credits and active subscription
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -191,7 +197,7 @@ export async function POST(request: NextRequest) {
         triggerWord: selectedUserModel.triggerWord || undefined,
         aspectRatio,
         steps: steps || 28, // Use more steps for LoRA by default
-        seed
+        seed: effectiveSeed
       })
     } else {
       // Base model generation (no custom model specified)
@@ -217,7 +223,7 @@ export async function POST(request: NextRequest) {
         model: modelId || FREE_MODEL_ID,
         aspectRatio,
         steps,
-        seed
+        seed: effectiveSeed
       })
     }
 
@@ -278,7 +284,7 @@ export async function POST(request: NextRequest) {
             provider: actualProvider,
             aspectRatio,
             steps: selectedUserModel ? (steps || 28) : steps,
-            seed,
+            seed: effectiveSeed,
             style
           }
         )
@@ -455,7 +461,7 @@ export async function POST(request: NextRequest) {
             provider: actualProvider,
             aspectRatio,
             steps: selectedUserModel ? (steps || 28) : steps,
-            seed,
+            seed: effectiveSeed,
             style,
             userModel: selectedUserModel ? {
               id: selectedUserModel.id,

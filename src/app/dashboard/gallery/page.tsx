@@ -597,12 +597,10 @@ export default function GalleryPage() {
                         <span className="text-gray-600">Steps:</span>
                         <span>{selectedImage.generationParams.steps}</span>
                       </div>
-                      {selectedImage.generationParams.seed && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Seed:</span>
-                          <span>{selectedImage.generationParams.seed}</span>
-                        </div>
-                      )}
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Seed:</span>
+                        <span>{selectedImage.generationParams.seed ?? 'N/A'}</span>
+                      </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Style:</span>
                         <span className="capitalize">{selectedImage.generationParams.style}</span>
