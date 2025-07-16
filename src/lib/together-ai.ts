@@ -1,5 +1,6 @@
 import { TogetherGenerationResponse, TogetherModelResponse } from '@/lib/types'
 import { ReplicateService } from '@/lib/replicate-service'
+import { FREE_MODEL_ID } from '@/lib/models/constants'
 
 interface GenerateImageParams {
   prompt: string
@@ -160,7 +161,7 @@ export class TogetherAIService {
     // --- START OUTER TRY-CATCH FOR ROUTING AND OVERALL FAILURE ---
     try {
       const { width, height } = this.getDimensions(params.aspectRatio)
-      const model = params.model || 'black-forest-labs/FLUX.1-schnell-Free'
+      const model = params.model || FREE_MODEL_ID
       
       if (this.shouldUseReplicate(model)) {
         console.log(`🔄 Routing ${model} to Replicate`)
@@ -304,7 +305,7 @@ export class TogetherAIService {
         })
       }
 
-      const model = params.model || 'black-forest-labs/FLUX.1-schnell-Free'
+      const model = params.model || FREE_MODEL_ID
       const replicateModelId = this.getReplicateModelId(model)
       
       if (!replicateModelId) {
