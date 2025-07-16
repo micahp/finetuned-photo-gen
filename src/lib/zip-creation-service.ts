@@ -1,5 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import os from 'os'
 import archiver from 'archiver'
 import sharp from 'sharp'
 import { TrainingDebugger, TrainingStage, ErrorCategory } from './training-debug'
@@ -570,15 +571,18 @@ export class ZipCreationService {
   }
 
   /**
-   * Create temporary directory for processing
+   * Create a writable temporary directory. We default to the OS temp folder
+   * to avoid permission issues inside Docker / read-only roots, but allow
+   * overriding with TRAINING_TEMP_DIR when the operator wants to mount a
+   * persistent volume for debugging.
    */
   private async createTempDirectory(): Promise<string> {
-    const tempDir = path.join(process.cwd(), 'temp', `training_${Date.now()}`)
-    
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true })
-    }
-    
+    const baseDir = process.env.TRAINING_TEMP_DIR || os.tmpdir()
+    const tempDir = path.join(baseDir, `training_${Date.now()}`)
+
+    // fs.promises.mkdir is async and recursive by default in Node 14+
+    await fs.promises.mkdir(tempDir, { recursive: true })
+
     return tempDir
   }
 
