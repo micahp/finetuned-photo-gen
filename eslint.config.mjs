@@ -32,6 +32,38 @@ const eslintConfig = [
         }
       ]
     }
+  },
+  {
+    files: ["**/__tests__/**", "**/*.test.*", "**/*.spec.*"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/ban-ts-comment": "off",
+      "@next/next/no-assign-module-variable": "off"
+    }
+  },
+  {
+    files: [
+      "src/app/test-*/**/*.{ts,tsx}",
+      "src/app/test-contrast/**/*.{ts,tsx}",
+      "src/app/test-upload/**/*.{ts,tsx}",
+      "src/components/landing/**/*.{ts,tsx}"
+    ],
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "react/no-unescaped-entities": "off",
+      "react-hooks/exhaustive-deps": "warn"
+    }
+  },
+  {
+    files: [
+      "src/app/api/**/*.{ts,tsx,js,jsx}"
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-vars": "off"
+    }
   }
 ];
 

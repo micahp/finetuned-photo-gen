@@ -77,19 +77,7 @@ describe('Edit Page - Comprehensive Tests', () => {
     } as Response)
     
     // Reset DOM between tests but ensure we have a proper container
-    if (typeof document !== 'undefined') {
-      document.body.innerHTML = ''
-      // Recreate test container after clearing
-      try {
-        const container = document.createElement('div')
-        if (container && typeof container.setAttribute === 'function') {
-          container.setAttribute('id', 'test-root')
-          document.body.appendChild(container)
-        }
-      } catch (error) {
-        console.warn('Failed to create DOM container in beforeEach:', error)
-      }
-    }
+    // React Testing Library will create its own container; no manual DOM container needed.
   })
 
   describe('Credit Management', () => {
@@ -193,7 +181,7 @@ describe('Edit Page - Comprehensive Tests', () => {
           id: 'edit-123',
           url: '/edited-image.jpg',
           prompt: 'Test edit',
-          remainingCredits: 99, // One credit deducted
+          remainingCredits: 95, // 5 credits deducted
         }),
       } as Response)
 
@@ -244,7 +232,7 @@ describe('Edit Page - Comprehensive Tests', () => {
 
       // Wait for the update function to be called with correct credits
       await waitFor(() => {
-        expect(mockUpdate).toHaveBeenCalledWith({ credits: 99 })
+        expect(mockUpdate).toHaveBeenCalledWith({ credits: 95 })
       }, { timeout: 5000 })
     })
   })
@@ -436,19 +424,7 @@ describe('Edit Page - Comprehensive Tests', () => {
 
   describe('Download Functionality', () => {
     beforeEach(() => {
-      // Ensure DOM container is available
-      if (typeof document !== 'undefined') {
-        document.body.innerHTML = ''
-        try {
-          const container = document.createElement('div')
-          if (container && typeof container.setAttribute === 'function') {
-            container.setAttribute('id', 'test-root')
-            document.body.appendChild(container)
-          }
-        } catch (error) {
-          console.warn('Failed to create DOM container in beforeEach:', error)
-        }
-      }
+      // No manual DOM container setup necessary for RTL.
 
       const mockSession = createMockSession({
         subscriptionStatus: 'active',
@@ -472,7 +448,7 @@ describe('Edit Page - Comprehensive Tests', () => {
           id: 'edit-123',
           url: 'https://example.com/edited-image.jpg',
           prompt: 'Test edit',
-          remainingCredits: 99,
+          remainingCredits: 95,
         }),
         blob: async () => new Blob(['fake image data']),
       } as Response)
@@ -522,24 +498,12 @@ describe('Edit Page - Comprehensive Tests', () => {
           id: 'edit-123',
           url: 'https://example.com/edited-image.jpg',
           prompt: 'Test edit',
-          remainingCredits: 99,
+          remainingCredits: 95,
         }),
         blob: async () => new Blob(['fake image data']),
       } as Response)
 
-      // Ensure DOM container is available BEFORE mocking document methods
-      if (typeof document !== 'undefined') {
-        document.body.innerHTML = ''
-        try {
-          const container = document.createElement('div')
-          if (container && typeof container.setAttribute === 'function') {
-            container.setAttribute('id', 'test-root')
-            document.body.appendChild(container)
-          }
-        } catch (error) {
-          console.warn('Failed to create DOM container in test:', error)
-        }
-      }
+      // No manual DOM container setup needed; RTL handles this.
 
       // Mock document methods AFTER DOM setup
       const mockLink = {
@@ -625,7 +589,7 @@ describe('Edit Page - Comprehensive Tests', () => {
           id: 'edit-123',
           url: 'https://example.com/edited-image.jpg',
           prompt: 'Test edit',
-          remainingCredits: 99,
+          remainingCredits: 95,
         }),
       } as Response)
 

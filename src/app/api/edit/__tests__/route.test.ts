@@ -165,7 +165,7 @@ describe('/api/edit', () => {
       mockAuthEdit.mockResolvedValue(mockSession)
       mockPrismaUserFindUnique.mockResolvedValue(mockUser)
       mockIsPremiumUser.mockReturnValue(true)
-      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 9 })
+      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 5 })
       mockReplicateEditImage.mockResolvedValue({
         status: 'completed',
         images: [{ url: 'https://example.com/edited.jpg', width: 512, height: 512 }],
@@ -179,7 +179,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       })
 
       const request = new NextRequest('http://localhost:3000/api/edit', {
@@ -298,7 +298,7 @@ describe('/api/edit', () => {
 
     it('should accept valid request with optional seed', async () => {
       // Arrange
-      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 9 })
+      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 5 })
       mockReplicateEditImage.mockResolvedValue({
         status: 'completed',
         images: [{ url: 'https://example.com/edited.jpg', width: 512, height: 512 }],
@@ -312,7 +312,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       })
 
       const validRequest = {
@@ -414,7 +414,7 @@ describe('/api/edit', () => {
       expect(data.error).toBe('Credit transaction failed')
       expect(global.mockCreditServiceSpendCredits).toHaveBeenCalledWith(
         'user-123',
-        1,
+        5,
         'Image edit: Make the sky more vibrant',
         'image_edit',
         undefined,
@@ -430,7 +430,7 @@ describe('/api/edit', () => {
     it('should properly spend credits on successful edit', async () => {
       // Arrange
       mockPrismaUserFindUnique.mockResolvedValue(mockUser)
-      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 9 })
+      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 5 })
       mockReplicateEditImage.mockResolvedValue({
         status: 'completed',
         images: [{ url: 'https://example.com/edited.jpg', width: 512, height: 512 }],
@@ -444,7 +444,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       })
 
       const request = new NextRequest('http://localhost:3000/api/edit', {
@@ -459,10 +459,10 @@ describe('/api/edit', () => {
 
       // Assert
       expect(response.status).toBe(200)
-      expect(data.remainingCredits).toBe(9) // 10 - 1
+      expect(data.remainingCredits).toBe(5) // 10 - 5
       expect(global.mockCreditServiceSpendCredits).toHaveBeenCalledWith(
         'user-123',
-        1,
+        5,
         'Image edit: Make the sky more vibrant',
         'image_edit',
         undefined,
@@ -481,7 +481,7 @@ describe('/api/edit', () => {
       mockAuthEdit.mockResolvedValue(mockSession)
       mockPrismaUserFindUnique.mockResolvedValue(mockUser)
       mockIsPremiumUser.mockReturnValue(true)
-      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 9 })
+      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 5 })
     })
 
     it('should return 500 when edit fails', async () => {
@@ -544,7 +544,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       })
 
       const request = new NextRequest('http://localhost:3000/api/edit', {
@@ -592,7 +592,7 @@ describe('/api/edit', () => {
       mockAuthEdit.mockResolvedValue(mockSession)
       mockPrismaUserFindUnique.mockResolvedValue(mockUser)
       mockIsPremiumUser.mockReturnValue(true)
-      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 9 })
+      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 5 })
       mockReplicateEditImage.mockResolvedValue({
         status: 'completed',
         images: [{ url: 'https://example.com/edited.jpg', width: 512, height: 512 }],
@@ -609,7 +609,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       })
 
       const request = new NextRequest('http://localhost:3000/api/edit', {
@@ -656,7 +656,7 @@ describe('/api/edit', () => {
         width: 1024,
         height: 1024,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       })
 
       const request = new NextRequest('http://localhost:3000/api/edit', {
@@ -692,7 +692,7 @@ describe('/api/edit', () => {
       mockAuthEdit.mockResolvedValue(mockSession)
       mockPrismaUserFindUnique.mockResolvedValue(mockUser)
       mockIsPremiumUser.mockReturnValue(true)
-      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 9 })
+      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 5 })
       mockReplicateEditImage.mockResolvedValue({
         status: 'completed',
         images: [{ url: 'https://example.com/edited.jpg', width: 512, height: 512 }],
@@ -711,7 +711,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
         cloudflareImageId: 'cf-123',
         metadata: {
           model: 'black-forest-labs/flux-kontext-pro',
@@ -741,7 +741,7 @@ describe('/api/edit', () => {
             width: 512,
             height: 512,
             seed: mockEditRequest.seed,
-            creditsUsed: 1,
+            creditsUsed: 5,
           })
         })
       )
@@ -759,7 +759,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
         cloudflareImageId: 'cf-123',
         fileSize: 256000,
         metadata: {
@@ -790,7 +790,7 @@ describe('/api/edit', () => {
           fileSize: 256000,
           width: 512,
           height: 512,
-          creditsUsed: 1,
+          creditsUsed: 5,
           generationParams: {
             model: 'black-forest-labs/flux-kontext-pro',
             provider: 'replicate',
@@ -811,7 +811,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       }
       mockPrismaEditedImageCreate.mockResolvedValue(mockSavedImage)
 
@@ -851,7 +851,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       }
       mockPrismaEditedImageCreate.mockResolvedValue(mockSavedImage)
       mockPrismaGeneratedImageCreate.mockRejectedValue(new Error('DB error'))
@@ -916,7 +916,7 @@ describe('/api/edit', () => {
 
     it('should handle Replicate service errors', async () => {
       // Arrange
-      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 9 })
+      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 5 })
       mockReplicateEditImage.mockRejectedValue(new Error('Replicate API error'))
 
       const request = new NextRequest('http://localhost:3000/api/edit', {
@@ -940,7 +940,7 @@ describe('/api/edit', () => {
       mockAuthEdit.mockResolvedValue(mockSession)
       mockPrismaUserFindUnique.mockResolvedValue(mockUser)
       mockIsPremiumUser.mockReturnValue(true)
-      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 9 })
+      global.mockCreditServiceSpendCredits.mockResolvedValue({ success: true, newBalance: 5 })
     })
 
     it('should handle very long prompts at the limit', async () => {
@@ -959,7 +959,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       })
 
       const request = new NextRequest('http://localhost:3000/api/edit', {
@@ -978,7 +978,7 @@ describe('/api/edit', () => {
       expect(response.status).toBe(200)
       expect(global.mockCreditServiceSpendCredits).toHaveBeenCalledWith(
         'user-123',
-        1,
+        5,
         `Image edit: ${longPrompt.substring(0, 100)}...`,
         'image_edit',
         undefined,
@@ -986,10 +986,10 @@ describe('/api/edit', () => {
       )
     })
 
-    it('should handle exactly 1 credit remaining', async () => {
+    it('should handle exactly the minimum credits required (5) remaining', async () => {
       // Arrange
-      const userWithOneCredit = { ...mockUser, credits: 1 }
-      mockPrismaUserFindUnique.mockResolvedValue(userWithOneCredit)
+      const userWithMinCredits = { ...mockUser, credits: 5 }
+      mockPrismaUserFindUnique.mockResolvedValue(userWithMinCredits)
       mockReplicateEditImage.mockResolvedValue({
         status: 'completed',
         images: [{ url: 'https://example.com/edited.jpg', width: 512, height: 512 }],
@@ -1003,7 +1003,7 @@ describe('/api/edit', () => {
         width: 512,
         height: 512,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       })
 
       const request = new NextRequest('http://localhost:3000/api/edit', {
@@ -1018,7 +1018,7 @@ describe('/api/edit', () => {
 
       // Assert
       expect(response.status).toBe(200)
-      expect(data.remainingCredits).toBe(0) // 1 - 1 = 0
+      expect(data.remainingCredits).toBe(0) // 5 - 5 = 0
     })
 
     it('should handle missing image dimensions from Replicate', async () => {
@@ -1036,7 +1036,7 @@ describe('/api/edit', () => {
         width: undefined,
         height: undefined,
         createdAt: new Date(),
-        creditsUsed: 1,
+        creditsUsed: 5,
       })
 
       const request = new NextRequest('http://localhost:3000/api/edit', {

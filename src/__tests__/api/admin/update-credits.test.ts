@@ -198,9 +198,22 @@ describe('/api/admin/update-credits', () => {
         credits: 100,
       })
 
+      // Ensure Prisma update included sessionInvalidatedAt timestamp
       expect(mockPrismaUpdate).toHaveBeenCalledWith({
         where: { email: 'user@example.com' },
-        data: { credits: 100 },
+        data: expect.objectContaining({
+          credits: 100,
+          sessionInvalidatedAt: expect.any(Date),
+        }),
+        select: expect.any(Object),
+      })
+
+      expect(mockPrismaUpdate).toHaveBeenCalledWith({
+        where: { email: 'user@example.com' },
+        data: expect.objectContaining({
+          credits: 100,
+          sessionInvalidatedAt: expect.any(Date),
+        }),
         select: {
           id: true,
           email: true,
@@ -239,7 +252,10 @@ describe('/api/admin/update-credits', () => {
       // Verify email was normalized to lowercase
       expect(mockPrismaUpdate).toHaveBeenCalledWith({
         where: { email: 'user@example.com' },
-        data: { credits: 50 },
+        data: expect.objectContaining({
+          credits: 50,
+          sessionInvalidatedAt: expect.any(Date),
+        }),
         select: {
           id: true,
           email: true,

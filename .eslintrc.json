@@ -17,5 +17,13 @@
       }
     ],
     "@typescript-eslint/no-duplicate-enum-values": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "**/*.test.js"],
+      "rules": {
+        "@typescript-eslint/no-require-imports": "off"
+      }
+    }
+  ]
 } 
