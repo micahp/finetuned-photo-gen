@@ -43,7 +43,7 @@ jest.mock('@/lib/db', () => {
   }
 })
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+ 
 const { prisma } = require('@/lib/db')
 
 describe('tryConsumeDailyFreeGeneration', () => {

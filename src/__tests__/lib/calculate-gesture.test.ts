@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from '@jest/globals'
-// eslint-disable-next-line import/no-relative-parent-imports
+ 
 import { TouchGestureHandler } from '../../lib/touch-utils'
 
 // Helper to access private members safely in tests

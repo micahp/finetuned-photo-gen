@@ -211,7 +211,7 @@ export class TogetherAIService {
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            let errorMessage = errorData.error?.message || `API request failed: ${response.status}`;
+            const errorMessage = errorData.error?.message || `API request failed: ${response.status}`;
             lastError = new Error(errorMessage); // Store error for potential rethrow
             (lastError as any).status = response.status; // Attach status code
 
