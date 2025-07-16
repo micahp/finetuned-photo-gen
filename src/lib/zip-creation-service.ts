@@ -288,8 +288,9 @@ export class ZipCreationService {
   private async downloadImage(url: string): Promise<Buffer> {
     console.log('🔍 DOWNLOAD DEBUG - Processing URL:', url)
     
-    // Check if this is a local file URL (server-side access)
-    if (url.startsWith('/api/uploads/') || url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
+    // Treat any URL that points to our internal upload API as local, regardless of host/port.
+    // This covers cases like http://0.0.0.0:3005/api/uploads/... inside Docker.
+    if (url.includes('/api/uploads/') || url.startsWith('/api/uploads/') || url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
       console.log('🔍 DOWNLOAD DEBUG - Using local file access for:', url)
       return this.readLocalFile(url)
     }
