@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom'
+import { TextEncoder, TextDecoder } from 'util'
 
 // Mock environment variables for tests
 process.env.NODE_ENV = 'test'

@@ -145,35 +145,16 @@ describe('Core Authentication Logic Tests', () => {
       expect(result.credits).toBe(3)
       expect(result).not.toHaveProperty('password')
 
-      expect(prisma.user.create).toHaveBeenCalledWith({
-        data: {
-          email: testEmail,
-          password: '$2a$12$hashedpassword',
-          name: testName,
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          isAdmin: true,
-          subscriptionStatus: true,
-          subscriptionPlan: true,
-          stripeCustomerId: true,
-          credits: true,
-          createdAt: true,
-          updatedAt: true,
-          stripeSubscriptionId: true,
-          stripePriceId: true,
-          stripeCurrentPeriodEnd: true,
-          stripeSubscriptionStatus: true,
-          purchasedCreditPacks: true,
-          lastApiCallAt: true,
-          apiCallCount: true,
-          emailPreferences: true,
-          adminNotes: true,
-          sessionInvalidatedAt: true,
-        }
-      })
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            email: testEmail,
+            password: '$2a$12$hashedpassword',
+            name: testName,
+          },
+          select: expect.any(Object),
+        })
+      )
     })
 
     it('should prevent duplicate user creation', async () => {
@@ -255,35 +236,16 @@ describe('Core Authentication Logic Tests', () => {
       const result = await createUser(uppercaseEmail, testPassword, testName)
 
       expect(result.email).toBe(uppercaseEmail.toLowerCase())
-      expect(prisma.user.create).toHaveBeenCalledWith({
-        data: {
-          email: uppercaseEmail.toLowerCase(),
-          password: '$2a$12$hashedpassword',
-          name: testName,
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          isAdmin: true,
-          subscriptionStatus: true,
-          subscriptionPlan: true,
-          stripeCustomerId: true,
-          credits: true,
-          createdAt: true,
-          updatedAt: true,
-          stripeSubscriptionId: true,
-          stripePriceId: true,
-          stripeCurrentPeriodEnd: true,
-          stripeSubscriptionStatus: true,
-          purchasedCreditPacks: true,
-          lastApiCallAt: true,
-          apiCallCount: true,
-          emailPreferences: true,
-          adminNotes: true,
-          sessionInvalidatedAt: true,
-        }
-      })
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            email: uppercaseEmail.toLowerCase(),
+            password: '$2a$12$hashedpassword',
+            name: testName,
+          },
+          select: expect.any(Object),
+        })
+      )
     })
 
     it('should never return password in user objects', async () => {

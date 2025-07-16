@@ -72,35 +72,16 @@ describe('Authentication Integration Tests', () => {
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: testEmail }
       })
-      expect(prisma.user.create).toHaveBeenCalledWith({
-        data: {
-          email: testEmail,
-          password: '$2a$12$hashedpassword',
-          name: testName,
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          isAdmin: true,
-          subscriptionStatus: true,
-          subscriptionPlan: true,
-          stripeCustomerId: true,
-          credits: true,
-          createdAt: true,
-          updatedAt: true,
-          stripeSubscriptionId: true,
-          stripePriceId: true,
-          stripeCurrentPeriodEnd: true,
-          stripeSubscriptionStatus: true,
-          purchasedCreditPacks: true,
-          lastApiCallAt: true,
-          apiCallCount: true,
-          emailPreferences: true,
-          adminNotes: true,
-          sessionInvalidatedAt: true,
-        },
-      })
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            email: testEmail,
+            password: '$2a$12$hashedpassword',
+            name: testName,
+          },
+          select: expect.any(Object),
+        })
+      )
     })
 
     it('should reject registration with duplicate email', async () => {

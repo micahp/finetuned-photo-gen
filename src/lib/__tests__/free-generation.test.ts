@@ -2,8 +2,10 @@ import { tryConsumeDailyFreeGeneration } from '@/lib/free-generation'
 
 // A helper to create a mock Prisma transaction environment for each test run
 function createPrismaMock(initialUser: any) {
-  // Crude deep clone to avoid shared reference between tests
-  const userState = JSON.parse(JSON.stringify(initialUser))
+  // Deep clone while preserving Date objects
+  const userState = typeof structuredClone === 'function'
+    ? structuredClone(initialUser)
+    : { ...initialUser } // Fallback shallow copy for older Node versions
 
   const tx = {
     user: {
