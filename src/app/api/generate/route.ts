@@ -10,6 +10,7 @@ import { CreditService } from '@/lib/credit-service'
 import { isPremiumUser, isPremiumModel } from '@/lib/subscription-utils'
 import { CREDIT_COSTS } from '@/lib/credits/constants'
 import { tryConsumeDailyFreeGeneration } from '@/lib/free-generation'
+import { FREE_MODEL_ID } from '@/lib/models/constants'
 import { applyWatermark } from '@/lib/watermark'
 
 const generateImageSchema = z.object({
@@ -70,7 +71,6 @@ export async function POST(request: NextRequest) {
     }
 
     const PHOTO_CREDIT_COST = CREDIT_COSTS.photo;
-    const FREE_MODEL_ID = 'black-forest-labs/FLUX.1-schnell-Free'
     const isFreeTogetherModel = (modelId || FREE_MODEL_ID) === FREE_MODEL_ID
 
     // We no longer check free allowance optimistically here; the atomic helper handles it.
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
       // Base model generation (no custom model specified)
       // Check if the base model should use Replicate instead of Together.ai
       const shouldUseReplicate = together.getAvailableModels()
-        .find(m => m.id === (modelId || 'black-forest-labs/FLUX.1-schnell-Free'))
+        .find(m => m.id === (modelId || FREE_MODEL_ID))
         ?.provider === 'replicate'
       
       if (shouldUseReplicate) {
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
       }
       
       console.log('🎯 Generating with base model:', {
-        model: modelId || 'black-forest-labs/FLUX.1-schnell-Free',
+        model: modelId || FREE_MODEL_ID,
         provider: actualProvider,
         prompt: fullPrompt,
         steps
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
       // Use base model generation (TogetherAI service will route to Replicate if needed)
       result = await together.generateImage({
         prompt: fullPrompt,
-        model: modelId,
+        model: modelId || FREE_MODEL_ID,
         aspectRatio,
         steps,
         seed
@@ -443,7 +443,7 @@ export async function POST(request: NextRequest) {
           originalTempUrl: temporaryImageUrl, // Store original URL for debugging
           
           generationParams: {
-            model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
+            model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || FREE_MODEL_ID),
             provider: actualProvider,
             aspectRatio,
             steps: selectedUserModel ? (steps || 28) : steps,
