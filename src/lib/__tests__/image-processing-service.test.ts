@@ -94,8 +94,8 @@ describe('ImageProcessingService', () => {
       )
 
       expect(largeImageOptions.quality).toBe(70) // Lower quality for very large images
-      expect(largeImageOptions.maxWidth).toBe(2048)
-      expect(largeImageOptions.maxHeight).toBe(2048)
+      expect(largeImageOptions.maxWidth).toBe(4096)
+      expect(largeImageOptions.maxHeight).toBe(4096)
 
       const mediumImageOptions = ImageProcessingService.getOptimalOptions(
         30 * 1024 * 1024, // 30MB - should be 75 quality

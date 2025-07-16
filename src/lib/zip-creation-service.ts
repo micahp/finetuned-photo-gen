@@ -37,7 +37,8 @@ export class ZipCreationService {
   private readonly supportedFormats = ['jpeg', 'jpg', 'png', 'webp', 'tiff']
   private readonly maxImageSize = 10 * 1024 * 1024 // 10MB
   private readonly minDimensions = 512 // minimum 512px on either side
-  private readonly maxDimensions = 2048 // maximum 2048px on either side
+  // Increased to accommodate higher-resolution images (was 2048)
+  private readonly maxDimensions = 4096 // maximum 4096px on either side
   private trainingId?: string
 
   constructor(trainingId?: string) {

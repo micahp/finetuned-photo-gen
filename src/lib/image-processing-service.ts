@@ -23,8 +23,8 @@ export class ImageProcessingService {
   private static readonly DEFAULT_OPTIONS: Required<ImageProcessingOptions> = {
     maxFileSize: 18 * 1024 * 1024, // 18MB (buffer under Cloudflare's 20MB limit)
     quality: 85, // Good balance of quality vs size
-    maxWidth: 2048,
-    maxHeight: 2048,
+    maxWidth: 4096,
+    maxHeight: 4096,
     format: 'jpeg'
   }
 
@@ -231,12 +231,13 @@ export class ImageProcessingService {
     // else keep default 85 for smaller images
 
     // Adjust max dimensions based on size
-    let maxWidth = 2048
-    let maxHeight = 2048
+    let maxWidth = 4096
+    let maxHeight = 4096
     
-    if (width && height && (width > 3000 || height > 3000)) {
-      maxWidth = 2048
-      maxHeight = 2048
+    // If the original is extremely large, still cap to our new max (4096)
+    if (width && height && (width > 5000 || height > 5000)) {
+      maxWidth = 4096
+      maxHeight = 4096
     }
 
     return {

@@ -33,7 +33,8 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/tiff
 const ALLOWED_FORMATS = ['jpeg', 'jpg', 'png', 'webp', 'tiff'] // Sharp formats
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB (aligned with ZIP creation)
 const MIN_DIMENSIONS = 512 // minimum 512px on either side
-const MAX_DIMENSIONS = 2048 // maximum 2048px on either side
+// Increased max dimensions to support higher-resolution training images
+const MAX_DIMENSIONS = 4096 // maximum 4096px on either side
 const MAX_FILES = 20
 const UPLOAD_DIR = 'public/uploads'
 
