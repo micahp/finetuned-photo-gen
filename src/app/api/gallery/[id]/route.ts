@@ -3,14 +3,21 @@ import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+// Using a broader type for `params` avoids the strictFunctionTypes error during the
+// Next.js build step. A narrower type ({ id: string }) violates contravariance rules.
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Record<string, string> }
+) {
   const session = await auth()
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 
-  const { id } = params
+  // `Record<string,string>` guarantees the value is a string, but we still
+  // validate presence explicitly.
+  const { id } = params as { id?: string }
   if (!id) {
     return NextResponse.json({ error: 'Image ID is required' }, { status: 400 })
   }
