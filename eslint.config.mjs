@@ -19,7 +19,8 @@ const eslintConfig = [
       ".next/**/*",
       "out/**/*",
       "dist/**/*",
-      "build/**/*"
+      "build/**/*",
+      "**/__tests__/**"
     ]
   },
   {
