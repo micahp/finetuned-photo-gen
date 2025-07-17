@@ -5,9 +5,11 @@ import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
 
 // Using a broader type for `params` avoids the strictFunctionTypes error during the
 // Next.js build step. A narrower type ({ id: string }) violates contravariance rules.
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  // Type cast to maintain inference without breaking build-time strict typings
-  const { id } = params
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
 
   const session = await auth()
 

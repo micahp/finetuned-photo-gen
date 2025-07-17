@@ -25,7 +25,7 @@ const coerceNumber = (val: unknown) => {
 
 const UINT32_MAX = 2 ** 32 - 1
 
-export const generateImageSchema = z.object({
+const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
   modelId: z.string().optional(),
   style: z.string().optional(),
