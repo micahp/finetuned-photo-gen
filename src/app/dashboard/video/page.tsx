@@ -331,19 +331,34 @@ export default function VideoGenerationPage() {
         formData.append('imageFile', data.imageFile)
       }
 
+      // 🐛 Debug: Show outgoing payload (non-binary values only)
+      const dbg: Record<string, unknown> = {}
+      formData.forEach((v, k) => {
+        dbg[k] = v instanceof File ? { name: v.name, size: v.size } : v
+      })
+      // eslint-disable-next-line no-console
+      console.table(dbg)
+
       const response = await fetch('/api/video/generate', {
         method: 'POST',
         body: formData,
       })
 
+      // eslint-disable-next-line no-console
+      console.log('VIDEO_GEN_API_RESPONSE_STATUS', response.status)
+
       clearInterval(progressInterval)
 
       if (!response.ok) {
         const errorData = await response.json()
+        // eslint-disable-next-line no-console
+        console.error('VIDEO_GEN_API_ERROR', errorData)
         throw new Error(errorData.error || 'Video generation failed')
       }
 
       const result = await response.json()
+      // eslint-disable-next-line no-console
+      console.log('VIDEO_GEN_API_RESULT', result)
       
       if (result.success) {
         if (result.video.status === 'processing') {
