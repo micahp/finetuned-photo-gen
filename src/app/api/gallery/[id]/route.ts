@@ -1,13 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
 
 // Using a broader type for `params` avoids the strictFunctionTypes error during the
 // Next.js build step. A narrower type ({ id: string }) violates contravariance rules.
-export async function DELETE(_req: NextRequest, { params }: any) {
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   // Type cast to maintain inference without breaking build-time strict typings
-  const { id } = (params as { id?: string })
+  const { id } = params
 
   const session = await auth()
 
