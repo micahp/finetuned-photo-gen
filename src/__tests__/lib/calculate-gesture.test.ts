@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from '@jest/globals'
 import { TouchGestureHandler } from '../../lib/touch-utils'
 
 // Helper to access private members safely in tests
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function createHandler(options: any = {}) {
   const el = document.createElement('div')
   return new TouchGestureHandler(el, {

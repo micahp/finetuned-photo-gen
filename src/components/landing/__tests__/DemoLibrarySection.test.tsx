@@ -7,7 +7,7 @@ describe('DemoLibrarySection', () => {
     expect(
       screen.getByRole('heading', {
         level: 2,
-        name: /infinite demo library/i
+        name: /demo library/i
       })
     ).toBeInTheDocument()
   })
@@ -24,7 +24,7 @@ describe('DemoLibrarySection', () => {
     render(<DemoLibrarySection />)
 
     const section = screen.getByRole('region', {
-      name: /infinite demo library/i
+      name: /demo library/i
     })
     expect(section).toBeInTheDocument()
     expect(section).toHaveAttribute('aria-labelledby', 'demo-library-heading')
