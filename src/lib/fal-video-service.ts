@@ -44,9 +44,15 @@ export class FalVideoService {
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.FAL_API_TOKEN || ''
+    // Log whether key present (parity with ReplicateService)
     if (!this.apiKey) {
-      throw new Error('Fal.ai API key is required')
+      // eslint-disable-next-line no-console
+      console.error('FAL_API_TOKEN missing. Available env vars:',
+        Object.keys(process.env).filter(key => key.toUpperCase().includes('FAL')))
+      throw new Error('Fal.ai API key is required. Please set FAL_API_TOKEN environment variable.')
     }
+    // eslint-disable-next-line no-console
+    console.log('✅ Fal.ai API token found')
     
     // Configure the fal client
     fal.config({
