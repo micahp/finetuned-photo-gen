@@ -43,6 +43,8 @@ export async function POST(request: NextRequest) {
 
     // 🔍 Debug: Check FAL API token availability
     console.log('FAL_API_TOKEN exists:', !!process.env.FAL_API_TOKEN)
+    console.log('FAL_API_TOKEN prefix:', process.env.FAL_API_TOKEN?.substring(0, 8) + '...')
+    console.log('All FAL env vars:', Object.keys(process.env).filter(key => key.includes('FAL')))
 
     // Parse FormData from request
     const formData = await request.formData()
