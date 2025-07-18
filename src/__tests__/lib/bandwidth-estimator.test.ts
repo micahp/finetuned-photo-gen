@@ -14,7 +14,7 @@ describe('BandwidthEstimator', () => {
     jest.useRealTimers()
     jest.resetAllMocks()
     // Restore navigator.connection
-    // @ts-ignore
+    // @ts-expect-error
     delete navigator.connection
   })
 
@@ -29,7 +29,7 @@ describe('BandwidthEstimator', () => {
   it('combines connection API and download test for estimate', async () => {
     mockConnection('4g') // maps to 3000 kbps in implementation
 
-    // @ts-ignore – mock fetch does not need full Response typing
+    // @ts-expect-error – mock fetch does not require full Response typing
     ;(global as any).fetch = jest.fn().mockResolvedValue({})
 
     const bw = await estimator.estimateBandwidth()
@@ -38,7 +38,7 @@ describe('BandwidthEstimator', () => {
 
   it('returns 0 when both methods fail', async () => {
     mockConnection(undefined)
-    // @ts-ignore – mock fetch does not need full Response typing
+    // @ts-expect-error – mock fetch does not require full Response typing
     ;(global as any).fetch = jest.fn().mockRejectedValue(new Error('fail'))
 
     const bw = await estimator.estimateBandwidth()
@@ -47,7 +47,7 @@ describe('BandwidthEstimator', () => {
 
   it('reuses lastEstimate while in-flight (concurrency guard)', async () => {
     mockConnection(undefined)
-    // @ts-ignore – mock fetch simplified for testing
+    // @ts-expect-error – mock fetch simplified for testing
     ;(global as any).fetch = jest.fn().mockImplementation(() => new Promise(resolve => setTimeout(() => resolve({}), 50)))
 
     const p1 = estimator.estimateBandwidth()
