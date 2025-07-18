@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Plus, Image, Calendar, Loader2, ExternalLink, DollarSign, Clock, Users, Zap, Activity, AlertCircle, Trash2, RefreshCw, Crown, CheckCircle } from 'lucide-react'
+import { Plus, Image, Calendar, Loader2, DollarSign, Clock, Zap, Activity, AlertCircle, Trash2, Crown, CheckCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { 
