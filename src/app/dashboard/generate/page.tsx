@@ -159,7 +159,6 @@ export default function GeneratePage() {
   const together = getTogetherService()
   const baseModels = together.getAvailableModels()
   const styles = together.getStylePresets()
-  const suggestions = together.getPromptSuggestions()
   const quickPrompts = together.getQuickPrompts()
   const categorizedPrompts = together.getCategorizedPrompts() as Record<string, Array<{ prompt: string; description: string }>>
   
@@ -562,7 +561,7 @@ export default function GeneratePage() {
                       
                       {selectedUserModel.triggerWord && (
                         <div className="text-xs text-blue-700">
-                          💡 Tip: Use "<code className="bg-blue-100 px-1 rounded">{selectedUserModel.triggerWord}</code>" in your prompt for best results
+                          💡 Tip: Use &quot;<code className="bg-blue-100 px-1 rounded">{selectedUserModel.triggerWord}</code>&quot; in your prompt for best results
                         </div>
                       )}
                       
