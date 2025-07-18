@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,9 +11,9 @@ import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { 
-  ArrowLeft, Calendar, Clock, DollarSign, ExternalLink, 
-  Image, Loader2, Zap, AlertCircle, Users, Activity,
-  Download, RefreshCw, Play, Settings, BarChart3
+  ArrowLeft, Clock, DollarSign, ExternalLink, 
+  Image, Loader2, Zap, AlertCircle, Activity,
+  RefreshCw, Play, BarChart3
 } from 'lucide-react'
 
 interface ModelDetails {
@@ -60,14 +60,13 @@ interface TrainingStatus {
   stage: string
   estimatedTimeRemaining?: number
   cost?: number
-  debugData?: any
+  debugData?: unknown
   logs?: string
 }
 
 export default function ModelDetailsPage() {
   const { data: session } = useSession()
   const params = useParams()
-  const router = useRouter()
   const modelId = params.id as string
 
   const [model, setModel] = useState<ModelDetails | null>(null)
