@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { saveImageToLocal, validateTrainingImages } from '@/lib/upload'
+import { logUploadSummary } from '@/lib/log'
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +19,16 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const files = formData.getAll('images') as File[]
     const userModelId = formData.get('userModelId') as string
+
+    const totalSize = files.reduce((acc, f) => acc + (f instanceof File ? f.size : 0), 0)
+    logUploadSummary({
+      route: 'models/training-images',
+      userId: session.user.id,
+      modelId: userModelId,
+      fileCount: files?.length ?? 0,
+      totalSizeBytes: totalSize,
+      contentLengthHeader: request.headers.get('content-length') ?? 'N/A',
+    })
 
     if (!files || files.length === 0) {
       return NextResponse.json(

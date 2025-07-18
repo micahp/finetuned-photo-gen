@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { saveImageToLocal, ensureUploadDirectories } from '@/lib/upload'
+import { logUploadSummary } from '@/lib/log'
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,6 +20,15 @@ export async function POST(request: NextRequest) {
     // Parse form data
     const formData = await request.formData()
     const files = formData.getAll('images') as File[]
+
+    const totalSize = files.reduce((acc, f) => acc + (f instanceof File ? f.size : 0), 0)
+    logUploadSummary({
+      route: 'upload',
+      userId: session.user.id,
+      fileCount: files?.length ?? 0,
+      totalSizeBytes: totalSize,
+      contentLengthHeader: request.headers.get('content-length') ?? 'N/A',
+    })
 
     if (!files || files.length === 0) {
       return NextResponse.json(
