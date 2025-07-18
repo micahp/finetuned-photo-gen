@@ -19,10 +19,6 @@ import {
   Play, 
   Download, 
   Crown, 
-  Copy, 
-  Plus, 
-  ChevronDown, 
-  ChevronUp, 
   Wand2, 
   Clock,
   Video,
@@ -39,7 +35,7 @@ import {
   Square
 } from 'lucide-react'
 import { isPremiumUser } from '@/lib/subscription-utils'
-import { VIDEO_MODELS as AVAILABLE_VIDEO_MODELS, VideoModel } from '@/lib/video-models'
+import { VIDEO_MODELS as AVAILABLE_VIDEO_MODELS } from '@/lib/video-models'
 import { ImageUpload } from '@/components/upload/ImageUpload'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'

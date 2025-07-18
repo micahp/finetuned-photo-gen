@@ -17,8 +17,6 @@ import {
   CheckCircle, 
   Loader2
 } from 'lucide-react'
-import { SessionRefresher } from '@/components/auth/SessionRefresher'
-import { CREDIT_COSTS } from '@/lib/credits/constants'
 
 const isDev = process.env.NODE_ENV === 'development'
 

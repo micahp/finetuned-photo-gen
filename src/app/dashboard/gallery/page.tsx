@@ -6,14 +6,13 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { SmartImage } from '@/components/ui/smart-image'
 import { 
   Search, 
   Download, 
-  Calendar, 
   Image as ImageIcon, 
   Grid3X3, 
   List, 
@@ -22,8 +21,7 @@ import {
   Eye,
   Copy,
   Share,
-  MoreHorizontal,
-  X
+  MoreHorizontal
 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
@@ -62,7 +60,7 @@ export default function GalleryPage() {
   const { data: session } = useSession()
   const [images, setImages] = useState<GeneratedImage[]>([])
   const [filteredImages, setFilteredImages] = useState<GeneratedImage[]>([])
-  const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set())
+  const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set<string>())
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null)
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
