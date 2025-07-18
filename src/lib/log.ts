@@ -17,5 +17,6 @@ export function logUploadSummary(data: Record<string, unknown>) {
     const val = hash[0] / 255
     if (val > rate) return
   }
-  console.log('[upload-summary]', JSON.stringify(data))
+  const limit = process.env.CLIENT_MAX_BODY_SIZE || process.env.UPLOAD_NGINX_LIMIT
+  console.log('[upload-summary]', JSON.stringify({ ...data, nginxLimit: limit ?? 'unknown' }))
 } 
