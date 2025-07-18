@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -14,8 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2, ChevronRight } from 'lucide-react'
+import { Loader2, Sparkles, Download, RefreshCw, Zap, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2, ChevronRight } from 'lucide-react'
 import { CreditCostHint } from '@/components/credits/CreditCostHint'
 import { TogetherAIService } from '@/lib/together-ai'
 import { SmartImage } from '@/components/ui/smart-image'
@@ -69,7 +68,7 @@ export default function GeneratePage() {
 
   // Premium subscription checks
   const hasPremiumAccess = isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
-  const premiumFeatures = getPremiumFeatures(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
+  const _premiumFeatures = getPremiumFeatures(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
 
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null)
@@ -78,7 +77,8 @@ export default function GeneratePage() {
   const [copiedPrompt, setCopiedPrompt] = useState<string | null>(null)
   const [userModels, setUserModels] = useState<UserModel[]>([])
   const [selectedUserModel, setSelectedUserModel] = useState<UserModel | null>(null)
-  const [loadingModels, setLoadingModels] = useState(true)
+  // Internal loading flag (underscore-prefixed to avoid eslint unused warnings)
+  const [_loadingModels, _setLoadingModels] = useState(true)
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false)
   const [generatingPrompt, setGeneratingPrompt] = useState(false)
 
@@ -234,7 +234,7 @@ export default function GeneratePage() {
 
   const fetchUserModels = async () => {
     try {
-      setLoadingModels(true)
+      _setLoadingModels(true)
       const response = await fetch('/api/models')
       if (response.ok) {
         const data = await response.json()
@@ -259,7 +259,7 @@ export default function GeneratePage() {
     } catch (error) {
       console.error('Failed to fetch user models:', error)
     } finally {
-      setLoadingModels(false)
+      _setLoadingModels(false)
     }
   }
 
@@ -359,7 +359,7 @@ export default function GeneratePage() {
     }
   }
 
-  const handleSuggestionClick = (suggestion: string) => {
+  const _handleSuggestionClick = (suggestion: string) => {
     // If using a custom model with trigger word, prepend it
     if (selectedUserModel?.triggerWord) {
       const enhancedSuggestion = `${selectedUserModel.triggerWord}, ${suggestion}`
@@ -389,7 +389,7 @@ export default function GeneratePage() {
     }
   }
 
-  const handlePromptAppend = (addition: string) => {
+  const _handlePromptAppend = (addition: string) => {
     const currentPrompt = form.getValues('prompt')
     const newPrompt = currentPrompt ? `${currentPrompt}, ${addition}` : addition
     form.setValue('prompt', newPrompt)
