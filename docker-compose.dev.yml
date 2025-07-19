@@ -11,42 +11,53 @@ services:
       target: dev  # Uses the dev stage from Dockerfile
     ports:
       - "3000:3000"  # Dev port
+    env_file:
+      # Pull in all development secrets from the same .env file we use with `npm run dev`
+      - .env
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:password@db:5432/finetuned_photo_gen
+      # ← point to the Postgres that’s already running on your host
+      - DATABASE_URL=postgresql://postgres:password@host.docker.internal:5432/finetuned_photo_gen
       - NEXTAUTH_URL=http://localhost:3000
-      - NEXTAUTH_SECRET=dev-secret-key
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-dev-secret-key}
       - NEXT_PUBLIC_GA_TRACKING_ID=${NEXT_PUBLIC_GA_TRACKING_ID:-}
-    depends_on:
-      db:
-        condition: service_healthy
+      # Forward frequently-used API keys (comment out if not needed in your setup)
+      - STRIPE_API_TOKEN=${STRIPE_API_TOKEN:-}
+      - STRIPE_PUBLISHABLE_TOKEN=${STRIPE_PUBLISHABLE_TOKEN:-}
+      - FAL_API_TOKEN=${FAL_API_TOKEN:-}
+      - REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN:-}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY:-}
+      - HUGGINGFACE_API_TOKEN=${HUGGINGFACE_API_TOKEN:-}
+      - CLOUDFLARE_R2_ACCESS_KEY_ID=${CLOUDFLARE_R2_ACCESS_KEY_ID:-}
+      - CLOUDFLARE_R2_SECRET_ACCESS_KEY=${CLOUDFLARE_R2_SECRET_ACCESS_KEY:-}
     volumes:
-      - .:/app                    # Mount source code for hot reload
-      - /app/node_modules         # Exclude node_modules
-      - /app/.next               # Exclude .next build cache
+      - .:/app            # hot-reload source
+      - /app/node_modules # ignore host node_modules
+      - /app/.next        # ignore .next build cache
+    extra_hosts:
+      # ensures host.docker.internal also works on modern Linux
+      - "host.docker.internal:host-gateway"
     networks:
       - app-network
 
-  db:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_DB=finetuned_photo_gen
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data_dev:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d finetuned_photo_gen"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # Lightweight container that runs network diagnostics before/alongside the app.
+  diagnostics:
+    image: alpine:3.20
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      echo "▶ DNS check — registry.npmjs.org" && \
+      getent hosts registry.npmjs.org || true && \
+      echo "▶ HTTPS HEAD request to registry" && \
+      apk add --no-cache curl npm >/dev/null && \
+      curl -I --max-time 10 https://registry.npmjs.org/ || true && \
+      echo "▶ npm ping registry" && \
+      npm ping --registry https://registry.npmjs.org/ || true && \
+      echo "▶ npm proxy config" && \
+      npm config get https-proxy && npm config get proxy && \
+      echo "✅ Diagnostics complete. Container will now idle (Ctrl+C to stop)." && \
+      tail -f /dev/null
     networks:
       - app-network
-
-volumes:
-  postgres_data_dev:
 
 networks:
   app-network:
