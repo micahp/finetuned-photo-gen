@@ -14,7 +14,7 @@ jest.mock('@fal-ai/client', () => ({
 function createService() {
   // Re-import after env change to ensure overrides are applied on module load
   jest.resetModules()
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+   
   const { FalVideoService } = require('../../lib/fal-video-service') as typeof import('../../lib/fal-video-service')
   return new FalVideoService('dummy-api-key')
 }

@@ -1,9 +1,17 @@
 import '@testing-library/jest-dom'
+import { TextEncoder, TextDecoder } from 'util'
 
+if (typeof global.TextEncoder === 'undefined') {
+  global.TextEncoder = TextEncoder
+}
+if (typeof global.TextDecoder === 'undefined') {
+  global.TextDecoder = TextDecoder
+}
 // Mock environment variables for tests
 process.env.NODE_ENV = 'test'
 process.env.NEXTAUTH_SECRET = 'test-secret'
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_db'
+process.env.IS_REACT_ACT_ENVIRONMENT = 'true'
 
 // === DOM SETUP FOR REACT TESTING LIBRARY ===
 // Only setup DOM objects if we're in a jsdom environment (React component tests)

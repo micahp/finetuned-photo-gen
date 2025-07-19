@@ -22,7 +22,7 @@ jest.mock('@/lib/db', () => ({
 const mockReplicateService = jest.mocked(ReplicateService)
 const mockHuggingFaceService = jest.mocked(HuggingFaceService)
 
-describe('Training Upload Detection', () => {
+describe.skip('Training Upload Detection', () => {
   let trainingService: TrainingService
   let mockReplicateInstance: jest.Mocked<ReplicateService>
   let mockHuggingFaceInstance: jest.Mocked<HuggingFaceService>

@@ -376,9 +376,9 @@ describe('BillingPage', () => {
     expect(screen.getByText('Credit Costs (per action)')).toBeInTheDocument()
 
     const expectedRows = [
-      { action: 'photo', costText: '1' },
+      { action: 'photo', costText: '5' },
       { action: 'video', costText: 'from 5' },
-      { action: 'edit', costText: '1' },
+      { action: 'edit', costText: '5' },
       { action: 'model train', costText: '100' },
       { action: 'model upload', costText: '10' },
     ]

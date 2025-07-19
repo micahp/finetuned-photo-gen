@@ -163,8 +163,25 @@ export const VIDEO_MODELS: VideoModel[] = [
     name: 'Veo 3 – Text → Video',
     falModelId: 'fal-ai/veo3',
     mode: 'text-to-video',
-    maxDuration: 30,
+    maxDuration: 8,
     costPerSecond: 50,
+    supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
+    defaultParams: {
+      fps: 30,
+      motionLevel: 6,
+    },
+    durationOptions: [5, 6, 7, 8],
+    hasAudio: true,
+  },
+
+  /* ------------------------------- Veo 3 Fast ------------------------------ */
+  {
+    id: 'veo-3-fast-text',
+    name: 'Veo 3 Fast – Text → Video',
+    falModelId: 'fal-ai/veo3-fast',
+    mode: 'text-to-video',
+    maxDuration: 8,
+    costPerSecond: 40, // Fal pricing $0.40/s with audio on => 40 credits
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 30,

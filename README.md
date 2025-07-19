@@ -1,6 +1,6 @@
 # Personalized AI Photo Generation Service - MVP
 
-A personalized AI photo generation service where users upload 10-20 photos of themselves to create custom FLUX models, then generate unlimited personalized images.
+A personalized AI photo generation service where users upload 10-20 photos of themselves to create custom FLUX models, then generate personalized images.
 
 ## 🏗️ **Tech Stack**
 

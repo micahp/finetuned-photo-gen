@@ -41,8 +41,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // 🔍 Debug: Check FAL API token availability
+    console.log('FAL_API_TOKEN exists:', !!process.env.FAL_API_TOKEN)
+    console.log('FAL_API_TOKEN prefix:', process.env.FAL_API_TOKEN?.substring(0, 8) + '...')
+    console.log('All FAL env vars:', Object.keys(process.env).filter(key => key.includes('FAL')))
+
     // Parse FormData from request
     const formData = await request.formData()
+
+    // 🔍 Debug: log raw form entries to quickly spot missing / malformed values
+    const debugEntries: Record<string, unknown> = {}
+    formData.forEach((value, key) => {
+      debugEntries[key] = value instanceof File ? { name: value.name, size: value.size } : value
+    })
+    console.log('VIDEO_GEN_REQUEST_DATA', debugEntries)
     
     // Extract and validate form fields
     const prompt = formData.get('prompt') as string
@@ -74,6 +86,8 @@ export async function POST(request: NextRequest) {
     if (!validationResult.success) {
       // For image-to-video we can allow empty prompt
       const promptIssue = validationResult.error.issues.find(i => i.path[0] === 'prompt')
+      // 🐛 Debug validation issues
+      console.warn('VIDEO_GEN_VALIDATION_ISSUES', validationResult.error.issues)
       if (promptIssue && imageFile) {
         // Re-validate treating prompt as optional
         const altSchema = generateVideoSchema.extend({ prompt: z.string().optional() })
@@ -88,6 +102,7 @@ export async function POST(request: NextRequest) {
           imageFile: imageFile || undefined,
         })
         if (!altValidation.success) {
+          console.warn('VIDEO_GEN_ALT_VALIDATION_ISSUES', altValidation.error.issues)
           return NextResponse.json({ error: 'Invalid request data', details: altValidation.error.issues }, { status: 400 })
         }
         // Set prompt to empty string if missing
@@ -224,6 +239,13 @@ export async function POST(request: NextRequest) {
       motionLevel: validatedData.motionLevel,
       seed: validatedData.seed,
       imageBuffer,
+    })
+
+    console.log('VIDEO_GEN_SERVICE_RESPONSE', {
+      status: videoResult.status,
+      id: videoResult.id,
+      error: videoResult.error,
+      url: videoResult.videoUrl,
     })
 
     const generationDuration = Date.now() - generationStartTime

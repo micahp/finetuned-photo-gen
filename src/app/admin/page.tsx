@@ -8,8 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { 
-  Search, Calendar, Users, Activity, 
-  ExternalLink, Trash2, RefreshCw, Shield 
+  Search, Users, 
+  ExternalLink, RefreshCw, Shield 
 } from 'lucide-react'
 
 interface AdminModel {

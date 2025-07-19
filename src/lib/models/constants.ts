@@ -1,0 +1,1 @@
+export const FREE_MODEL_ID = 'black-forest-labs/FLUX.1-schnell-Free' as const; 

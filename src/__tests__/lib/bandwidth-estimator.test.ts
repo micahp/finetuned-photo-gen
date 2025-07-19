@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
-// eslint-disable-next-line import/no-relative-parent-imports
+ 
 import { BandwidthEstimator } from '../../lib/video-optimization'
 
 describe('BandwidthEstimator', () => {

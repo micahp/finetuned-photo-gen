@@ -23,6 +23,7 @@ import { isPremiumUser, isPremiumModel, getPremiumFeatures } from '@/lib/subscri
 import { PremiumModelBadge } from '@/components/ui/premium-model-badge'
 import Link from 'next/link'
 import { CREDIT_COSTS } from '@/lib/credits/constants'
+import { FREE_MODEL_ID } from '@/lib/models/constants'
 
 const generateSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
@@ -80,6 +81,13 @@ export default function GeneratePage() {
   const [loadingModels, setLoadingModels] = useState(true)
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false)
   const [generatingPrompt, setGeneratingPrompt] = useState(false)
+
+  // Keep local creditsRemaining in sync with session changes
+  useEffect(() => {
+    if (session?.user?.credits !== undefined && session.user.credits !== creditsRemaining) {
+      setCreditsRemaining(session.user.credits)
+    }
+  }, [session?.user?.credits])
 
   // Initialize service without API key on client side (will be handled by API route)
   const getTogetherService = () => {
@@ -187,6 +195,18 @@ export default function GeneratePage() {
       steps: 4,
     },
   })
+
+  // Clamp steps to 1-4 when the free model is selected (after form & baseModels are initialized)
+  const selectedModelId = form.watch('modelId')
+  useEffect(() => {
+    const selectedModel = baseModels.find((m) => m.id === selectedModelId)
+    const isFreeModel = selectedModel?.free || selectedModelId === FREE_MODEL_ID
+    const maxAllowed = isFreeModel ? 4 : 50
+    const currentSteps = form.getValues('steps')
+    if (currentSteps > maxAllowed) {
+      form.setValue('steps', maxAllowed)
+    }
+  }, [selectedModelId])
 
   // Fetch user's trained models
   useEffect(() => {
@@ -844,7 +864,7 @@ export default function GeneratePage() {
                           <FormControl>
                             <Slider
                               min={1}
-                              max={50}
+                              max={baseModels.find((m) => m.id === form.watch('modelId'))?.free ? 4 : 50}
                               step={1}
                               value={[field.value]}
                               onValueChange={(value) => field.onChange(value[0])}

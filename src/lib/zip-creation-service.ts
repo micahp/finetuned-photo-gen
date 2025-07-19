@@ -1,5 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import os from 'os'
 import archiver from 'archiver'
 import sharp from 'sharp'
 import { TrainingDebugger, TrainingStage, ErrorCategory } from './training-debug'
@@ -37,7 +38,8 @@ export class ZipCreationService {
   private readonly supportedFormats = ['jpeg', 'jpg', 'png', 'webp', 'tiff']
   private readonly maxImageSize = 10 * 1024 * 1024 // 10MB
   private readonly minDimensions = 512 // minimum 512px on either side
-  private readonly maxDimensions = 2048 // maximum 2048px on either side
+  // Increased to accommodate higher-resolution images (was 2048)
+  private readonly maxDimensions = 4096 // maximum 4096px on either side
   private trainingId?: string
 
   constructor(trainingId?: string) {
@@ -286,8 +288,9 @@ export class ZipCreationService {
   private async downloadImage(url: string): Promise<Buffer> {
     console.log('🔍 DOWNLOAD DEBUG - Processing URL:', url)
     
-    // Check if this is a local file URL (server-side access)
-    if (url.startsWith('/api/uploads/') || url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
+    // Treat any URL that points to our internal upload API as local, regardless of host/port.
+    // This covers cases like http://0.0.0.0:3005/api/uploads/... inside Docker.
+    if (url.includes('/api/uploads/') || url.startsWith('/api/uploads/') || url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
       console.log('🔍 DOWNLOAD DEBUG - Using local file access for:', url)
       return this.readLocalFile(url)
     }
@@ -569,15 +572,18 @@ export class ZipCreationService {
   }
 
   /**
-   * Create temporary directory for processing
+   * Create a writable temporary directory. We default to the OS temp folder
+   * to avoid permission issues inside Docker / read-only roots, but allow
+   * overriding with TRAINING_TEMP_DIR when the operator wants to mount a
+   * persistent volume for debugging.
    */
   private async createTempDirectory(): Promise<string> {
-    const tempDir = path.join(process.cwd(), 'temp', `training_${Date.now()}`)
-    
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true })
-    }
-    
+    const baseDir = process.env.TRAINING_TEMP_DIR || os.tmpdir()
+    const tempDir = path.join(baseDir, `training_${Date.now()}`)
+
+    // fs.promises.mkdir is async and recursive by default in Node 14+
+    await fs.promises.mkdir(tempDir, { recursive: true })
+
     return tempDir
   }
 

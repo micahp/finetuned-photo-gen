@@ -95,6 +95,13 @@ export default function EditPage() {
     checkForStripeReturn()
   }, [update])
 
+  // Keep local creditsRemaining in sync with session updates
+  useEffect(() => {
+    if (session?.user?.credits !== undefined && session.user.credits !== creditsRemaining) {
+      setCreditsRemaining(session.user.credits)
+    }
+  }, [session?.user?.credits])
+
   // Preset editing prompts
   const presetPrompts = [
     { label: 'Change Background', prompt: 'Change the background to a professional studio setting', emoji: '🖼️' },
@@ -312,11 +319,11 @@ export default function EditPage() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        <div className="bg-gray-100 rounded-lg overflow-hidden">
                           <SmartImage
                             src={sourceImage}
                             alt="Source image"
-                            className="w-full h-full object-cover"
+                            className="w-full h-auto object-contain"
                           />
                         </div>
                         <Button 
@@ -611,11 +618,11 @@ export default function EditPage() {
               <CardContent>
                 {editedImage ? (
                   <div className="space-y-4">
-                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                    <div className="bg-gray-100 rounded-lg overflow-hidden">
                       <SmartImage
                         src={editedImage.url}
                         alt="Edited image"
-                        className="w-full h-full object-cover"
+                        className="w-full h-auto object-contain"
                       />
                     </div>
                     <div className="space-y-3">

@@ -29,11 +29,11 @@ export const PRICING_PLANS: PricingPlan[] = [
     description: 'Perfect for trying out personalized AI',
     price: 0,
     priceId: '', // No Stripe price ID for free plan
-    credits: 10,
+    credits: 50,
     maxModels: 0,
     features: [
-      '0 personalized model slot',
-      'Upload 10-20 training photos',
+      '5 free images per day',
+      '0 personalized model slots',
       'Basic style presets',
       'Standard generation speed',
       'Download in standard quality'
@@ -46,7 +46,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     description: 'For content creators and social media',
     price: 20,
     priceId: getRequiredEnvVar('NEXT_PUBLIC_STRIPE_CREATOR_PLAN_PRICE_ID'),
-    credits: 200,
+    credits: 500,
     maxModels: 3,
     features: [
       '3 personalized models slots',

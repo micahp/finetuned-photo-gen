@@ -102,6 +102,20 @@ export default function NewModelPage() {
     }
   }
 
+  // Safely parse a response as JSON if possible, otherwise return text
+  const parseJSONSafe = async (response: Response): Promise<any> => {
+    const contentType = response.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      try {
+        return await response.json()
+      } catch {
+        // Fall through to text parsing
+      }
+    }
+    // Fallback: return raw text so that we can surface a useful error message
+    return { error: await response.text() }
+  }
+
   const onSubmit = async (data: ModelFormData) => {
     if (uploadedFiles.length === 0) {
       alert('Please upload at least one image')
@@ -133,11 +147,11 @@ export default function NewModelPage() {
       })
 
       if (!createModelResponse.ok) {
-        const error = await createModelResponse.json()
-        throw new Error(error.error || 'Failed to create model')
+        const error = await parseJSONSafe(createModelResponse)
+        throw new Error(error.error || error.message || 'Failed to create model')
       }
 
-      const createResult = await createModelResponse.json()
+      const createResult = await parseJSONSafe(createModelResponse)
       const modelId = createResult.model.id
 
       // Step 2: Upload training images
@@ -154,11 +168,11 @@ export default function NewModelPage() {
       })
 
       if (!uploadResponse.ok) {
-        const error = await uploadResponse.json()
-        throw new Error(error.error || 'Failed to upload training images')
+        const error = await parseJSONSafe(uploadResponse)
+        throw new Error(error.error || error.message || 'Failed to upload training images')
       }
 
-      const uploadResult = await uploadResponse.json()
+      const uploadResult = await parseJSONSafe(uploadResponse)
 
       // Step 3: Start training with TrainingService (via API with custom parameters)
       setCreationProgress('Starting AI training with custom parameters...')
@@ -180,11 +194,11 @@ export default function NewModelPage() {
       })
 
       if (!trainingResponse.ok) {
-        const error = await trainingResponse.json()
-        throw new Error(error.error || 'Failed to start training')
+        const error = await parseJSONSafe(trainingResponse)
+        throw new Error(error.error || error.message || 'Failed to start training')
       }
 
-      const trainingResult = await trainingResponse.json()
+      const trainingResult = await parseJSONSafe(trainingResponse)
       
       if (trainingResult.success) {
         setTrainingId(trainingResult.training.id)

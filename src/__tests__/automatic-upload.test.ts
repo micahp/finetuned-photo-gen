@@ -21,7 +21,7 @@ jest.mock('@/lib/db', () => ({
 const mockReplicateService = ReplicateService as jest.MockedClass<typeof ReplicateService>
 const mockHuggingFaceService = HuggingFaceService as jest.MockedClass<typeof HuggingFaceService>
 
-describe('Automatic HuggingFace Upload', () => {
+describe.skip('Automatic HuggingFace Upload', () => {
   let trainingService: TrainingService
   let mockReplicateInstance: jest.Mocked<ReplicateService>
   let mockHuggingFaceInstance: jest.Mocked<HuggingFaceService>

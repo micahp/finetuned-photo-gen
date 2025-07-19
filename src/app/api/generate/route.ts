@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
+import { randomBytes } from 'crypto'
 import { TogetherAIService } from '@/lib/together-ai'
 import { ReplicateService } from '@/lib/replicate-service'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
@@ -9,6 +10,20 @@ import { ImageProcessingService } from '@/lib/image-processing-service'
 import { CreditService } from '@/lib/credit-service'
 import { isPremiumUser, isPremiumModel } from '@/lib/subscription-utils'
 import { CREDIT_COSTS } from '@/lib/credits/constants'
+import { tryConsumeDailyFreeGeneration } from '@/lib/free-generation'
+import { FREE_MODEL_ID } from '@/lib/models/constants'
+import { applyWatermark } from '@/lib/watermark'
+
+// Utility: coerce numeric-like values to numbers, otherwise leave untouched
+const coerceNumber = (val: unknown) => {
+  if (typeof val === 'string' && val.trim() !== '') {
+    const parsed = Number(val)
+    return Number.isNaN(parsed) ? val : parsed
+  }
+  return val
+}
+
+const UINT32_MAX = 2 ** 32 - 1
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
@@ -16,7 +31,10 @@ const generateImageSchema = z.object({
   style: z.string().optional(),
   aspectRatio: z.enum(['1:1', '16:9', '9:16', '3:4', '4:3']).default('1:1'),
   steps: z.number().min(1).max(50).optional(),
-  seed: z.number().optional(),
+  // Accept numeric strings & ensure 0 <= seed <= UINT32_MAX
+  seed: z
+    .preprocess(coerceNumber, z.number().int().min(0).max(UINT32_MAX))
+    .optional(),
   userModelId: z.string().optional(), // For custom trained models
 })
 
@@ -47,13 +65,21 @@ export async function POST(request: NextRequest) {
 
     const { prompt, modelId, style, aspectRatio, steps, seed, userModelId } = validation.data
 
+    // Ensure every generation has a deterministic seed.
+    // If the client did not provide one, generate a cryptographically secure random 32-bit integer.
+    const effectiveSeed = typeof seed === 'number'
+      ? seed
+      : randomBytes(4).readUInt32BE(0)
+
     // Check if user has enough credits and active subscription
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { 
         credits: true,
         subscriptionPlan: true,
-        subscriptionStatus: true
+        subscriptionStatus: true,
+        dailyFreeGenerations: true,
+        lastFreeGenerationDate: true,
       }
     })
 
@@ -66,13 +92,20 @@ export async function POST(request: NextRequest) {
     }
 
     const PHOTO_CREDIT_COST = CREDIT_COSTS.photo;
-    // Check if user has enough credits
-    if (user.credits < PHOTO_CREDIT_COST) {
+    const isFreeTogetherModel = (modelId || FREE_MODEL_ID) === FREE_MODEL_ID
+
+    // Additional validation: the free FLUX.1 Schnell model only supports 1-4 steps
+    if (isFreeTogetherModel && typeof steps === 'number' && (steps < 1 || steps > 4)) {
       return NextResponse.json(
-        { error: 'Insufficient credits' },
+        { error: 'For FLUX.1 Schnell (Free), steps must be between 1 and 4' },
         { status: 400 }
       )
     }
+
+    // We no longer check free allowance optimistically here; the atomic helper handles it.
+
+    // NOTE: Early credit guard removed to avoid race with atomic free-allowance consumption.
+    // Credit sufficiency is now enforced right before spending credits.
 
     // Check if subscription has been canceled but user trying to use premium features
     if (user.subscriptionStatus === 'canceled' && user.subscriptionPlan) {
@@ -165,7 +198,8 @@ export async function POST(request: NextRequest) {
         replicateModelId: selectedUserModel.replicateModelId,
         triggerWord: selectedUserModel.triggerWord,
         prompt: fullPrompt,
-        steps: steps || 28
+        steps: steps || 28,
+        seed: effectiveSeed
       })
 
       actualProvider = 'replicate'
@@ -179,13 +213,13 @@ export async function POST(request: NextRequest) {
         triggerWord: selectedUserModel.triggerWord || undefined,
         aspectRatio,
         steps: steps || 28, // Use more steps for LoRA by default
-        seed
+        seed: effectiveSeed
       })
     } else {
       // Base model generation (no custom model specified)
       // Check if the base model should use Replicate instead of Together.ai
       const shouldUseReplicate = together.getAvailableModels()
-        .find(m => m.id === (modelId || 'black-forest-labs/FLUX.1-schnell-Free'))
+        .find(m => m.id === (modelId || FREE_MODEL_ID))
         ?.provider === 'replicate'
       
       if (shouldUseReplicate) {
@@ -193,19 +227,20 @@ export async function POST(request: NextRequest) {
       }
       
       console.log('🎯 Generating with base model:', {
-        model: modelId || 'black-forest-labs/FLUX.1-schnell-Free',
+        model: modelId || FREE_MODEL_ID,
         provider: actualProvider,
         prompt: fullPrompt,
-        steps
+        steps,
+        seed: effectiveSeed
       })
 
       // Use base model generation (TogetherAI service will route to Replicate if needed)
       result = await together.generateImage({
         prompt: fullPrompt,
-        model: modelId,
+        model: modelId || FREE_MODEL_ID,
         aspectRatio,
         steps,
-        seed
+        seed: effectiveSeed
       })
     }
 
@@ -218,6 +253,7 @@ export async function POST(request: NextRequest) {
       hasImages: !!result.images,
       imageCount: result.images?.length || 0,
       error: result.error,
+      seed: effectiveSeed,
       resultKeys: Object.keys(result),
       firstImageUrl: result.images?.[0]?.url,
       generationDuration
@@ -241,29 +277,42 @@ export async function POST(request: NextRequest) {
 
     // Only deduct credits and save if generation succeeded
     if (result.status === 'completed' && result.images?.[0]) {
-      // Deduct credit using CreditService for proper transaction logging
-      const creditResult = await CreditService.spendCredits(
-        session.user.id,
-        PHOTO_CREDIT_COST,
-        `Image generation: ${fullPrompt.substring(0, 100)}${fullPrompt.length > 100 ? '...' : ''}`,
-        'image_generation',
-        undefined, // Will be set to generated image ID after creation
-        {
-          prompt: fullPrompt,
-          model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
-          provider: actualProvider,
-          aspectRatio,
-          steps: selectedUserModel ? (steps || 28) : steps,
-          seed,
-          style
-        }
-      )
+      let creditResult: { success: boolean; newBalance: number; error?: string } = { success: true, newBalance: user.credits }
+      let usedFreeAllowance = false
 
-      if (!creditResult.success) {
-        return NextResponse.json(
-          { error: creditResult.error || 'Failed to process credit transaction' },
-          { status: 400 }
+      if (isFreeTogetherModel) {
+        // Attempt to consume daily free allowance atomically
+        const consumed = await tryConsumeDailyFreeGeneration(session.user.id)
+        if (consumed) {
+          usedFreeAllowance = true
+          creditResult = { success: true, newBalance: user.credits } // credits unchanged
+        }
+      }
+
+      if (!usedFreeAllowance) {
+        creditResult = await CreditService.spendCredits(
+          session.user.id,
+          PHOTO_CREDIT_COST,
+          `Image generation: ${fullPrompt.substring(0, 100)}${fullPrompt.length > 100 ? '...' : ''}`,
+          'image_generation',
+          undefined,
+          {
+            prompt: fullPrompt,
+            model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || FREE_MODEL_ID),
+            provider: actualProvider,
+            aspectRatio,
+            steps: selectedUserModel ? (steps || 28) : steps,
+            seed: effectiveSeed,
+            style
+          }
         )
+
+        if (!creditResult.success) {
+          return NextResponse.json(
+            { error: creditResult.error || 'Failed to process credit transaction' },
+            { status: 400 }
+          )
+        }
       }
 
       // Extract image metadata from generation result
@@ -308,9 +357,20 @@ export async function POST(request: NextRequest) {
             break // Don't retry if processing failed
           }
 
-          // Upload processed image buffer instead of URL
+          // Apply watermark only when free allowance was used AND the user does not have an active paid subscription
+          let uploadBuffer = processingResult.buffer!
+          const shouldWatermark = usedFreeAllowance && user.subscriptionStatus !== 'active'
+          if (shouldWatermark) {
+            try {
+              uploadBuffer = await applyWatermark(uploadBuffer)
+            } catch (wmErr) {
+              console.warn('⚠️ Failed to apply watermark:', wmErr)
+            }
+          }
+
+          // Upload processed (and possibly watermarked) buffer instead of URL
           uploadResult = await cfImagesService.uploadImageFromBuffer(
-            processingResult.buffer!,
+            uploadBuffer,
             `generated-${Date.now()}.jpg`,
             {
               originalPrompt: fullPrompt,
@@ -415,11 +475,11 @@ export async function POST(request: NextRequest) {
           originalTempUrl: temporaryImageUrl, // Store original URL for debugging
           
           generationParams: {
-            model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || 'black-forest-labs/FLUX.1-schnell-Free'),
+            model: selectedUserModel ? selectedUserModel.replicateModelId : (modelId || FREE_MODEL_ID),
             provider: actualProvider,
             aspectRatio,
             steps: selectedUserModel ? (steps || 28) : steps,
-            seed,
+            seed: effectiveSeed,
             style,
             userModel: selectedUserModel ? {
               id: selectedUserModel.id,
@@ -428,7 +488,7 @@ export async function POST(request: NextRequest) {
               triggerWord: selectedUserModel.triggerWord
             } : undefined
           },
-          creditsUsed: PHOTO_CREDIT_COST
+          creditsUsed: usedFreeAllowance ? 0 : PHOTO_CREDIT_COST
         }
       })
 

@@ -214,4 +214,39 @@ export class CloudflareImagesService {
 
     return `${baseUrl}/${this.accountHash}/${imageId}/${variantName}`;
   }
+
+  /**
+   * Deletes an image from Cloudflare Images.
+   * @param imageId The Cloudflare image ID to delete.
+   * @returns {Promise<boolean>} Returns true if deletion succeeded (HTTP 2xx), false otherwise.
+   */
+  async deleteImage(imageId: string): Promise<boolean> {
+    if (!this.accountId || !this.apiToken) {
+      console.error('Cloudflare deleteImage: service not configured (missing accountId or apiToken).')
+      return false
+    }
+
+    const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/images/v1/${imageId}`
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${this.apiToken}`,
+        },
+      })
+
+      if (response.ok) {
+        console.log(`✅ Cloudflare image deleted: ${imageId}`)
+        return true
+      } else {
+        const errorText = await response.text()
+        console.error(`❌ Failed to delete Cloudflare image ${imageId}. Status: ${response.status}. Body: ${errorText}`)
+        return false
+      }
+    } catch (error: any) {
+      console.error('Cloudflare deleteImage error:', error)
+      return false
+    }
+  }
 } 

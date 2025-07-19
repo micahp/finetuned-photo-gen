@@ -226,6 +226,36 @@ export default function GalleryPage() {
     }
   }
 
+  /**
+   * Delete one or more images by ID. Prompts for confirmation, calls API, and updates local state.
+   */
+  const handleDeleteImages = async (ids: string[]) => {
+    if (ids.length === 0) return
+    const confirmMsg = ids.length === 1
+      ? 'Are you sure you want to delete this image? This action cannot be undone.'
+      : `Are you sure you want to delete ${ids.length} images? This action cannot be undone.`
+
+    if (!window.confirm(confirmMsg)) {
+      return
+    }
+
+    try {
+      // Perform deletions in parallel
+      await Promise.all(ids.map(id => fetch(`/api/gallery/${id}`, { method: 'DELETE' })))
+
+      // Optimistically remove deleted images from state
+      setImages(prev => prev.filter(img => !ids.includes(img.id)))
+      setSelectedImages(prev => {
+        const next = new Set(prev)
+        ids.forEach(id => next.delete(id))
+        return next
+      })
+    } catch (error) {
+      console.error('Failed to delete images:', error)
+      alert('Failed to delete some images. Please try again.')
+    }
+  }
+
   if (!session) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -399,6 +429,15 @@ export default function GalleryPage() {
                     Download Selected
                   </Button>
                   <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDeleteImages(Array.from(selectedImages))}
+                    className="flex items-center gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                  <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setSelectedImages(new Set())}
@@ -471,6 +510,10 @@ export default function GalleryPage() {
                           <DropdownMenuItem onClick={() => shareImage(image)}>
                             <Share className="h-4 w-4 mr-2" />
                             Share
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => handleDeleteImages([image.id])}>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -597,12 +640,10 @@ export default function GalleryPage() {
                         <span className="text-gray-600">Steps:</span>
                         <span>{selectedImage.generationParams.steps}</span>
                       </div>
-                      {selectedImage.generationParams.seed && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Seed:</span>
-                          <span>{selectedImage.generationParams.seed}</span>
-                        </div>
-                      )}
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Seed:</span>
+                        <span>{selectedImage.generationParams.seed ?? 'N/A'}</span>
+                      </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Style:</span>
                         <span className="capitalize">{selectedImage.generationParams.style}</span>

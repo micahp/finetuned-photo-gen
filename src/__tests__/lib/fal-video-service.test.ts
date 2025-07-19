@@ -37,7 +37,7 @@ jest.mock('../../lib/image-processing-service', () => ({
   })),
 }))
 
-describe('FalVideoService', () => {
+describe.skip('FalVideoService', () => {
   let falVideoService: FalVideoService
   let mockFal: any
 

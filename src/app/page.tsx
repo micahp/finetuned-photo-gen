@@ -123,7 +123,7 @@ export default function HomePage() {
               </div>
               <CardTitle>Generate Images</CardTitle>
               <CardDescription>
-                Create unlimited personalized images with custom prompts - from professional headshots to creative art
+                Create personalized images with custom prompts - from professional headshots to creative art
               </CardDescription>
             </CardHeader>
           </Card>

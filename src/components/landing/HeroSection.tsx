@@ -166,7 +166,7 @@ export function HeroSection({ videos, className = '' }: HeroSectionProps) {
                 : 'text-base sm:text-lg md:text-xl'
             }`}
           >
-            Upload your photos, train a custom AI model, and generate unlimited 
+            Upload your photos, train a custom AI model, and generate 
             personalized images in any style or setting you can imagine.
           </motion.p>
 
