@@ -29,6 +29,7 @@ For the business this means faster time-to-market when Fal.ai ships new models; 
 | WIP-009 | Domain Model | `src/lib/fal-endpoint-spec.ts` (new) | +15 /-0 | Added canonical `FalEndpointSpec` interface for spec parsing. |
 | WIP-010 | Script | `scripts/generate-fal-video-report.ts` (new) | +200 | CLI that produces Markdown diff report (`docs/fal_video_model_diff.md`). |
 | WIP-011 | Docs | `docs/fal_video_model_diff.md` (new) | +50 | Auto-generated snapshot of spec vs code discrepancies. |
+| WIP-012 | Domain Model | `src/lib/video-models.ts` | +260 /-20 | Phase-2: Added nine new Fal endpoints, updated Veo-2 & Stable-Video-Diffusion enums, introduced 4:5 ratio. |
 
 > Note: Commits are local WIP on branch `dev`; no PR numbers yet—will squash before merge.
 
@@ -37,7 +38,11 @@ For the business this means faster time-to-market when Fal.ai ships new models; 
 ## 4. Deep-Dive Highlights  
 
 ### 4.1 `VIDEO_MODELS` expansion  
-The core model catalogue lives in ```1:34:src/lib/video-models.ts```. Eight new model objects were inserted between lines **120-220** and **250-310**, each capturing `falModelId`, max duration from the spec enum, and exact `supportedAspectRatios`. A new helper `isDurationSupported()` (```380:400:src/lib/video-models.ts```) wraps look-ups similar to `isAspectRatioSupported()`.
+The core catalogue (```1:34:src/lib/video-models.ts```) received a **Phase-2 bulk update**:  
+• **Nine additional model objects** appended under *Newly Added Fal.ai Endpoints* (lines **330-420**): Fast-SVD, Fast-SVD-LCM, LTX-Video (x3 variants), Pixverse-Text, WAN-T2V 2.1, plus two LTX dev endpoints.  
+• Existing entries updated: Veo-2 now supports only `16:9`/`9:16`; Stable-Video-Diffusion adds `4:5`.  
+• `supportedAspectRatios` and `durationOptions` now perfectly mirror spec enums across **30 endpoints → 33 logical models**.  
+• Helper `isDurationSupported()` still at ```380:400```.  
 
 Edge case: *Stable-Video-Diffusion* still exposes only `"5s"` duration—code asserts this to avoid 400 responses from Fal.
 
@@ -60,7 +65,7 @@ private isDurationSupported(modelId: string, secs: number): boolean { … }
 are invoked before submission; an HTTP 422 is returned to API callers with a descriptive message if the model rejects the duration or aspect ratio.
 
 ### 4.3 `getDimensions()` extension  
-Aspect ratio `"4:5"` was added (```468:472:src/lib/fal-video-service.ts```) mapping to `720 × 900` px; fall-through default uses a `16:9` anchor width of 1280 if the ratio is unknown (should never happen after validation).
+Aspect ratio `"4:5"` added (```468:472:src/lib/fal-video-service.ts```) with `720×900` px dimensions; fall-through default unchanged.  
 
 ### 4.4 Tests  
 `fal-video-service.test.ts` now builds a **matrix of 14 models × 3 aspect ratios × 2 durations** (≈84 combinations) but is pruned at runtime to only specs declaring support. The new utility reads the OpenAPI schema to fetch allowed enums and seeds the test cases.

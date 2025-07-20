@@ -8,7 +8,7 @@ export interface VideoGenerationParams {
   prompt: string
   modelId: string
   duration?: number // seconds, 3-30
-  aspectRatio?: '16:9' | '9:16' | '1:1' | '3:4' | '4:3'
+  aspectRatio?: '16:9' | '9:16' | '1:1' | '3:4' | '4:3' | '4:5'
   fps?: number // frames per second, 12-30
   motionLevel?: number // 1-10, controls amount of motion
   seed?: number
@@ -472,7 +472,8 @@ export class FalVideoService {
       '9:16': { width: 768, height: 1344 },
       '1:1': { width: 1024, height: 1024 },
       '3:4': { width: 768, height: 1024 },
-      '4:3': { width: 1024, height: 768 }
+      '4:3': { width: 1024, height: 768 },
+      '4:5': { width: 720, height: 900 }
     }
     
     return dimensionMap[aspectRatio] || dimensionMap['16:9']

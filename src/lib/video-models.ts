@@ -102,7 +102,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/pro/image-to-video',
     mode: 'image-to-video',
     maxDuration: 15,
-    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits
+    costPerSecond: 12, // Fal cost 8¢/s, markup ×1.5 → 12 credits
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -117,7 +117,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/pro/text-to-video',
     mode: 'text-to-video',
     maxDuration: 15,
-    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits
+    costPerSecond: 12, // Fal cost 8¢/s, markup ×1.5 → 12 credits
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -132,7 +132,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/standard/image-to-video',
     mode: 'image-to-video',
     maxDuration: 15,
-    costPerSecond: 9, // Fal cost 4.5¢/s, markup ×2 → 9 credits
+    costPerSecond: 8, // Fal cost 4.5¢/s, markup ×1.75 → 8 credits
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -147,7 +147,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/standard/text-to-video',
     mode: 'text-to-video',
     maxDuration: 15,
-    costPerSecond: 9, // Fal cost 4.5¢/s, markup ×2 → 9 credits
+    costPerSecond: 8, // Fal cost 4.5¢/s, markup ×1.75 → 8 credits
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -164,7 +164,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/veo3',
     mode: 'text-to-video',
     maxDuration: 8,
-    costPerSecond: 94, // Fal cost 75¢/s (audio), markup ×1.25 → 94 credits
+    costPerSecond: 80, // Fal cost 75¢/s (audio), markup ×1.066 → 80 credits
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 30,
@@ -178,7 +178,7 @@ export const VIDEO_MODELS: VideoModel[] = [
   {
     id: 'veo-3-fast-text',
     name: 'Veo 3 Fast – Text → Video',
-    falModelId: 'fal-ai/veo3-fast',
+    falModelId: 'fal-ai/veo3/fast',
     mode: 'text-to-video',
     maxDuration: 8,
     costPerSecond: 50, // Fal cost 40¢/s (audio), markup ×1.25 → 50 credits
@@ -198,7 +198,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/kling-video/v2.1/master/image-to-video',
     mode: 'image-to-video',
     maxDuration: 20,
-    costPerSecond: 42, // Fal cost 28¢/s, markup ×1.5 → 42 credits
+    costPerSecond: 35, // Fal cost 28¢/s, markup ×1.25 → 35 credits
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -245,8 +245,21 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/veo2',
     mode: 'text-to-video',
     maxDuration: 8,
-    costPerSecond: 63, // Fal cost 50¢/s, markup ×1.25 ≈ 62.5 → 63 credits
-    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    costPerSecond: 55, // Fal cost 50¢/s, markup ×1.1 → 55 credits
+    supportedAspectRatios: ['16:9', '9:16'],
+    defaultParams: { fps: 30, motionLevel: 6 },
+    durationOptions: [5, 6, 7, 8],
+    hasAudio: false,
+  },
+
+  {
+    id: 'veo-2-image',
+    name: 'Veo 2 – Image → Video',
+    falModelId: 'fal-ai/veo2/image-to-video',
+    mode: 'image-to-video',
+    maxDuration: 8,
+    costPerSecond: 55, // Fal cost 50¢/s, markup ×1.1 → 55 credits
+    supportedAspectRatios: ['16:9', '9:16'],
     defaultParams: { fps: 30, motionLevel: 6 },
     durationOptions: [5, 6, 7, 8],
     hasAudio: false,
@@ -255,7 +268,7 @@ export const VIDEO_MODELS: VideoModel[] = [
   {
     id: 'kling-2.0-master-image',
     name: 'Kling 2.0 Master – Image → Video',
-    falModelId: 'fal-ai/kling-video/v2.0/master/image-to-video',
+    falModelId: 'fal-ai/kling-video/v2/master/image-to-video',
     mode: 'image-to-video',
     maxDuration: 20,
     costPerSecond: 42, // Fal cost 28¢/s, markup ×1.5 → 42 credits
@@ -281,11 +294,11 @@ export const VIDEO_MODELS: VideoModel[] = [
   {
     id: 'stable-video-diffusion',
     name: 'Stable Video Diffusion – Image → Video',
-    falModelId: 'fal-ai/stable-video-diffusion',
+    falModelId: 'fal-ai/stable-video',
     mode: 'image-to-video',
     maxDuration: 5,
     costPerSecond: 3, // Fal cost ≈1.5¢/s (0.075 per 5s clip), markup ×2 → 3 credits
-    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    supportedAspectRatios: ['16:9', '9:16', '1:1', '4:5'],
     defaultParams: { fps: 24, motionLevel: 4 },
     durationOptions: [5],
     hasAudio: false,
@@ -294,7 +307,7 @@ export const VIDEO_MODELS: VideoModel[] = [
   {
     id: 'ltx-video-13b-distilled',
     name: 'LTX Video 13B Distilled – Image → Video',
-    falModelId: 'fal-ai/ltx-video/13b-distilled/image-to-video',
+    falModelId: 'fal-ai/ltx-video-13b-distilled/image-to-video',
     mode: 'image-to-video',
     maxDuration: 5,
     costPerSecond: 2, // Fal cost ≈0.8¢/s (0.04 per 5s clip), markup ×2 → 2 credits
@@ -307,7 +320,7 @@ export const VIDEO_MODELS: VideoModel[] = [
   {
     id: 'wan-2.1-480p',
     name: 'WAN 2.1 (480p) – Image → Video',
-    falModelId: 'fal-ai/wan/2.1/480p',
+    falModelId: 'fal-ai/wan-i2v',
     mode: 'image-to-video',
     maxDuration: 5,
     costPerSecond: 8, // Fal cost ≈4¢/s (0.20 per 5s clip), markup ×2 → 8 credits
@@ -320,7 +333,31 @@ export const VIDEO_MODELS: VideoModel[] = [
   {
     id: 'pixverse-v4.5',
     name: 'Pixverse v4.5 – Image → Video',
-    falModelId: 'fal-ai/pixverse/v4.5',
+    falModelId: 'fal-ai/pixverse/v4.5/image-to-video',
+    mode: 'image-to-video',
+    maxDuration: 10,
+    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 5 },
+    durationOptions: [5, 10],
+    hasAudio: false,
+  },
+  {
+    id: 'pixverse-v4.5-text',
+    name: 'Pixverse v4.5 – Text → Video',
+    falModelId: 'fal-ai/pixverse/v4.5/text-to-video',
+    mode: 'text-to-video',
+    maxDuration: 10,
+    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 5 },
+    durationOptions: [5, 10],
+    hasAudio: false,
+  }, // We have to add resolution to our pricing for this model 
+  {
+    id: 'pixverse-v4.5-effects',
+    name: 'Pixverse v4.5 Effects – Image → Video',
+    falModelId: 'fal-ai/pixverse/v4.5/effects',
     mode: 'image-to-video',
     maxDuration: 10,
     costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits
@@ -333,7 +370,7 @@ export const VIDEO_MODELS: VideoModel[] = [
   {
     id: 'hunyuan-custom-512',
     name: 'Hunyuan Custom 512p – Image → Video',
-    falModelId: 'fal-ai/hunyuan/custom/512p',
+    falModelId: 'fal-ai/hunyuan-custom',
     mode: 'image-to-video',
     maxDuration: 10,
     costPerSecond: 24, // Fal cost 16¢/s, markup ×1.5 → 24 credits
@@ -346,10 +383,10 @@ export const VIDEO_MODELS: VideoModel[] = [
   {
     id: 'hunyuan-avatar',
     name: 'Hunyuan Avatar – Image → Video',
-    falModelId: 'fal-ai/hunyuan/avatar',
+    falModelId: 'fal-ai/hunyuan-avatar',
     mode: 'image-to-video',
     maxDuration: 5,
-    costPerSecond: 42, // Fal cost 28¢/s, markup ×1.5 → 42 credits
+    costPerSecond: 35, // Fal cost 28¢/s, markup ×1.25 → 35 credits
     supportedAspectRatios: ['1:1', '9:16'],
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5],
@@ -359,13 +396,196 @@ export const VIDEO_MODELS: VideoModel[] = [
   {
     id: 'magi-1',
     name: 'MAGI-1 – Text → Video',
-    falModelId: 'fal-ai/magi/v1',
+    falModelId: 'fal-ai/magi',
     mode: 'text-to-video',
     maxDuration: 10,
-    costPerSecond: 30, // Fal cost 20¢/s, markup ×1.5 → 30 credits
+    costPerSecond: 35, // For 5s video your request will cost $1.40, → $0.28/s → markup ×1.25 → 35 credits
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 6 },
     durationOptions: [4, 6, 8, 10],
+    hasAudio: false,
+  },
+
+  /* ----------------------- Newly Added Fal.ai Endpoints ----------------------- */
+  {
+    id: 'fast-svd',
+    name: 'Fast Stable Video Diffusion – Image → Video',
+    falModelId: 'fal-ai/fast-svd',
+    mode: 'image-to-video',
+    maxDuration: 5,
+    costPerSecond: 3, // Price not disclosed. We assume the rate matches the text‑to‑video endpoint ( $0.00111 / compute s ).
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 5 },
+    // duration fixed to 25 frames (~2-3s); leave undefined to fallback
+    hasAudio: false,
+  },
+  {
+    id: 'fast-svd-text',
+    name: 'Fast Stable Video Diffusion – Text → Video',
+    falModelId: 'fal-ai/fast-svd/text-to-video',
+    mode: 'text-to-video',
+    maxDuration: 5,
+    costPerSecond: 3, // Fal page: "Your request will cost $0.00111 per compute second." Matched to image variant at 12 credits/s.
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
+    hasAudio: false,
+  },
+  {
+    id: 'fast-svd-lcm',
+    name: 'Fast Stable Video Diffusion Turbo – Image → Video',
+    falModelId: 'fal-ai/fast-svd-lcm',
+    mode: 'image-to-video',
+    maxDuration: 5,
+    costPerSecond: 3, // Fal text to video page: "Your request will cost $0.00111 per compute second." We assume this is the same as the image to video page.
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 5 },
+    hasAudio: false,
+  },
+  {
+    id: 'ltx-video-13b-dev-image',
+    name: 'LTX Video 13B Dev – Image → Video',
+    falModelId: 'fal-ai/ltx-video-13b-dev/image-to-video',
+    mode: 'image-to-video',
+    maxDuration: 5,
+    costPerSecond: 25, // Fal page: "Your request will cost $0.20 per video. For $1 you can run this model approximately 5 times."
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
+    hasAudio: false,
+  },
+  // Currently we don't support video uploads so we'll come back to this
+  // {
+  //   id: 'ltx-video-13b-dev-extend',
+  //   name: 'LTX Video 13B Dev Extend – Image → Video',
+  //   falModelId: 'fal-ai/ltx-video-13b-dev/extend',
+  //   mode: 'image-to-video',
+  //   maxDuration: 10,
+  //   costPerSecond: 25, // Your request will cost $0.20 per video. For $1 you can run this model approximately 5 times.
+  //   supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  //   defaultParams: { fps: 24, motionLevel: 4 },
+  //   durationOptions: [5, 10],
+  //   hasAudio: false,
+  // },
+  {
+    id: 'ltx-video-v095-image',
+    name: 'LTX Video v0.95 – Image → Video',
+    falModelId: 'fal-ai/ltx-video-v095/image-to-video',
+    mode: 'image-to-video',
+    maxDuration: 5,
+    costPerSecond: 5, // Your request will cost $0.02 per second, billed at 24 frames per second. For $1 you can generate 50 seconds of video. Enabling detail_pass will double the billed seconds.
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
+    hasAudio: false,
+  }, // DEPRECATED
+  {
+    id: 'ltx-video-v095-mc-image',
+    name: 'LTX Video v0.95 MC – Image → Video',
+    falModelId: 'fal-ai/ltx-video-v095/multiconditioning',
+    mode: 'image-to-video',
+    maxDuration: 5,
+    costPerSecond: 8, // Your request will cost $0.04 per video.
+
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
+    hasAudio: false,
+  },
+  {
+    id: 'fast-svd-lcm-text',
+    name: 'Fast Stable Video Diffusion Turbo – Text → Video',
+    falModelId: 'fal-ai/fast-svd-lcm/text-to-video',
+    mode: 'text-to-video',
+    maxDuration: 5,
+    costPerSecond: 3, // Your request will cost $0.00111 per compute second.
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 5 },
+    durationOptions: [5],
+    hasAudio: false,
+  },
+  {
+    id: 'wan-2.1-t2v',
+    name: 'WAN 2.1 – Text → Video',
+    falModelId: 'fal-ai/wan-t2v',
+    mode: 'text-to-video',
+    maxDuration: 5,
+    costPerSecond: 8,
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
+    hasAudio: false,
+  },
+  {
+    id: 'minimax-video-01-text',
+    name: 'MiniMax Video-01 – Text → Video',
+    falModelId: 'fal-ai/minimax/video-01',
+    mode: 'text-to-video',
+    maxDuration: 10,
+    costPerSecond: 12,
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 5 },
+    durationOptions: [6, 10],
+    hasAudio: false,
+  },
+  {
+    id: 'minimax-video-01-live-image',
+    name: 'MiniMax Video-01 Live – Image → Video',
+    falModelId: 'fal-ai/minimax/video-01/image-to-video',
+    mode: 'image-to-video',
+    maxDuration: 10,
+    costPerSecond: 12,
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 5 },
+    durationOptions: [6, 10],
+    hasAudio: false,
+  },
+  {
+    id: 'ltx-preview-image',
+    name: 'LTX Video Preview – Image → Video',
+    falModelId: 'fal-ai/ltx-video/image-to-video',
+    mode: 'image-to-video',
+    maxDuration: 5,
+    costPerSecond: 2,
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
+    hasAudio: false,
+  },
+  {
+    id: 'ltx-v095-text',
+    name: 'LTX Video 0.9.5 – Text → Video',
+    falModelId: 'fal-ai/ltx-video-v095',
+    mode: 'text-to-video',
+    maxDuration: 5,
+    costPerSecond: 3,
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
+    hasAudio: false,
+  },
+  {
+    id: 'ltx-13b-dev-extend',
+    name: 'LTX Video 13B Dev Extend – Video → Video',
+    falModelId: 'fal-ai/ltx-video-13b-dev/extend',
+    mode: 'image-to-video',
+    maxDuration: 5,
+    costPerSecond: 2,
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
+    hasAudio: false,
+  },
+  {
+    id: 'stable-video-diffusion-t2v',
+    name: 'Stable Video Diffusion – Text → Video',
+    falModelId: 'fal-ai/stable-video/text-to-video',
+    mode: 'text-to-video',
+    maxDuration: 5,
+    costPerSecond: 1, // Your request will cost $0.00003 per compute second. → need to confimr this pricing with generations. 1 is our miminum
+    supportedAspectRatios: ['16:9', '9:16', '1:1', '4:5'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
     hasAudio: false,
   },
 ] 
@@ -373,50 +593,4 @@ export const VIDEO_MODELS: VideoModel[] = [
 // Runtime pricing overrides
 // Allow dynamic adjustment of video pricing without code changes.
 // 1. Global multiplier via `VIDEO_PRICING_MULTIPLIER` (e.g. "0.8" for 20% discount)
-// 2. Model specific overrides via `VIDEO_MODEL_<MODEL_ID>_COST` where MODEL_ID is upper-case and non-alphanumeric chars replaced with `_`.
-const pricingMultiplierEnv = process.env.VIDEO_PRICING_MULTIPLIER
-const pricingMultiplier = pricingMultiplierEnv ? parseFloat(pricingMultiplierEnv) : 1
-
-if (!Number.isNaN(pricingMultiplier) && pricingMultiplier !== 1) {
-  VIDEO_MODELS.forEach(model => {
-    model.costPerSecond = Number((model.costPerSecond * pricingMultiplier).toFixed(2))
-  })
-}
-
-VIDEO_MODELS.forEach(model => {
-  const envKey = `VIDEO_MODEL_${model.id.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_COST`
-  const override = process.env[envKey]
-  if (override) {
-    const parsed = parseFloat(override)
-    if (!Number.isNaN(parsed)) {
-      model.costPerSecond = parsed
-    }
-  }
-})
-
-/**
- * Get audio capability information for a model by ID
- */
-export function getModelAudioCapability(modelId: string): { hasAudio: boolean; name: string } | null {
-  const model = VIDEO_MODELS.find(m => m.id === modelId)
-  if (!model) return null
-  
-  return {
-    hasAudio: model.hasAudio,
-    name: model.name
-  }
-}
-
-/**
- * Get all models with audio support
- */
-export function getModelsWithAudio(): VideoModel[] {
-  return VIDEO_MODELS.filter(model => model.hasAudio)
-}
-
-/**
- * Get all models without audio support (video only)
- */
-export function getVideoOnlyModels(): VideoModel[] {
-  return VIDEO_MODELS.filter(model => !model.hasAudio)
-} 
+// 2. Model specific overrides via `VIDEO_MODEL_<MODEL_ID>_COST` where MODEL_ID is upper-case and non-alphanumeric chars replaced with `
