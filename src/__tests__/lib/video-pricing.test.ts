@@ -22,7 +22,7 @@ function createService() {
 }
 
 describe('Video pricing overrides', () => {
-  const modelId = 'seedance-lite-image'
+  const modelId = 'pixverse-v4.5'
   const duration = 10
 
   beforeEach(() => {
@@ -35,22 +35,22 @@ describe('Video pricing overrides', () => {
   it('calculates cost with default pricing', () => {
     const service = createService()
     const cost = service.calculateCost(modelId, duration)
-    expect(cost).toBe(18 * duration)
+    expect(cost).toBe(20 * duration)
   })
 
   it('applies global multiplier override', () => {
     process.env.VIDEO_PRICING_MULTIPLIER = '2'
     const service = createService()
     const cost = service.calculateCost(modelId, duration)
-    expect(cost).toBe(36 * duration)
+    expect(cost).toBe(40 * duration)
   })
 
   it('applies model-specific override', () => {
     const envKey = `VIDEO_MODEL_${modelId.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_COST`
-    process.env[envKey] = '5'
+    process.env[envKey] = '7'
     const service = createService()
     const cost = service.calculateCost(modelId, duration)
-    expect(cost).toBe(5 * duration)
+    expect(cost).toBe(7 * duration)
   })
 })
 

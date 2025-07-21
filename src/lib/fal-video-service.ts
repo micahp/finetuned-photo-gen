@@ -118,12 +118,46 @@ export class FalVideoService {
   }
 
   /**
-   * Calculate cost for video generation
+   * Calculate credits charged for a video generation request.
+   *
+   * The calculation supports two environment-level overrides that are useful
+   * during testing or promotional pricing experiments:
+   *  1. `VIDEO_MODEL_<MODEL_ID>_COST` – sets a fixed baseline
+   *     `costPerSecond` **for that specific model** (after slug → env key
+   *     transformation). When present, this value takes precedence over the
+   *     global multiplier.
+   *  2. `VIDEO_PRICING_MULTIPLIER` – a numeric multiplier applied to the
+   *     model’s baseline `costPerSecond` to uniformly raise/lower prices.
+   *
+   * Both env vars should contain positive numbers. Invalid values (non-numbers
+   * or ≤0) are ignored gracefully.
    */
   calculateCost(modelId: string, duration: number): number {
     const model = this.getModelConfig(modelId)
     if (!model) return 0
-    return model.costPerSecond * duration
+
+    // 1️⃣ Model-specific override → VIDEO_MODEL_<MODEL_ID>_COST
+    const envKey = `VIDEO_MODEL_${modelId.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_COST`
+    const modelOverrideRaw = process.env[envKey]
+    let costPerSecond = model.costPerSecond
+
+    if (modelOverrideRaw) {
+      const parsed = Number(modelOverrideRaw)
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        costPerSecond = parsed
+      }
+    } else {
+      // 2️⃣ Global multiplier override → VIDEO_PRICING_MULTIPLIER
+      const multiplierRaw = process.env.VIDEO_PRICING_MULTIPLIER
+      if (multiplierRaw) {
+        const multiplier = Number(multiplierRaw)
+        if (!Number.isNaN(multiplier) && multiplier > 0) {
+          costPerSecond = costPerSecond * multiplier
+        }
+      }
+    }
+
+    return costPerSecond * duration
   }
 
   /**
