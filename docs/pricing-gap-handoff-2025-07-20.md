@@ -58,12 +58,9 @@ Mismatches (26 models) – table below
 
 #### Questions / TODO for next session
 
-1. **Define a policy**  
-   • flat markup (e.g. 1.5× everywhere)?  
-   • tiered (cheap models ≥ credits-floor; high-end audio models lower markup)?
-2. Decide if we keep comments & scripted pricing in sync automatically (CI lint) or manual review.
-3. Update `costPerSecond` where markup deviation > 0.1× from chosen rule.
-4. Consider dynamic env-based multiplier (`VIDEO_PRICING_MULTIPLIER`) already supported – document procedure.
+1. **Analyze our pricing and say what our policy is**  
+2. make sure the script helpers don't mess up our pricing if when use it.
+3. WE haven't accounted for the pricing of models with different resolutions. we will do it on a per model basis and we need to account for it
 5. Add unit tests around `verify_video_models.py` so it fails CI on unsupported drift.
 
 ---

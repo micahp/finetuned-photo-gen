@@ -18,11 +18,39 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Iterable
 from urllib.parse import quote
 
-import requests
+# Third-party dependencies (install via pip):
+#   pip install cloudscraper beautifulsoup4
+import cloudscraper
+# BeautifulSoup remains an optional fallback but primary extraction now
+# uses regex because Fal pages serve raw markdown with back-ticked names
+# prior to hydration.
+from bs4 import BeautifulSoup
+
+# ---------------------------------------------------------------------------
+# HTTP client (Cloudflare-aware)
+# ---------------------------------------------------------------------------
+
+
+UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+# cloudscraper v1.2.71 expects `browser` as a dict describing platform.
+# Use a Chrome desktop UA on macOS to mimic real traffic.
+scraper = cloudscraper.create_scraper(
+    browser={"browser": "chrome", "platform": "darwin", "desktop": True},
+    delay=1,
+)
+scraper.headers.update({"User-Agent": UA})
+
+# polite rate-limit between requests (seconds)
+REQUEST_DELAY = 0.8
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -34,49 +62,102 @@ def api_url(slug: str) -> str:
     return f"https://fal.ai/models/{'/'.join(parts)}/api"
 
 
-def scrape_inputs(url: str) -> List[str]:
-    """Scrape the field names from the ### Input section of the Fal API page."""
+def candidate_urls(slug: str, mode: str) -> Iterable[str]:
+    """Yield possible /api URLs for a given slug covering common Fal variants."""
+    base = f"https://fal.ai/models/{slug}"
+    yield f"{base}/api"  # as-is (may redirect internally)
+
+    if not slug.endswith(('/image-to-video', '/text-to-video', '/video-to-video')):
+        variant = 'image-to-video' if mode == 'image-to-video' else 'text-to-video'
+        yield f"{base}/{variant}/api"
+        # Sometimes there is an extend/video-to-video variant
+        yield f"{base}/video-to-video/api"
+
+
+def fetch_html(url: str) -> str | None:
+    """Return HTML for url if it contains an Input schema section."""
     try:
-        html = requests.get(url, timeout=20).text
-    except Exception as exc:
-        raise RuntimeError(f"request error: {exc}") from exc
+        r = scraper.get(url, timeout=20)
+        if r.ok and ('schema-input' in r.text or '### Input' in r.text):
+            return r.text
+    except Exception:
+        pass
+    return None
 
-    block = re.search(r"### Input#?[^#]+?(?=### Output|## Related)", html, re.S)
-    if not block:
-        raise ValueError("Could not locate Input block in page")
 
-    return re.findall(r"<code[^>]*>([a-z0-9_]+)</code>", block.group(0))
+def extract_fields(html: str) -> List[str]:
+    """Extract parameter names from the raw markdown HTML.
+
+    Fal pages send the markdown pre-hydration, so the back-ticked
+    parameter names remain as literal text. A simple regex pull between
+    the *Input* heading and the next heading is the most resilient.
+    """
+
+    block_match = re.search(
+        r"#+\s*Input#?(.+?)(?=#+\s*(Output|Other|About|LLMs|Table))",
+        html,
+        flags=re.I | re.S,
+    )
+    if not block_match:
+        raise ValueError("No Input section found")
+
+    raw_block = block_match.group(0)
+    fields = re.findall(r"`([A-Za-z0-9_]+)`", raw_block)
+
+    # Fallback: if regex somehow fails (HTML already hydrated), try <code>
+    if not fields:
+        soup = BeautifulSoup(raw_block, "html.parser")
+        fields = [c.get_text(strip=True) for c in soup.select("code")]
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique_fields: list[str] = []
+    for f in fields:
+        if f not in seen:
+            seen.add(f)
+            unique_fields.append(f)
+    return unique_fields
+
+
+CORE_NAMES = {
+    'prompt',
+    'image_url',
+    'video_url',
+    'aspect_ratio',
+    'resolution',
+    'duration',
+    'fps',
+}
 
 
 def split_folds(fields: List[str]) -> Tuple[List[str], List[str]]:
     """Return (above, advanced) according to Fal’s ordering rule."""
-    above, advanced = [], []
-    core_names = {
-        "prompt",
-        "image_url",
-        "video_url",
-        "aspect_ratio",
-        "resolution",
-        "duration",
-        "fps",
-    }
+    above: list[str] = []
     for idx, name in enumerate(fields):
-        if idx <= 4 or name in core_names:
+        if idx < 6 or name in CORE_NAMES:
             above.append(name)
         else:
-            advanced.append(name)
+            break
+    advanced = [f for f in fields if f not in above]
     return above, advanced
+
+
+# ---------------------------------------------------------------------------------
+# Parsing TypeScript VIDEO_MODELS array for (id, falModelId, mode)
+# ---------------------------------------------------------------------------------
 
 
 def parse_ts_models(ts_path: Path) -> List[Dict[str, str]]:
     """Extract (id, falModelId) pairs from the TypeScript VIDEO_MODELS array."""
     text = ts_path.read_text(encoding="utf-8")
-    # Very loose but sufficient regex spanning inside each object literal
-    pattern = re.compile(r"id:\s*'([^']+)'[^{}]+?falModelId:\s*'([^']+)'", re.S)
-    pairs = pattern.findall(text)
-    if not pairs:
-        raise ValueError("No model definitions found – regex may need updating.")
-    return [{"id": mid, "falModelId": slug} for mid, slug in pairs]
+    pattern = re.compile(
+        r"id:\s*'(?P<id>[^']+)'[\s\S]+?falModelId:\s*'(?P<falModelId>[^']+)'[\s\S]+?mode:\s*'(?P<mode>[^']+)'",
+        re.S,
+    )
+    raw = [m.groupdict() for m in pattern.finditer(text)]
+    if not raw:
+        raise ValueError('No model definitions found – update regex parsing.')
+    return raw
 
 
 # ---------------------------------------------------------------------------
@@ -87,25 +168,41 @@ def main(argv: List[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Harvest Fal input parameter groupings.")
     parser.add_argument("ts_file", type=Path, help="Path to src/lib/video-models.ts")
     parser.add_argument("-o", "--output", type=Path, help="Write JSON to this file instead of stdout")
+    parser.add_argument("--limit", nargs="*", help="Restrict to these model ids during debugging")
     args = parser.parse_args(argv)
 
     models = parse_ts_models(args.ts_file)
+
+    if args.limit:
+        wanted = set(args.limit)
+        models = [m for m in models if m["id"] in wanted]
+
     results: Dict[str, Dict[str, List[str]]] = {}
 
     for m in models:
-        slug = m["falModelId"]
-        url = api_url(slug)
-        try:
-            fields = scrape_inputs(url)
-            above, advanced = split_folds(fields)
-            results[m["id"]] = {"above": above, "advanced": advanced}
-        except Exception as exc:
-            results[m["id"]] = {"error": str(exc)}
+        last_error = None
+        for url in candidate_urls(m['falModelId'], m['mode']):
+            html = fetch_html(url)
+            if html is None:
+                continue
+            try:
+                fields = extract_fields(html)
+                above, advanced = split_folds(fields)
+                results[m['id']] = {'above': above, 'advanced': advanced}
+                print(f"{m['id']}: ✓ {len(fields)} fields")
+                break
+            except Exception as exc:
+                last_error = str(exc)
+        else:
+            results[m['id']] = {'error': last_error or 'Input section not found'}
+            print(f"{m['id']}: ✗ {results[m['id']]['error']}")
+
+        time.sleep(REQUEST_DELAY)
 
     json_blob = json.dumps(results, indent=2, sort_keys=True)
     if args.output:
-        args.output.write_text(json_blob, encoding="utf-8")
-        print(f"Wrote results to {args.output.relative_to(Path.cwd())}")
+        args.output.write_text(json_blob, encoding='utf-8')
+        print(f"Wrote results to {args.output}")
     else:
         print(json_blob)
 
