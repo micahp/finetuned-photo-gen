@@ -19,10 +19,18 @@ const FileConstructor: typeof File | (new () => unknown) =
   typeof File === 'undefined' ? (class DummyFile {}) : File
 
 const generateVideoSchema = z.object({
-  prompt: z.string().max(2000, 'Prompt too long'),
+  prompt: z.string().max(2000, 'Prompt too long').optional(),
+  negativePrompt: z.string().max(2000, 'Negative prompt too long').optional(),
+  enhancePrompt: z.enum(['true', 'false']).transform(v => v === 'true').optional(),
+  effects: z.string().optional(), // Comma-separated list; will split later
+  extend: z.enum(['true', 'false']).transform(v => v === 'true').optional(),
+  firstFrame: z.string().url().optional(),
+  lastFrame: z.string().url().optional(),
+  resolution: z.string().optional(),
+
   modelId: z.string().min(1, 'Model is required'),
   duration: z.number().min(3).max(30).default(5),
-  aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3']).default('16:9'),
+  aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3', '4:5']).default('16:9'),
   fps: z.number().min(12).max(30).default(24),
   motionLevel: z.number().min(1).max(10).default(5),
   seed: z.number().optional(),
@@ -70,8 +78,25 @@ export async function POST(request: NextRequest) {
     const seed = seedString ? parseInt(seedString) : undefined
     const imageFile = formData.get('imageFile') as File | null
 
+    // New optional fields
+    const negativePrompt = formData.get('negativePrompt') as string | null
+    const enhancePromptRaw = formData.get('enhancePrompt') as string | null // 'true' | 'false'
+    const effectsRaw = formData.get('effects') as string | null
+    const extendRaw = formData.get('extend') as string | null // 'true' | 'false'
+    const firstFrame = formData.get('firstFrame') as string | null
+    const lastFrame = formData.get('lastFrame') as string | null
+    const resolution = formData.get('resolution') as string | null
+
     // Validate the parsed data
     const validationResult = generateVideoSchema.safeParse({
+      negativePrompt: negativePrompt || undefined,
+      enhancePrompt: enhancePromptRaw || undefined,
+      effects: effectsRaw || undefined,
+      extend: extendRaw || undefined,
+      firstFrame: firstFrame || undefined,
+      lastFrame: lastFrame || undefined,
+      resolution: resolution || undefined,
+      imageFile: imageFile || undefined,
       prompt,
       modelId,
       duration,
@@ -79,7 +104,7 @@ export async function POST(request: NextRequest) {
       fps,
       motionLevel,
       seed,
-      imageFile: imageFile || undefined,
+      // prompt may be optional if imageFile present; actual prompt handled later
     })
     
     let validatedData: any
@@ -201,6 +226,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate resolution if provided
+    if (validatedData.resolution && !falVideoService.isResolutionSupported(validatedData.modelId, validatedData.resolution)) {
+      return NextResponse.json(
+        { error: `Resolution ${validatedData.resolution} not supported by ${modelConfig.name}` },
+        { status: 400 }
+      )
+    }
+
     console.log('🎬 Starting video generation:', {
       userId: user.id,
       model: modelConfig.name,
@@ -239,6 +272,13 @@ export async function POST(request: NextRequest) {
       motionLevel: validatedData.motionLevel,
       seed: validatedData.seed,
       imageBuffer,
+      negativePrompt: validatedData.negativePrompt,
+      enhancePrompt: validatedData.enhancePrompt,
+      effects: validatedData.effects ? validatedData.effects.split(',').map(e => e.trim()).filter(Boolean) : undefined,
+      extend: validatedData.extend,
+      firstFrame: validatedData.firstFrame,
+      lastFrame: validatedData.lastFrame,
+      resolution: validatedData.resolution,
     })
 
     console.log('VIDEO_GEN_SERVICE_RESPONSE', {
