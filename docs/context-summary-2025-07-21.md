@@ -1,10 +1,11 @@
 # Finetuned-Image-Gen – Context Summary (2025-07-21)
-This document rolls up **all work completed on July-21** and revises the roadmap based on three new decisions:
+This document rolls up **all work completed on July-21** and revises the roadmap based on five new decisions:
 
 * **Param-Group Harvester** – see `decisions/fal-param-group-harvester-2025-07-21.md`.
 * **Playground Screenshot Automation** – see `decisions/fal-playground-screenshots-2025-07-21.md`.
 * **Phase 3 Backend & UI Refactor** – see `decisions/phase-3a-3b-frontend-backend-2025-07-21.md`.
 * **Resolution-Aware Pricing Metadata** – see `decisions/resolution-pricing-metadata-2025-07-21.md`.
+* **Advanced Parameters UI** – see `decisions/phase-3b-advanced-params-ui-2025-07-21.md`.
 
 ---
 
