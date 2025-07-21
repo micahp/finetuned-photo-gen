@@ -53,7 +53,7 @@ Implementation notes:
 
 **Phase 3b – Front-End UI Breakdown**
 
-* Tier-grouped model dropdown (`phase3-dropdown-refactor`).
+* Tier-grouped model dropdown **filtered by generation mode** – text-to-video dropdown shows only `mode: "text-to-video"` models, image-to-video dropdown shows only `mode: "image-to-video"` (`phase3-dropdown-refactor`).
 * `AdvancedParametersForm` exposing **negativePrompt**, **enhancePrompt**, **effects**, **extend**, **firstFrame/lastFrame**, **resolution** (`phase3-advanced-params-form`).
 * Collapsible **Advanced** accordion embedding the form (`phase3-advanced-accordion`).
 * Form submission hook wiring the new fields into `FormData` for `/api/video/generate` (`phase3-form-submit-hook`).
