@@ -14,6 +14,15 @@ export interface VideoGenerationParams {
   seed?: number
   width?: number
   height?: number
+  /** Optional additional parameters uncovered in latest Fal specs */
+  negativePrompt?: string // veo, fast-svd, ltx, pixverse
+  enhancePrompt?: boolean // veo, fast-svd, ltx
+  effects?: string[] // pixverse effect variant
+  extend?: boolean // ltx dev_extend flag
+  firstFrame?: string // wan-flf2v first frame URL
+  lastFrame?: string // wan-flf2v last frame URL
+  resolution?: string // High-resolution hint, e.g. "480p" | "720p" | "1080p"
+
   imageBuffer?: Buffer // For image-to-video generation
 }
 
@@ -91,6 +100,24 @@ export class FalVideoService {
   }
 
   /**
+   * Check if a given resolution is supported by a specific model.
+   * A model supports a resolution when it declares it as its baseline or via
+   * `resolutionMultipliers` in the pricing metadata.
+   */
+  isResolutionSupported(modelId: string, resolution: string): boolean {
+    const model = this.getModelConfig(modelId)
+    if (!model) return false
+
+    // Collect allowed resolutions from baseline + multipliers if present
+    const allowed: string[] = []
+    if (model.baselineResolution) allowed.push(model.baselineResolution)
+    if (model.resolutionMultipliers) {
+      allowed.push(...Object.keys(model.resolutionMultipliers))
+    }
+    return allowed.includes(resolution)
+  }
+
+  /**
    * Calculate cost for video generation
    */
   calculateCost(modelId: string, duration: number): number {
@@ -136,7 +163,9 @@ export class FalVideoService {
         const requestPayload: any = {
           prompt: enhancedPrompt,
           duration: duration.toString(), // Seedance expects string "5" or "10"
-          resolution: params.width && params.width >= 1280 ? "720p" : "480p", // Default to 720p if high width requested
+          resolution: params.resolution && this.isResolutionSupported(model.id, params.resolution)
+            ? params.resolution
+            : (params.width && params.width >= 1280 ? "720p" : "480p"),
           camera_fixed: false, // Optional, but keep for now
           seed: params.seed,
           // Disable NSFW checker only when explicitly opted-out via env flag
@@ -262,6 +291,40 @@ export class FalVideoService {
           seed: params.seed,
           // Disable NSFW checker only when explicitly opted-out via env flag
           enable_safety_checker: this.enableSafetyChecker
+        }
+
+        // ----- Optional parameters (conditional by model capabilities) ----- //
+        const modelSlug = model.falModelId
+
+        // Negative prompt (veo, fast-svd, ltx, pixverse)
+        if (params.negativePrompt && /(veo|fast-svd|ltx|pixverse)/i.test(modelSlug)) {
+          requestPayload.negative_prompt = params.negativePrompt
+        }
+
+        // Enhance prompt flag (veo, fast-svd, ltx)
+        if (typeof params.enhancePrompt === 'boolean' && /(veo|fast-svd|ltx)/i.test(modelSlug)) {
+          requestPayload.enhance_prompt = params.enhancePrompt
+        }
+
+        // Effects array (pixverse effects endpoint)
+        if (params.effects && params.effects.length && /pixverse.*effects/i.test(modelSlug)) {
+          requestPayload.effects = params.effects
+        }
+
+        // Extend frames (ltx dev_extend flag)
+        if (typeof params.extend === 'boolean' && /ltx/i.test(modelSlug)) {
+          requestPayload.extend = params.extend
+        }
+
+        // First / last frame URLs (wan-flf2v)
+        if (/wan-flf2v/i.test(modelSlug)) {
+          if (params.firstFrame) requestPayload.first_frame_url = params.firstFrame
+          if (params.lastFrame) requestPayload.last_frame_url = params.lastFrame
+        }
+
+        // Explicit resolution (models with multipliers)
+        if (params.resolution && this.isResolutionSupported(model.id, params.resolution)) {
+          requestPayload.resolution = params.resolution
         }
 
         // For image-to-video models, handle image upload
