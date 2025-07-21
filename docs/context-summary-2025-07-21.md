@@ -82,5 +82,14 @@ The `VIDEO_MODELS` entries include a new `tier: "premium" | "standard" | "budget
 4. **Docs & pricing** – refresh cost tables to match new credit rates (P1).
 5. **CI enhancement** – compress screenshot artefacts or move to LFS (P2).
 
+### New UI Tasks (2025-07-21 Evening Handoff)
+* **Pricing comment realignment** – swap `costPerSecond` comment with `priceCostText` in `video-models.ts`; surface Fal’s price text under calculated cost range in UI.
+* **Model dropdown styling** – match padding/spacing to duration & aspect-ratio selects.
+* **Advanced Settings accordion** – rename to *Advanced Settings*, shift label left of caret, highlight entire header on hover/click.
+* **Capability icons/labels** – add:
+  * Start & End Frames for `wan-flf2v`
+  * Effects
+  * Lip-syncing (audio models)
+
 ---
 *End of summary.* 
