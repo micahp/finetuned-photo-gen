@@ -32,7 +32,9 @@ import {
   Volume2,
   VolumeX,
   Info,
-  Square
+  Square,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 import { isPremiumUser } from '@/lib/subscription-utils'
 import { VIDEO_MODELS as AVAILABLE_VIDEO_MODELS } from '@/lib/video-models'
@@ -40,6 +42,7 @@ import { ImageUpload } from '@/components/upload/ImageUpload'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import AdvancedParametersForm from '@/components/video/AdvancedParametersForm'
 
 const videoGenerationSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
@@ -50,6 +53,14 @@ const videoGenerationSchema = z.object({
   motionLevel: z.number().min(1).max(10),
   seed: z.number().optional(),
   imageFile: z.instanceof(File).optional(),
+  // Phase 3b advanced params
+  negativePrompt: z.string().max(2000).optional(),
+  enhancePrompt: z.boolean().optional(),
+  effects: z.string().optional(),
+  extend: z.boolean().optional(),
+  firstFrame: z.string().url().optional(),
+  lastFrame: z.string().url().optional(),
+  resolution: z.string().optional(),
 })
 
 type VideoGenerationFormData = z.infer<typeof videoGenerationSchema>
@@ -126,6 +137,7 @@ export default function VideoGenerationPage() {
   const [estimatedCost, setEstimatedCost] = useState(0)
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [generatingPrompt, setGeneratingPrompt] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Track which generation mode (text or image) the user is on
   const [activeMode, setActiveMode] = useState<'text-to-video' | 'image-to-video'>(
@@ -159,6 +171,14 @@ export default function VideoGenerationPage() {
       aspectRatio: '16:9',
       fps: 24,
       motionLevel: 5,
+      // Advanced params defaults
+      negativePrompt: '',
+      enhancePrompt: false,
+      effects: '',
+      extend: false,
+      firstFrame: '',
+      lastFrame: '',
+      resolution: '',
     },
   })
 
@@ -334,6 +354,14 @@ export default function VideoGenerationPage() {
       formData.append('aspectRatio', data.aspectRatio)
       formData.append('fps', data.fps.toString())
       formData.append('motionLevel', data.motionLevel.toString())
+      // Advanced params
+      if (data.negativePrompt) formData.append('negativePrompt', data.negativePrompt)
+      if (data.enhancePrompt) formData.append('enhancePrompt', String(data.enhancePrompt))
+      if (data.effects) formData.append('effects', data.effects)
+      if (data.extend) formData.append('extend', String(data.extend))
+      if (data.firstFrame) formData.append('firstFrame', data.firstFrame)
+      if (data.lastFrame) formData.append('lastFrame', data.lastFrame)
+      if (data.resolution) formData.append('resolution', data.resolution)
       if (data.seed) {
         formData.append('seed', data.seed.toString())
       }
@@ -750,6 +778,30 @@ export default function VideoGenerationPage() {
                         )}
                       />
                     </CardContent>
+                  </Card>
+
+                  {/* Advanced Parameters Accordion */}
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between py-3">
+                      <CardTitle>Advanced</CardTitle>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setShowAdvanced(!showAdvanced)}
+                      >
+                        {showAdvanced ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </CardHeader>
+                    {showAdvanced && (
+                      <CardContent className="pt-0">
+                        <AdvancedParametersForm selectedModel={selectedModel} />
+                      </CardContent>
+                    )}
                   </Card>
 
                   {/* Cost Estimation */}
