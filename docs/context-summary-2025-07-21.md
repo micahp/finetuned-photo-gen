@@ -80,7 +80,7 @@ The `VIDEO_MODELS` entries include a new `tier: "premium" | "standard" | "budget
 2. **Update tests** – align with new pricing & advanced-param flows ✅
 3. **Wire field-support map** – front-end now consumes `fal_input_groups.json`; expand JSON coverage (P1, in progress).
 4. **Docs & pricing** – refresh cost tables to match new credit rates (P1).
-5. **CI enhancement** – compress screenshot artefacts or move to LFS (P2).
+5. **Screenshot cleanup** – one-time batch complete; no ongoing CI work needed ✅
 
 ### New UI Tasks (2025-07-21 Evening Handoff)
 * **Pricing comment realignment** – swap `costPerSecond` comment with `priceCostText` in `video-models.ts`; surface Fal’s price text under calculated cost range in UI.
