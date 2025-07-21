@@ -6,7 +6,8 @@ This document rolls up **all work completed on July-21** and revises the roadmap
 * **Phase 3 Backend & UI Refactor** – see `decisions/phase-3a-3b-frontend-backend-2025-07-21.md`.
 * **Resolution-Aware Pricing Metadata** – see `decisions/resolution-pricing-metadata-2025-07-21.md`.
 * **Advanced Parameters UI** – see `decisions/phase-3b-advanced-params-ui-2025-07-21.md`.
-* **Video Pricing Adjustment** – see `decisions/video-pricing-adjustment-2025-07-21.md`.  
+* **Video Pricing Adjustment** – see `decisions/video-pricing-adjustment-2025-07-21.md`.
+* **Env-Driven Pricing Overrides & Input Groups UI** – see `decisions/env-pricing-overrides-input-groups-ui-2025-07-21.md`.  
 
 ---
 
@@ -76,8 +77,8 @@ The `VIDEO_MODELS` entries include a new `tier: "premium" | "standard" | "budget
 
 ## 5. Outstanding Work & Next Tasks
 1. **Cost-range display** – implemented and shipped ✅
-2. **Update tests** – align with new pricing & advanced-param flows (P0, in progress).
-3. **Wire field-support map** – drive field visibility from `fal_input_groups.json` (P1).
+2. **Update tests** – align with new pricing & advanced-param flows ✅
+3. **Wire field-support map** – front-end now consumes `fal_input_groups.json`; expand JSON coverage (P1, in progress).
 4. **Docs & pricing** – refresh cost tables to match new credit rates (P1).
 5. **CI enhancement** – compress screenshot artefacts or move to LFS (P2).
 
