@@ -570,7 +570,11 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/wan-t2v',
     mode: 'text-to-video',
     maxDuration: 5,
-    costPerSecond: 8,
+    costPerSecond: 25, // 25 credits @480p (baseline); 50 credits @720p
+    description: 'Wan-2.1 is a text-to-video model that generates high-quality videos with high visual quality and motion diversity from text prompts',
+    priceCostText: 'For a video generation, your request will cost $0.2 at 480p resolution and 0.4$ at 720p resolution. For $1 you can run this model approximately 5 times. More than the default frames will cost 1.25x more.',
+    baselineResolution: '480p',
+    resolutionMultipliers: { '720p': 2 },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 4 },
     durationOptions: [5],
