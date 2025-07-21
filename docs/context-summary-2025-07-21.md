@@ -3,6 +3,7 @@ This document rolls up **all work completed on July-21** and revises the roadmap
 
 * **Param-Group Harvester** – see `decisions/fal-param-group-harvester-2025-07-21.md`.
 * **Playground Screenshot Automation** – see `decisions/fal-playground-screenshots-2025-07-21.md`.
+* **Phase 3 Backend & UI Refactor** – see `decisions/phase-3a-3b-frontend-backend-2025-07-21.md`.
 * **Resolution-Aware Pricing Metadata** – see `decisions/resolution-pricing-metadata-2025-07-21.md`.
 
 ---
@@ -23,6 +24,7 @@ The harvester script now cross-references **spec JSON → Playground UI → `VID
 * Up-to-date enum lists (`aspect_ratio`, `duration`).
 * Parameter grouping metadata (`above`, `advanced`) exported to `fal_input_groups.json` for form generation.
 * **Above-the-fold vs Advanced UI** – the grouping mirrors Fal’s own layout: the first ~5 “core” controls appear immediately, while less-used fields tuck under an **Advanced** accordion. The JSON drives our React form to collapse these fields by default.
+* **Resolution-aware pricing metadata** – harvester captures min/max `creditsPerSecond` per resolution tier enabling front-end cost-range display.
 
 CI fails if:
 * A spec exists without a matching `VIDEO_MODELS` entry.
@@ -57,6 +59,7 @@ Implementation notes:
 * `AdvancedParametersForm` exposing **negativePrompt**, **enhancePrompt**, **effects**, **extend**, **firstFrame/lastFrame**, **resolution** (`phase3-advanced-params-form`).
 * Collapsible **Advanced** accordion embedding the form (`phase3-advanced-accordion`).
 * Form submission hook wiring the new fields into `FormData` for `/api/video/generate` (`phase3-form-submit-hook`).
+* **Dynamic cost display** – show a *cost-per-second range* (low ↔︎ high) when a model’s price varies by resolution, powered by resolution-aware metadata (`phase3-cost-range-display`).
 
 ## 4. UX Improvement – Model Categorisation
 To reduce dropdown fatigue the 24 logical models are now split into three groups:
