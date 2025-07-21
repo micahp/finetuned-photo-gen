@@ -1,5 +1,5 @@
 # Finetuned-Image-Gen – Context Summary (2025-07-21)
-This document rolls up **all work completed on July-21** and revises the roadmap based on five new decisions:
+This document rolls up **all work completed on July-21** and revises the roadmap based on seven new decisions:
 
 * **Param-Group Harvester** – see `decisions/fal-param-group-harvester-2025-07-21.md`.
 * **Playground Screenshot Automation** – see `decisions/fal-playground-screenshots-2025-07-21.md`.
@@ -25,8 +25,9 @@ New assets/directories introduced today:
 The harvester script now cross-references **spec JSON → Playground UI → `VIDEO_MODELS`** to ensure:
 * Correct **`falModelId`** & **mode** for all 30 endpoints.
 * Up-to-date enum lists (`aspect_ratio`, `duration`).
-* Parameter grouping metadata (`above`, `advanced`) exported to `fal_input_groups.json` for form generation.
+* Parameter grouping metadata (`above`, `advanced`) exported to `fal_input_groups.json` for form generation **using local OpenAPI specs first** – the harvester no longer requires a live Fal.ai request for known endpoints.
 * **Above-the-fold vs Advanced UI** – the grouping mirrors Fal’s own layout: the first ~5 “core” controls appear immediately, while less-used fields tuck under an **Advanced** accordion. The JSON drives our React form to collapse these fields by default.
+* **Regex fallback removed** – `AdvancedParametersForm.tsx` now relies exclusively on the JSON mapping, guaranteeing deterministic field visibility.
 * **Resolution-aware pricing metadata** – harvester captures min/max `creditsPerSecond` per resolution tier enabling front-end cost-range display.
 
 CI fails if:
@@ -78,7 +79,7 @@ The `VIDEO_MODELS` entries include a new `tier: "premium" | "standard" | "budget
 ## 5. Outstanding Work & Next Tasks
 1. **Cost-range display** – implemented and shipped ✅
 2. **Update tests** – align with new pricing & advanced-param flows ✅
-3. **Wire field-support map** – front-end now consumes `fal_input_groups.json`; expand JSON coverage (P1, in progress).
+3. **Wire field-support map** – `fal_input_groups.json` now covers all harvested models and UI heuristics have been removed ✅
 4. **Docs & pricing** – refresh cost tables to match new credit rates (P1).
 5. **Screenshot cleanup** – one-time batch complete; no ongoing CI work needed ✅
 

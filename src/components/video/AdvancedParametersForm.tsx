@@ -43,13 +43,11 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
     }
   }, [selectedModel])
 
-  const id = selectedModel?.id || ''
-  // Fallback heuristics ensure we don't hide fields if mapping is missing.
-  const supportsNegativePrompt = capability?.negativePrompt ?? /veo|fast-svd|ltx|pixverse/i.test(id)
-  const supportsEnhancePrompt = capability?.enhancePrompt ?? /veo|fast-svd|ltx/i.test(id)
-  const supportsEffects = capability?.effects ?? /pixverse/i.test(id)
-  const supportsExtend = capability?.extend ?? /ltx/i.test(id)
-  const supportsFirstLastFrame = capability?.firstLastFrame ?? /wan-flf2v/i.test(id)
+  const supportsNegativePrompt = !!capability?.negativePrompt
+  const supportsEnhancePrompt = !!capability?.enhancePrompt
+  const supportsEffects = !!capability?.effects
+  const supportsExtend = !!capability?.extend
+  const supportsFirstLastFrame = !!capability?.firstLastFrame
   const supportsResolution = !!selectedModel?.resolutionMultipliers
 
   return (

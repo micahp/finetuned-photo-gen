@@ -1,18 +1,368 @@
 {
-  "pixverse-v4.5": {
-    "above": ["prompt", "image_url", "aspect_ratio", "duration", "fps", "resolution"],
-    "advanced": ["negative_prompt", "effects", "enhance_prompt"]
+  "fast-svd": {
+    "above": [
+      "cond_aug",
+      "deep_cache",
+      "image_url",
+      "motion_bucket_id",
+      "fps",
+      "steps"
+    ],
+    "advanced": [
+      "seed"
+    ]
   },
-  "wan-flf2v": {
-    "above": ["prompt", "image_url", "aspect_ratio", "duration", "fps", "resolution"],
-    "advanced": ["first_frame", "last_frame"]
+  "fast-svd-lcm": {
+    "above": [
+      "motion_bucket_id",
+      "fps",
+      "steps",
+      "cond_aug",
+      "seed",
+      "image_url"
+    ],
+    "advanced": []
   },
-  "ltx-video-13b-distilled": {
-    "above": ["prompt", "image_url", "aspect_ratio", "duration", "fps"],
-    "advanced": ["negative_prompt", "enhance_prompt", "extend"]
+  "hailuo-02-pro-image": {
+    "above": [
+      "prompt",
+      "prompt_optimizer",
+      "image_url"
+    ],
+    "advanced": []
+  },
+  "hailuo-02-standard-image": {
+    "above": [
+      "prompt",
+      "duration",
+      "prompt_optimizer",
+      "image_url"
+    ],
+    "advanced": []
+  },
+  "hunyuan-avatar": {
+    "above": [
+      "text",
+      "image_url",
+      "turbo_mode",
+      "audio_url",
+      "seed",
+      "num_inference_steps"
+    ],
+    "advanced": [
+      "num_frames"
+    ]
+  },
+  "kling-1.6-pro-image": {
+    "above": [
+      "prompt",
+      "duration",
+      "aspect_ratio",
+      "tail_image_url",
+      "image_url",
+      "negative_prompt"
+    ],
+    "advanced": [
+      "cfg_scale"
+    ]
+  },
+  "kling-2.0-master-image": {
+    "above": [
+      "prompt",
+      "duration",
+      "cfg_scale",
+      "negative_prompt",
+      "image_url"
+    ],
+    "advanced": []
+  },
+  "kling-2.1-master-image": {
+    "above": [
+      "prompt",
+      "duration",
+      "cfg_scale",
+      "negative_prompt",
+      "image_url"
+    ],
+    "advanced": []
+  },
+  "kling-2.1-pro-image": {
+    "above": [
+      "prompt",
+      "duration",
+      "cfg_scale",
+      "negative_prompt",
+      "image_url"
+    ],
+    "advanced": []
+  },
+  "ltx-13b-dev-extend": {
+    "above": [
+      "second_pass_skip_initial_steps",
+      "first_pass_num_inference_steps",
+      "frame_rate",
+      "prompt",
+      "reverse_video",
+      "expand_prompt"
+    ],
+    "advanced": [
+      "loras",
+      "second_pass_num_inference_steps",
+      "num_frames",
+      "enable_safety_checker",
+      "video",
+      "negative_prompt",
+      "resolution",
+      "aspect_ratio",
+      "constant_rate_factor",
+      "first_pass_skip_final_steps",
+      "seed"
+    ]
+  },
+  "ltx-preview-image": {
+    "above": [
+      "prompt",
+      "guidance_scale",
+      "seed",
+      "num_inference_steps",
+      "negative_prompt",
+      "image_url"
+    ],
+    "advanced": []
+  },
+  "ltx-v095-text": {
+    "above": [
+      "prompt",
+      "resolution",
+      "aspect_ratio",
+      "expand_prompt",
+      "seed",
+      "num_inference_steps"
+    ],
+    "advanced": [
+      "negative_prompt"
+    ]
+  },
+  "ltx-video-13b-dev-extend": {
+    "above": [
+      "second_pass_skip_initial_steps",
+      "first_pass_num_inference_steps",
+      "frame_rate",
+      "prompt",
+      "reverse_video",
+      "expand_prompt"
+    ],
+    "advanced": [
+      "loras",
+      "second_pass_num_inference_steps",
+      "num_frames",
+      "enable_safety_checker",
+      "video",
+      "negative_prompt",
+      "resolution",
+      "aspect_ratio",
+      "constant_rate_factor",
+      "first_pass_skip_final_steps",
+      "seed"
+    ]
+  },
+  "ltx-video-13b-dev-image": {
+    "above": [
+      "second_pass_skip_initial_steps",
+      "first_pass_num_inference_steps",
+      "frame_rate",
+      "prompt",
+      "reverse_video",
+      "expand_prompt"
+    ],
+    "advanced": [
+      "loras",
+      "second_pass_num_inference_steps",
+      "num_frames",
+      "enable_safety_checker",
+      "negative_prompt",
+      "resolution",
+      "aspect_ratio",
+      "image_url",
+      "constant_rate_factor",
+      "first_pass_skip_final_steps",
+      "seed"
+    ]
+  },
+  "ltx-video-v095-mc-image": {
+    "above": [
+      "prompt",
+      "resolution",
+      "aspect_ratio",
+      "expand_prompt",
+      "images",
+      "videos"
+    ],
+    "advanced": [
+      "seed",
+      "num_inference_steps",
+      "negative_prompt"
+    ]
+  },
+  "pixverse-v4.5-effects": {
+    "above": [
+      "negative_prompt",
+      "resolution",
+      "duration",
+      "effect",
+      "image_url"
+    ],
+    "advanced": []
+  },
+  "pixverse-v4.5-text": {
+    "above": [
+      "prompt",
+      "aspect_ratio",
+      "resolution",
+      "style",
+      "duration",
+      "seed"
+    ],
+    "advanced": [
+      "negative_prompt"
+    ]
+  },
+  "seedance-lite-text": {
+    "above": [
+      "prompt",
+      "duration",
+      "aspect_ratio",
+      "resolution",
+      "seed",
+      "camera_fixed"
+    ],
+    "advanced": []
+  },
+  "seedance-pro-text": {
+    "above": [
+      "prompt",
+      "duration",
+      "aspect_ratio",
+      "resolution",
+      "seed",
+      "camera_fixed"
+    ],
+    "advanced": []
+  },
+  "stable-video-diffusion": {
+    "above": [
+      "motion_bucket_id",
+      "fps",
+      "cond_aug",
+      "seed",
+      "image_url"
+    ],
+    "advanced": []
+  },
+  "veo-2-image": {
+    "above": [
+      "prompt",
+      "duration",
+      "aspect_ratio",
+      "image_url"
+    ],
+    "advanced": []
+  },
+  "veo-2-text": {
+    "above": [
+      "prompt",
+      "duration",
+      "aspect_ratio",
+      "seed",
+      "negative_prompt",
+      "enhance_prompt"
+    ],
+    "advanced": []
+  },
+  "veo-3-fast-text": {
+    "above": [
+      "prompt",
+      "aspect_ratio",
+      "duration",
+      "generate_audio",
+      "resolution",
+      "seed"
+    ],
+    "advanced": [
+      "negative_prompt",
+      "enhance_prompt"
+    ]
   },
   "veo-3-text": {
-    "above": ["prompt", "aspect_ratio", "duration", "fps"],
-    "advanced": ["negative_prompt", "enhance_prompt"]
+    "above": [
+      "prompt",
+      "aspect_ratio",
+      "duration",
+      "generate_audio",
+      "resolution",
+      "seed"
+    ],
+    "advanced": [
+      "negative_prompt",
+      "enhance_prompt"
+    ]
+  },
+  "wan-2.1": {
+    "above": [
+      "prompt",
+      "shift",
+      "acceleration",
+      "frames_per_second",
+      "enable_safety_checker",
+      "num_frames"
+    ],
+    "advanced": [
+      "negative_prompt",
+      "resolution",
+      "aspect_ratio",
+      "image_url",
+      "enable_prompt_expansion",
+      "seed",
+      "guide_scale",
+      "num_inference_steps"
+    ]
+  },
+  "wan-2.1-t2v": {
+    "above": [
+      "prompt",
+      "resolution",
+      "aspect_ratio",
+      "enable_prompt_expansion",
+      "turbo_mode",
+      "frames_per_second"
+    ],
+    "advanced": [
+      "enable_safety_checker",
+      "num_frames",
+      "seed",
+      "negative_prompt",
+      "num_inference_steps"
+    ]
+  },
+  "wan-flf2v": {
+    "above": [
+      "prompt",
+      "shift",
+      "acceleration",
+      "frames_per_second",
+      "enable_safety_checker",
+      "start_image_url"
+    ],
+    "advanced": [
+      "end_image_url",
+      "negative_prompt",
+      "num_frames",
+      "resolution",
+      "aspect_ratio",
+      "enable_prompt_expansion",
+      "seed",
+      "guide_scale",
+      "num_inference_steps"
+    ]
   }
-} 
+}
