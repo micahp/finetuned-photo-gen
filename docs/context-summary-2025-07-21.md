@@ -75,10 +75,11 @@ To reduce dropdown fatigue the 24 logical models are now split into three groups
 The `VIDEO_MODELS` entries include a new `tier: "premium" | "standard" | "budget"` property consumed by the front-end to render grouped option lists.
 
 ## 5. Outstanding Work & Next Tasks
-1. **UI forms upgrade** – surface new params, fold logic, tiered dropdown (P0).
-2. **Update tests** – cover new params & tier logic (P0).
-3. **Docs & pricing** – refresh cost table, flag TBD rows (P1).
-4. **CI enhancement** – compress screenshot artefacts or move to LFS (P2).
+1. **Cost-range display** – implemented and shipped ✅
+2. **Update tests** – align with new pricing & advanced-param flows (P0, in progress).
+3. **Wire field-support map** – drive field visibility from `fal_input_groups.json` (P1).
+4. **Docs & pricing** – refresh cost tables to match new credit rates (P1).
+5. **CI enhancement** – compress screenshot artefacts or move to LFS (P2).
 
 ---
 *End of summary.* 
