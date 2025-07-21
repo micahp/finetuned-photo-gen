@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'
 import { Slider } from '@/components/ui/slider'
 import { Progress } from '@/components/ui/progress'
@@ -97,6 +97,20 @@ const IMAGE_TO_VIDEO_PROMPTS: string[] = [
   // Kling 2.1 Pro – Image → Video
   "Warm, incandescent streetlights paint the rain-slicked cobblestones in pools of amber light as a couple walks hand-in-hand, their silhouettes stark against the blurry backdrop of a city shrouded in a gentle downpour; the camera lingers on the subtle textures of their rain-soaked coats and the glistening reflections dancing on the wet pavement, creating a sense of intimate vulnerability and shared quietude.",
 ]
+
+// Helper to categorise cost tiers if explicit tier field absent
+const getTier = (costPerSecond: number): 'premium' | 'standard' | 'budget' => {
+  if (costPerSecond > 20) return 'premium'
+  if (costPerSecond >= 9) return 'standard'
+  return 'budget'
+}
+
+const TIER_LABELS: Record<'premium' | 'standard' | 'budget', string> = {
+  premium: 'Premium',
+  standard: 'Standard',
+  budget: 'Budget',
+}
+const TIER_ORDER: Array<'premium' | 'standard' | 'budget'> = ['premium', 'standard', 'budget']
 
 export default function VideoGenerationPage() {
   const { data: session, update } = useSession()
@@ -502,24 +516,28 @@ export default function VideoGenerationPage() {
                                   <SelectValue placeholder="Select a video model" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {AVAILABLE_VIDEO_MODELS.filter(m => m.mode === activeMode).map((model) => (
-                                    <SelectItem 
-                                      key={model.id} 
-                                      value={model.id}
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium">{model.name}</span>
-                                        <div className="flex items-center gap-1">
-                                          {model.hasAudio && (
-                                            <Volume2 className="h-3 w-3 text-green-600" />
-                                          )}
-                                          {model.falModelId.includes('kling-video') && (
-                                            <Clapperboard className="h-3 w-3 text-blue-600" />
-                                          )}
-                                          <Crown className="h-3 w-3 text-yellow-500" />
-                                        </div>
-                                      </div>
-                                    </SelectItem>
+                                  {TIER_ORDER.map((tierKey) => (
+                                    <SelectGroup key={tierKey}>
+                                      <SelectLabel className="text-xs uppercase tracking-wider text-muted-foreground px-2">
+                                        {TIER_LABELS[tierKey]}
+                                      </SelectLabel>
+                                      {AVAILABLE_VIDEO_MODELS.filter(m => m.mode === activeMode && getTier(m.costPerSecond) === tierKey).map((model) => (
+                                        <SelectItem key={model.id} value={model.id}>
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-medium">{model.name}</span>
+                                            <div className="flex items-center gap-1">
+                                              {model.hasAudio && (
+                                                <Volume2 className="h-3 w-3 text-green-600" />
+                                              )}
+                                              {model.falModelId.includes('kling-video') && (
+                                                <Clapperboard className="h-3 w-3 text-blue-600" />
+                                              )}
+                                              {tierKey === 'premium' && <Crown className="h-3 w-3 text-yellow-500" />}
+                                            </div>
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
                                   ))}
                                 </SelectContent>
                               </Select>
