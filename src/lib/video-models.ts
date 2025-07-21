@@ -20,6 +20,14 @@ export interface VideoModel {
   durationOptions?: number[]
   /** Whether the model generates video with synchronized audio */
   hasAudio: boolean
+  /** Optional human-readable description (not used in pricing logic) */
+  description?: string
+  /** Optional pricing snippet from Fal.ai for reference */
+  priceCostText?: string
+  /** Baseline resolution that the `costPerSecond` value represents (e.g. "480p") */
+  baselineResolution?: string
+  /** Resolution-specific cost multipliers relative to the baseline costPerSecond */
+  resolutionMultipliers?: Record<string, number>
 }
 
 /**
@@ -318,17 +326,38 @@ export const VIDEO_MODELS: VideoModel[] = [
   },
 
   {
-    id: 'wan-2.1-480p',
-    name: 'WAN 2.1 (480p) – Image → Video',
+    id: 'wan-2.1',
+    name: 'WAN 2.1 – Image → Video',
     falModelId: 'fal-ai/wan-i2v',
     mode: 'image-to-video',
     maxDuration: 5,
-    costPerSecond: 8, // Fal cost ≈4¢/s (0.20 per 5s clip), markup ×2 → 8 credits
+    costPerSecond: 8, // Fal cost ≈4¢/s (0.20 per 5s clip), markup ×2 → 8 credits (baseline 480p)
+    description: 'Wan-2.1 generates high-quality videos with strong motion diversity from a single image.',
+    priceCostText: 'Fal pricing: $0.20 at 480p, $0.40 at 720p (5-second clip).',
+    baselineResolution: '480p',
+    resolutionMultipliers: { '720p': 2 },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 4 },
     durationOptions: [5],
     hasAudio: false,
-  },
+  }, // We have to add resolution to our pricing for this model 
+
+  {
+    id: 'wan-flf2v',
+    name: 'WAN FLF2V – Image → Video',
+    falModelId: 'fal-ai/wan-flf2v',
+    mode: 'image-to-video',
+    maxDuration: 5,
+    costPerSecond: 8, // Fal cost ≈4¢/s (0.20 per 5s clip), markup ×2 → 8 credits (baseline 480p)
+    description: 'WAN-flf2v bridges first & last frames to create smooth motion sequences.',
+    priceCostText: 'Fal pricing: $0.20 at 480p, $0.40 at 720p (5-second clip).',
+    baselineResolution: '480p',
+    resolutionMultipliers: { '720p': 2 },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
+    hasAudio: false,
+  }, // We have to add resolution to our pricing for this model 
 
   {
     id: 'pixverse-v4.5',
@@ -336,19 +365,29 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/pixverse/v4.5/image-to-video',
     mode: 'image-to-video',
     maxDuration: 10,
-    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits
+    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits (baseline 360p)
+    baselineResolution: '360p',
+    resolutionMultipliers: { '540p': 1, '720p': 1.33, '1080p': 2.67 },
+    priceCostText: 'Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p).',
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
     hasAudio: false,
   },
+  // We have to add resolution to our pricing for this model 
+  
+
   {
     id: 'pixverse-v4.5-text',
     name: 'Pixverse v4.5 – Text → Video',
     falModelId: 'fal-ai/pixverse/v4.5/text-to-video',
     mode: 'text-to-video',
     maxDuration: 10,
-    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits
+    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits (baseline 360p)
+    description: 'Generate high-quality video clips from text prompts using PixVerse v4.5.',
+    priceCostText: 'Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p).',
+    baselineResolution: '360p',
+    resolutionMultipliers: { '540p': 1, '720p': 1.33, '1080p': 2.67 },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
@@ -360,12 +399,33 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/pixverse/v4.5/effects',
     mode: 'image-to-video',
     maxDuration: 10,
-    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits
+    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits (baseline 360p)
+    description: 'Generate stylised effects using PixVerse v4.5.',
+    priceCostText: 'Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p).',
+    baselineResolution: '360p',
+    resolutionMultipliers: { '540p': 1, '720p': 1.33, '1080p': 2.67 },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
     hasAudio: false,
-  },
+  }, // We have to add resolution to our pricing for this model 
+
+  {
+    id: 'pixverse-v4.5-transition',
+    name: 'Pixverse v4.5 Transition – Image → Video',
+    falModelId: 'fal-ai/pixverse/v4.5/transition',
+    mode: 'image-to-video',
+    maxDuration: 10,
+    costPerSecond: 14, // Fal cost 8¢/s, markup ×1.75 → 14 credits (baseline 360p)
+    description: 'Create seamless transitions between images using PixVerse v4.5.',
+    priceCostText: 'Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p).',
+    baselineResolution: '360p',
+    resolutionMultipliers: { '540p': 1, '720p': 1.33, '1080p': 2.67 },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 5 },
+    durationOptions: [5, 10],
+    hasAudio: false,
+  }, // We have to add resolution to our pricing for this model 
 
   {
     id: 'hunyuan-custom-512',
