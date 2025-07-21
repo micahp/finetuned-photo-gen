@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 import { isPremiumUser } from '@/lib/subscription-utils'
 import { VIDEO_MODELS as AVAILABLE_VIDEO_MODELS } from '@/lib/video-models'
+import { getCostRange, getCostPerSecond } from '@/lib/video-pricing'
 import { ImageUpload } from '@/components/upload/ImageUpload'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -184,13 +185,15 @@ export default function VideoGenerationPage() {
 
   const selectedModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === form.watch('modelId'))
   const watchedDuration = form.watch('duration')
+  const watchedResolution = form.watch('resolution')
 
   useEffect(() => {
     if (selectedModel) {
-      const cost = selectedModel.costPerSecond * watchedDuration
+      const costPerSec = getCostPerSecond(selectedModel, watchedResolution)
+      const cost = costPerSec * watchedDuration
       setEstimatedCost(cost)
     }
-  }, [selectedModel, watchedDuration])
+  }, [selectedModel, watchedDuration, watchedResolution])
 
   // Keep local creditsRemaining in sync with session once it loads/updates
   useEffect(() => {
@@ -582,7 +585,13 @@ export default function VideoGenerationPage() {
                               <span className="font-medium">Max Duration:</span> {selectedModel.maxDuration}s
                             </div>
                             <div>
-                              <span className="font-medium">Cost:</span> {selectedModel.costPerSecond} credits/sec
+                              <span className="font-medium">Cost:</span>{' '}
+                              {(() => {
+                                const range = getCostRange(selectedModel)
+                                return range.low === range.high
+                                  ? `${range.low} credits/sec`
+                                  : `${range.low}-${range.high} credits/sec`
+                              })()}
                             </div>
                           </div>
                           {(selectedModel.hasAudio || selectedModel.falModelId.includes('kling-video')) && (
