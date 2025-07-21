@@ -1,0 +1,18 @@
+{
+  "pixverse-v4.5": {
+    "above": ["prompt", "image_url", "aspect_ratio", "duration", "fps", "resolution"],
+    "advanced": ["negative_prompt", "effects", "enhance_prompt"]
+  },
+  "wan-flf2v": {
+    "above": ["prompt", "image_url", "aspect_ratio", "duration", "fps", "resolution"],
+    "advanced": ["first_frame", "last_frame"]
+  },
+  "ltx-video-13b-distilled": {
+    "above": ["prompt", "image_url", "aspect_ratio", "duration", "fps"],
+    "advanced": ["negative_prompt", "enhance_prompt", "extend"]
+  },
+  "veo-3-text": {
+    "above": ["prompt", "aspect_ratio", "duration", "fps"],
+    "advanced": ["negative_prompt", "enhance_prompt"]
+  }
+} 

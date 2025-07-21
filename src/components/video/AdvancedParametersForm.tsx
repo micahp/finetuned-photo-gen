@@ -1,12 +1,13 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useFormContext } from 'react-hook-form'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form'
 import { VideoModel } from '@/lib/video-models'
+import inputGroups from '@/data/fal_input_groups.json'
 
 interface Props {
   selectedModel?: VideoModel
@@ -22,14 +23,33 @@ interface Props {
 const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
   const { control } = useFormContext()
 
-  // Very lightweight heuristics for now. These can be replaced with a more
-  // robust capability map once the param harvester JSON is integrated.
+  // --------------------------------------------------------------
+  // Capability detection driven by `fal_input_groups.json` mapping
+  // produced by the harvester script. Falls back to previous
+  // heuristics when mapping is missing.
+  // --------------------------------------------------------------
+
+  const capability = useMemo(() => {
+    if (!selectedModel) return null
+    const record = (inputGroups as Record<string, { above: string[]; advanced: string[] }>)[selectedModel.id]
+    if (!record) return null
+    const adv = new Set(record.advanced)
+    return {
+      negativePrompt: adv.has('negative_prompt'),
+      enhancePrompt: adv.has('enhance_prompt'),
+      effects: adv.has('effects'),
+      extend: adv.has('extend'),
+      firstLastFrame: adv.has('first_frame') || adv.has('last_frame'),
+    }
+  }, [selectedModel])
+
   const id = selectedModel?.id || ''
-  const supportsNegativePrompt = /veo|fast-svd|ltx|pixverse/i.test(id)
-  const supportsEnhancePrompt = /veo|fast-svd|ltx/i.test(id)
-  const supportsEffects = /pixverse/i.test(id)
-  const supportsExtend = /ltx/i.test(id)
-  const supportsFirstLastFrame = /wan-flf2v/i.test(id)
+  // Fallback heuristics ensure we don't hide fields if mapping is missing.
+  const supportsNegativePrompt = capability?.negativePrompt ?? /veo|fast-svd|ltx|pixverse/i.test(id)
+  const supportsEnhancePrompt = capability?.enhancePrompt ?? /veo|fast-svd|ltx/i.test(id)
+  const supportsEffects = capability?.effects ?? /pixverse/i.test(id)
+  const supportsExtend = capability?.extend ?? /ltx/i.test(id)
+  const supportsFirstLastFrame = capability?.firstLastFrame ?? /wan-flf2v/i.test(id)
   const supportsResolution = !!selectedModel?.resolutionMultipliers
 
   return (
