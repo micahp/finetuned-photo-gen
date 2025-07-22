@@ -15,6 +15,7 @@ This document rolls up **all work completed on July-21** and revises the roadmap
 * **Video-UI Tooltips & Conditional Advanced Section** – see `decisions/video-ui-tooltips-conditional-advanced-2025-07-22.md`.
 * **Video Tab Always Visible** – see `decisions/video-tab-always-visible-2025-07-22.md`.
 - **Video Generation Time Metadata** – see `decisions/video-generation-time-metadata-2025-07-22.md`
+* **Video Advanced Settings Gap Audit & Schema Verification** – see `docs/video-advanced-settings-audit-2025-07-22.md`
 
 ---
 
