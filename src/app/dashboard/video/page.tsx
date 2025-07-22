@@ -543,7 +543,7 @@ export default function VideoGenerationPage() {
                           <FormItem>
                             <FormControl>
                               <Select onValueChange={field.onChange} value={field.value}>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full">
                                   <SelectValue placeholder="Select a video model" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -557,12 +557,23 @@ export default function VideoGenerationPage() {
                                           <div className="flex items-center gap-2">
                                             <span className="font-medium">{model.name}</span>
                                             <div className="flex items-center gap-1">
+                                              {/* Lip-sync / Audio support */}
                                               {model.hasAudio && (
                                                 <Volume2 className="h-3 w-3 text-green-600" />
                                               )}
-                                              {model.falModelId.includes('kling-video') && (
+                                              {/* Key-frame / Start-End Frames support */}
+                                              {model.falModelId?.includes('wan-flf2v') && (
+                                                <Film className="h-3 w-3 text-purple-600" />
+                                              )}
+                                              {/* Effects parameter support */}
+                                              {model.falModelId?.includes('pixverse') && (
+                                                <Sparkles className="h-3 w-3 text-pink-600" />
+                                              )}
+                                              {/* Kling variants */}
+                                              {model.falModelId?.includes('kling-video') && (
                                                 <Clapperboard className="h-3 w-3 text-blue-600" />
                                               )}
+                                              {/* Tier badge */}
                                               {tierKey === 'premium' && <Crown className="h-3 w-3 text-yellow-500" />}
                                             </div>
                                           </div>
@@ -612,6 +623,12 @@ export default function VideoGenerationPage() {
                                 )}
                                 {selectedModel.falModelId.includes('kling-video') && (
                                   <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded">Start & End Frames</span>
+                                )}
+                                {selectedModel.falModelId.includes('wan-flf2v') && (
+                                  <span className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 rounded">Start & End Frames</span>
+                                )}
+                                {selectedModel.falModelId.includes('pixverse') && (
+                                  <span className="flex items-center gap-1 px-2 py-1 bg-pink-100 text-pink-800 rounded">Effects</span>
                                 )}
                               </div>
                             </div>
@@ -797,13 +814,15 @@ export default function VideoGenerationPage() {
                   {/* Advanced Parameters Accordion */}
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between py-3">
-                      <CardTitle>Advanced</CardTitle>
+                      <CardTitle>Additional Settings</CardTitle>
                       <Button
                         type="button"
                         variant="ghost"
-                        size="icon"
+                        size="sm"
+                        className="flex items-center gap-1"
                         onClick={() => setShowAdvanced(!showAdvanced)}
                       >
+                        <span className="font-medium">More</span>
                         {showAdvanced ? (
                           <ChevronUp className="h-4 w-4" />
                         ) : (

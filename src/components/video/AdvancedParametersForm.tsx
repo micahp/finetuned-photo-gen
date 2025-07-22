@@ -4,6 +4,7 @@ import React, { useMemo } from 'react'
 import { useFormContext } from 'react-hook-form'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form'
 import { VideoModel } from '@/lib/video-models'
@@ -169,19 +170,18 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
             <FormItem>
               <FormLabel>Resolution</FormLabel>
               <FormControl>
-                <select
-                  value={field.value || ''}
-                  onChange={field.onChange}
-                  className="w-full border rounded-md py-2 px-3 text-sm"
-                >
-                  <option value="">Auto (default)</option>
-                  {selectedModel &&
-                    Object.keys(selectedModel.resolutionMultipliers || {}).map((res) => (
-                      <option key={res} value={res}>
-                        {res}
-                      </option>
-                    ))}
-                </select>
+                <Select value={field.value || ''} onValueChange={field.onChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Auto (default)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Auto (default)</SelectItem>
+                    {selectedModel &&
+                      Object.keys(selectedModel.resolutionMultipliers || {}).map((res) => (
+                        <SelectItem key={res} value={res}>{res}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               </FormControl>
               <FormMessage />
             </FormItem>
