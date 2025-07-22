@@ -11,6 +11,7 @@ This document rolls up **all work completed on July-21** and revises the roadmap
 * **Resolution Default Fix** – see `decisions/resolution-default-fix-2025-07-22.md`.  
 * **Video UI Refinements** – see `decisions/video-ui-refinements-2025-07-22.md`.  
 - **Free Zero-Credit Daily Generations** – see `decisions/free-generation-zero-credit-2025-07-22.md`.
+* **Watermark Visibility Fix** – see `decisions/watermark-visibility-fix-2025-07-22.md`.
 
 ---
 
@@ -87,9 +88,9 @@ The `VIDEO_MODELS` entries include a new `tier: "premium" | "standard" | "budget
 5. **Screenshot cleanup** – one-time batch complete; no ongoing CI work needed ✅
 
 ### New UI Tasks (2025-07-21 Evening Handoff)
-* **Pricing comment realignment** – swap `costPerSecond` comment with `priceCostText` in `video-models.ts`; surface Fal’s price text under calculated cost range in UI.
-* **Model dropdown styling** – match padding/spacing to duration & aspect-ratio selects.
-* **Advanced Settings accordion** – rename to *Advanced Settings*, shift label left of caret, highlight entire header on hover/click.
+* **Pricing comment realignment** – swap `costPerSecond` comment with `priceCostText` in `video-models.ts`; surface Fal’s price text under calculated cost range in UI. ✅
+* **Model dropdown styling** – match padding/spacing to duration & aspect-ratio selects. ✅
+* **Advanced Settings accordion** – rename to *Advanced Settings*, shift label left of caret, highlight entire header on hover/click.  ✅
 * **Capability icons/labels** – add:
   * Start & End Frames for `wan-flf2v`
   * Effects
