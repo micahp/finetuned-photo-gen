@@ -22,17 +22,22 @@ export async function POST() {
         messages: [
           {
             role: 'system',
-            content: 'You are a creative AI that generates unique, detailed image prompts. Create vivid, descriptive prompts that would work well for AI image generation. Focus on interesting subjects, lighting, composition, and style. Keep prompts between 10-30 words and make them creative and engaging.'
+            content: `You are PromptSmith, an expert at crafting imaginative image-generation prompts.
+
+Guidelines:
+• 20-35 words.
+• Evoke vivid subjects, cinematic lighting, and evocative atmosphere.
+• Include 1-2 art-style or lens keywords (e.g. "neon cyberpunk", "50 mm bokeh").
+• No camera brands. No artist names. No quoted text.`
           },
           {
             role: 'user',
-            content: 'Generate a creative and detailed prompt for AI image generation. Make it unique and interesting.'
+            content: 'Give me one fresh, exciting prompt.'
           }
         ],
-        max_tokens: 100,
-        temperature: 0.9,
-        top_p: 0.9,
-        stop: ['\n', '.', '!', '?']
+        max_tokens: 120,
+        temperature: 1,
+        top_p: 0.95
       })
     })
 
