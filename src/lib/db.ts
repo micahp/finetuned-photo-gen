@@ -2,6 +2,13 @@
 import './server-only';
 import { PrismaClient } from '@/generated/prisma'
 
+// Quick visibility into what Prisma thinks the connection string is.
+if (process.env.DATABASE_URL) {
+  console.log('[Boot] DATABASE_URL:', process.env.DATABASE_URL)
+} else {
+  console.warn('[Boot] DATABASE_URL is undefined')
+}
+
 // This prevents PrismaClient from being instantiated in browser contexts
 // https://www.prisma.io/docs/guides/other/troubleshooting-orm/help-articles/nextjs-prisma-client-dev-practices
 
