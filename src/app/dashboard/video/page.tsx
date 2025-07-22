@@ -592,6 +592,11 @@ export default function VideoGenerationPage() {
                                   ? `${range.low} credits/sec`
                                   : `${range.low}-${range.high} credits/sec`
                               })()}
+                              {selectedModel.priceCostText && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {selectedModel.priceCostText}
+                                </div>
+                              )}
                             </div>
                           </div>
                           {(selectedModel.hasAudio || selectedModel.falModelId.includes('kling-video')) && (

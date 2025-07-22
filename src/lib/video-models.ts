@@ -110,7 +110,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/pro/image-to-video',
     mode: 'image-to-video',
     maxDuration: 15,
-    costPerSecond: 12, // Fal cost 8¢/s, markup ×1.5 → 12 credits
+    costPerSecond: 12, // For each second of video generated, it will cost $0.08/sec. A single 6 second video will cost $0.48/video.
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -140,7 +140,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/minimax/hailuo-02/standard/image-to-video',
     mode: 'image-to-video',
     maxDuration: 15,
-    costPerSecond: 8, // Fal cost 4.5¢/s, markup ×1.75 → 8 credits
+    costPerSecond: 8, // For each second of video generated, it will cost $0.045/sec. A single 6 second video will cost $0.27/video.
     supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
     defaultParams: {
       fps: 24,
@@ -331,9 +331,9 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/wan-i2v',
     mode: 'image-to-video',
     maxDuration: 5,
-    costPerSecond: 25, // 25 credits @480p (baseline); 50 credits @720p
+    costPerSecond: 25, // Fal pricing per 5s: $0.20 (480p), $0.40 (720p)
     description: 'Wan-2.1 generates high-quality videos with strong motion diversity from a single image.',
-    priceCostText: 'Fal pricing: $0.20 at 480p, $0.40 at 720p (5-second clip).',
+    priceCostText: 'Cost per 5-second clip: 125 credits (480p), 250 credits (720p).',
     baselineResolution: '480p',
     resolutionMultipliers: { '720p': 2 },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
@@ -343,14 +343,31 @@ export const VIDEO_MODELS: VideoModel[] = [
   }, // We have to add resolution to our pricing for this model 
 
   {
+    id: 'wan-2.1-t2v',
+    name: 'WAN 2.1 – Text → Video',
+    falModelId: 'fal-ai/wan-t2v',
+    mode: 'text-to-video',
+    maxDuration: 5,
+    costPerSecond: 25, // For a video generation, your request will cost $0.2 at 480p resolution and 0.4$ at 720p resolution. For $1 you can run this model approximately 5 times. More than the default frames will cost 1.25x more.
+    description: 'Wan-2.1 is a text-to-video model that generates high-quality videos with high visual quality and motion diversity from text prompts',
+    priceCostText: 'Cost per 5-second clip: 125 credits (480p), 250 credits (720p).',
+    baselineResolution: '480p',
+    resolutionMultipliers: { '720p': 2 },
+    supportedAspectRatios: ['16:9', '9:16', '1:1'],
+    defaultParams: { fps: 24, motionLevel: 4 },
+    durationOptions: [5],
+    hasAudio: false,
+  },
+
+  {
     id: 'wan-flf2v',
     name: 'WAN FLF2V – Image → Video',
     falModelId: 'fal-ai/wan-flf2v',
     mode: 'image-to-video',
     maxDuration: 5,
-    costPerSecond: 25, // 25 credits @480p (baseline); 50 credits @720p
+    costPerSecond: 25, // Fal pricing per 5s: $0.20 (480p), $0.40 (720p)
     description: 'WAN-flf2v bridges first & last frames to create smooth motion sequences.',
-    priceCostText: 'Fal pricing: $0.20 at 480p, $0.40 at 720p (5-second clip).',
+    priceCostText: 'Cost per 5-second clip: 125 credits (480p), 250 credits (720p).',
     baselineResolution: '480p',
     resolutionMultipliers: { '720p': 2 },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
@@ -365,10 +382,10 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/pixverse/v4.5/image-to-video',
     mode: 'image-to-video',
     maxDuration: 10,
-    costPerSecond: 20, // 20 credits @360/540p; 27 credits @720p; 54 credits @1080p (baseline 360p)
+    costPerSecond: 20, // Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p)
     baselineResolution: '360p',
     resolutionMultipliers: { '540p': 1, '720p': 1.25, '1080p': 2.5 },
-    priceCostText: 'Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p).',
+    priceCostText: 'Cost per 5-second clip: 100 credits (360/540p), 125 credits (720p), 250 credits (1080p).',
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
@@ -383,9 +400,9 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/pixverse/v4.5/text-to-video',
     mode: 'text-to-video',
     maxDuration: 10,
-    costPerSecond: 20, // 20 credits @360/540p; 27 credits @720p; 54 credits @1080p (baseline 360p)
+    costPerSecond: 20, // Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p)
     description: 'Generate high-quality video clips from text prompts using PixVerse v4.5.',
-    priceCostText: 'Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p).',
+    priceCostText: 'Cost per 5-second clip: 100 credits (360/540p), 125 credits (720p), 250 credits (1080p).',
     baselineResolution: '360p',
     resolutionMultipliers: { '540p': 1, '720p': 1.25, '1080p': 2.5 },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
@@ -399,9 +416,9 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/pixverse/v4.5/effects',
     mode: 'image-to-video',
     maxDuration: 10,
-    costPerSecond: 20, // 20 credits @360/540p; 27 credits @720p; 54 credits @1080p (baseline 360p)
+    costPerSecond: 20, // Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p)
     description: 'Generate stylised effects using PixVerse v4.5.',
-    priceCostText: 'Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p).',
+    priceCostText: 'Cost per 5-second clip: 100 credits (360/540p), 125 credits (720p), 250 credits (1080p).',
     baselineResolution: '360p',
     resolutionMultipliers: { '540p': 1, '720p': 1.25, '1080p': 2.5 },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
@@ -416,9 +433,9 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/pixverse/v4.5/transition',
     mode: 'image-to-video',
     maxDuration: 10,
-    costPerSecond: 20, // 20 credits @360/540p; 27 credits @720p; 54 credits @1080p (baseline 360p)
+    costPerSecond: 20, // Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p)
     description: 'Create seamless transitions between images using PixVerse v4.5.',
-    priceCostText: 'Fal pricing per 5s: $0.15 (360/540p), $0.20 (720p), $0.40 (1080p).',
+    priceCostText: 'Cost per 5-second clip: 100 credits (360/540p), 125 credits (720p), 250 credits (1080p).',
     baselineResolution: '360p',
     resolutionMultipliers: { '540p': 1, '720p': 1.25, '1080p': 2.5 },
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
@@ -564,22 +581,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     durationOptions: [5],
     hasAudio: false,
   },
-  {
-    id: 'wan-2.1-t2v',
-    name: 'WAN 2.1 – Text → Video',
-    falModelId: 'fal-ai/wan-t2v',
-    mode: 'text-to-video',
-    maxDuration: 5,
-    costPerSecond: 25, // 25 credits @480p (baseline); 50 credits @720p
-    description: 'Wan-2.1 is a text-to-video model that generates high-quality videos with high visual quality and motion diversity from text prompts',
-    priceCostText: 'For a video generation, your request will cost $0.2 at 480p resolution and 0.4$ at 720p resolution. For $1 you can run this model approximately 5 times. More than the default frames will cost 1.25x more.',
-    baselineResolution: '480p',
-    resolutionMultipliers: { '720p': 2 },
-    supportedAspectRatios: ['16:9', '9:16', '1:1'],
-    defaultParams: { fps: 24, motionLevel: 4 },
-    durationOptions: [5],
-    hasAudio: false,
-  },
+  
   {
     id: 'minimax-video-01-text',
     name: 'MiniMax Video-01 – Text → Video',

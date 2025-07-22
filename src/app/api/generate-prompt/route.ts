@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/next-auth'
+import { fetchWithRetry } from '@/lib/fetch-with-retry'
 
 // POST /api/generate-prompt
 export async function POST() {
@@ -10,7 +11,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const response = await fetch('https://api.together.xyz/v1/chat/completions', {
+    const response = await fetchWithRetry('https://api.together.xyz/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.TOGETHER_API_KEY}`,
@@ -51,11 +52,13 @@ export async function POST() {
       prompt: generatedPrompt
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Generate prompt error:', error)
+    const message = typeof error?.message === 'string' ? error.message : ''
+    const serviceUnavailable = message.includes('status 503')
     return NextResponse.json(
       { error: 'Failed to generate prompt' },
-      { status: 500 }
+      { status: serviceUnavailable ? 503 : 500 }
     )
   }
 } 
