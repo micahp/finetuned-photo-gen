@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect } from 'react'
 import { useFormContext } from 'react-hook-form'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
@@ -22,7 +22,7 @@ interface Props {
  * created in the parent page. All fields are registered in that parent form.
  */
 const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
-  const { control } = useFormContext()
+  const { control, watch, setValue } = useFormContext()
 
   // --------------------------------------------------------------
   // Capability detection driven by `fal_input_groups.json` mapping
@@ -50,6 +50,18 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
   const supportsExtend = !!capability?.extend
   const supportsFirstLastFrame = !!capability?.firstLastFrame
   const supportsResolution = !!selectedModel?.resolutionMultipliers
+
+  // Auto-select first resolution when applicable
+  useEffect(() => {
+    if (!supportsResolution) return
+    const current = watch('resolution') as string
+    if (current) return
+    if (selectedModel && selectedModel.resolutionMultipliers) {
+      const firstRes = Object.keys(selectedModel.resolutionMultipliers)[0]
+      if (firstRes) setValue('resolution', firstRes)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supportsResolution, selectedModel])
 
   return (
     <div className="space-y-4">
@@ -170,12 +182,11 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
             <FormItem>
               <FormLabel>Resolution</FormLabel>
               <FormControl>
-                <Select value={field.value || ''} onValueChange={field.onChange}>
+                <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Auto (default)" />
+                    <SelectValue placeholder="Select resolution" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Auto (default)</SelectItem>
                     {selectedModel &&
                       Object.keys(selectedModel.resolutionMultipliers || {}).map((res) => (
                         <SelectItem key={res} value={res}>{res}</SelectItem>

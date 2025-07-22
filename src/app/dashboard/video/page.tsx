@@ -166,6 +166,11 @@ export default function VideoGenerationPage() {
     'image-to-video': seedanceProModel?.id || cheapestImageModel?.id || '',
   }
 
+  const defaultSelectedModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === defaultModelIdByMode['text-to-video'])
+  const baselineResolution = defaultSelectedModel && defaultSelectedModel.resolutionMultipliers
+    ? Object.keys(defaultSelectedModel.resolutionMultipliers)[0]
+    : ''
+
   const form = useForm<VideoGenerationFormData>({
     resolver: zodResolver(videoGenerationSchema),
     defaultValues: {
@@ -182,7 +187,7 @@ export default function VideoGenerationPage() {
       extend: false,
       firstFrame: '',
       lastFrame: '',
-      resolution: '',
+      resolution: baselineResolution,
     },
   })
 
