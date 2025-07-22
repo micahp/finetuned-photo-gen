@@ -52,7 +52,11 @@ describe('VideoPlayerWithFallback', () => {
       jest.advanceTimersByTime(5000)
     })
 
-    // Allow Promise queue to flush
+    // first attempt failed; advance again to simulate next poll
+    await act(() => {
+      jest.advanceTimersByTime(5000)
+    })
+
     await waitFor(() => {
       expect(videoEl.src).toBe(video.videoUrl)
     })
