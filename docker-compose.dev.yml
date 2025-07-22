@@ -9,6 +9,10 @@ services:
     build:
       context: .
       target: dev  # Uses the dev stage from Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY}
+        HTTPS_PROXY: ${HTTPS_PROXY}
+        NO_PROXY: ${NO_PROXY}
     ports:
       - "3000:3000"  # Dev port
     env_file:
@@ -16,8 +20,8 @@ services:
       - .env
     environment:
       - NODE_ENV=development
-      # Use DATABASE_URL from local .env so it propagates unchanged into container
-      - DATABASE_URL=${DATABASE_URL}
+      # Override DB host to talk to host machine Postgres
+      - DATABASE_URL=postgresql://micah:${POSTGRES_PASSWORD}@host.docker.internal:5432/finetuned_image_gen?schema=public
       - NEXTAUTH_URL=http://localhost:3000
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-dev-secret-key}
       - NEXT_PUBLIC_GA_TRACKING_ID=${NEXT_PUBLIC_GA_TRACKING_ID:-}

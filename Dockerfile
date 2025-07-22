@@ -16,6 +16,11 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
+# Improve npm resilience against transient network failures
+RUN npm config set fetch-retries 4 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000
+
 # Dependencies stage - production only
 FROM base AS deps
 
@@ -33,7 +38,10 @@ FROM base AS build-deps
 COPY package.json package-lock.json* ./
 
 # Install ALL dependencies (including devDependencies for build process)
-RUN npm ci --no-audit --no-fund --legacy-peer-deps && \
+RUN apk add --no-cache curl && \
+    echo "Testing TLS handshake with registry.npmjs.org…" && \
+    curl -I https://registry.npmjs.org/ --max-time 10 && \
+    npm ci --no-audit --no-fund --legacy-peer-deps && \
     npm cache clean --force
 
 # Development stage (unchanged for compatibility)
