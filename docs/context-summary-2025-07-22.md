@@ -19,6 +19,7 @@
 - [x] Add detailed timing logs for video generation pipeline (queue submit latency, Fal completion, download time, R2 upload/propagation) to diagnose end-to-end delay.
 - [x] Expose fallbackUrl (original Fal video link) from backend APIs and include it in client payloads.
 - [x] Update dashboard player to load fallbackUrl immediately, swap to Cloudflare URL once available, and keep progress bar animating during polling.
+- [ ] Power generation progress bar with real-time Fal logs instead of synthetic random increments.
 - [ ] Generate/handle thumbnail fallback when Fal returns none and log occurrences.
 
 ### Low Priority
