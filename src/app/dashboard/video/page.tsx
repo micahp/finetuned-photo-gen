@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -44,6 +44,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AdvancedParametersForm from '@/components/video/AdvancedParametersForm'
+import inputGroups from '@/data/fal_input_groups.json'
 
 const videoGenerationSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
@@ -192,6 +193,16 @@ export default function VideoGenerationPage() {
   })
 
   const selectedModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === form.watch('modelId'))
+
+  // Determine if the selected model actually supports any advanced parameters.
+  const hasAdvancedSettings = useMemo(() => {
+    if (!selectedModel) return false
+    const record = (inputGroups as Record<string, { advanced: string[] }>)[selectedModel.id]
+    const hasAdvancedParams = record && record.advanced && record.advanced.length > 0
+    const hasResolution = !!selectedModel.resolutionMultipliers
+    return hasAdvancedParams || hasResolution
+  }, [selectedModel])
+
   const watchedDuration = form.watch('duration')
   const watchedResolution = form.watch('resolution')
 
@@ -580,26 +591,55 @@ export default function VideoGenerationPage() {
                                         <SelectItem key={model.id} value={model.id}>
                                           <div className="flex items-center gap-2">
                                             <span className="font-medium">{model.name}</span>
-                                            <div className="flex items-center gap-1">
-                                              {/* Lip-sync / Audio support */}
-                                              {model.hasAudio && (
-                                                <Volume2 className="h-3 w-3 text-green-600" />
-                                              )}
-                                              {/* Key-frame / Start-End Frames support */}
-                                              {model.falModelId?.includes('wan-flf2v') && (
-                                                <Film className="h-3 w-3 text-purple-600" />
-                                              )}
-                                              {/* Effects parameter support */}
-                                              {model.falModelId?.includes('pixverse') && (
-                                                <Sparkles className="h-3 w-3 text-pink-600" />
-                                              )}
-                                              {/* Kling variants */}
-                                              {model.falModelId?.includes('kling-video') && (
-                                                <Clapperboard className="h-3 w-3 text-blue-600" />
-                                              )}
-                                              {/* Tier badge */}
-                                              {tierKey === 'premium' && <Crown className="h-3 w-3 text-yellow-500" />}
-                                            </div>
+                                            <TooltipProvider delayDuration={200}>
+                                              <div className="flex items-center gap-1">
+                                                {/* Lip-sync / Audio support */}
+                                                {model.hasAudio && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Volume2 className="h-3 w-3 text-green-600" aria-label="Audio Lip-sync" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Audio&nbsp;Lip-sync</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                {/* Key-frame / Start-End Frames support */}
+                                                {model.falModelId?.includes('wan-flf2v') && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Film className="h-3 w-3 text-purple-600" aria-label="Start & End Frames" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Start & End Frames</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                {/* Effects parameter support */}
+                                                {model.falModelId?.includes('pixverse') && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Sparkles className="h-3 w-3 text-pink-600" aria-label="Effects Param" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Effects Parameter</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                {/* Kling variants */}
+                                                {model.falModelId?.includes('kling-video') && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Clapperboard className="h-3 w-3 text-blue-600" aria-label="Kling Extras" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Kling-specific Features</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                {/* Tier badge */}
+                                                {tierKey === 'premium' && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Crown className="h-3 w-3 text-yellow-500" aria-label="Premium Tier" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Premium Tier</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                              </div>
+                                            </TooltipProvider>
                                           </div>
                                         </SelectItem>
                                       ))}
@@ -834,29 +874,31 @@ export default function VideoGenerationPage() {
                       />
 
                       {/* Advanced Settings */}
-                      <div className="border-t border-gray-200 pt-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-semibold text-gray-900">Advanced Settings</h3>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="flex items-center gap-1"
-                            onClick={() => setShowAdvanced(!showAdvanced)}
-                          >
-                            <span className="font-medium">More</span>
-                            {showAdvanced ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
+                      {hasAdvancedSettings && (
+                        <div className="border-t border-gray-200 pt-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-gray-900">Advanced Settings</h3>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="flex items-center gap-1"
+                              onClick={() => setShowAdvanced(!showAdvanced)}
+                            >
+                              <span className="font-medium">More</span>
+                              {showAdvanced ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
 
-                        {showAdvanced && (
-                          <AdvancedParametersForm selectedModel={selectedModel} />
-                        )}
-                      </div>
+                          {showAdvanced && (
+                            <AdvancedParametersForm selectedModel={selectedModel} />
+                          )}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 

@@ -51,6 +51,13 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
   const supportsFirstLastFrame = !!capability?.firstLastFrame
   const supportsResolution = !!selectedModel?.resolutionMultipliers
 
+  // If none of the advanced options are supported, render nothing so parent can hide section.
+  const hasAnyAdvanced = supportsNegativePrompt || supportsEnhancePrompt || supportsEffects || supportsExtend || supportsFirstLastFrame || supportsResolution
+
+  if (!hasAnyAdvanced) {
+    return null
+  }
+
   // Ensure the selected resolution is always valid for the current model
   useEffect(() => {
     if (!supportsResolution) return
