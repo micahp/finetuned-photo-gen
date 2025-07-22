@@ -431,6 +431,7 @@ export async function POST(request: NextRequest) {
         width: videoResult.width,
         height: videoResult.height,
         fileSize: videoResult.fileSize,
+        fallbackUrl: videoResult.fallbackUrl,
         creditsUsed: estimatedCost,
         generationDuration,
         createdAt: generatedVideo.createdAt

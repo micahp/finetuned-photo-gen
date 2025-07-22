@@ -37,6 +37,8 @@ export interface VideoGenerationResponse {
   height?: number
   fps?: number
   error?: string
+  /** Original Fal.ai video URL that can be streamed while the Cloudflare copy is propagating */
+  fallbackUrl?: string
 }
 
 export class FalVideoService {
@@ -283,6 +285,7 @@ export class FalVideoService {
                 id: result.request_id || `fal_seedance_${Date.now()}`,
                 status: 'completed',
                 videoUrl: processedVideo.videoUrl,
+                fallbackUrl: videoUrl,
                 thumbnailUrl: processedVideo.thumbnailUrl,
                 duration: duration,
                 fileSize: processedVideo.fileSize,
@@ -432,6 +435,7 @@ export class FalVideoService {
                 id: result.request_id || `fal_video_${Date.now()}`,
                 status: 'completed',
                 videoUrl: processedVideo.videoUrl,
+                fallbackUrl: videoUrl,
                 thumbnailUrl: processedVideo.thumbnailUrl,
                 duration: duration,
                 fileSize: processedVideo.fileSize,
@@ -484,8 +488,15 @@ export class FalVideoService {
     try {
       console.log('🔄 Processing and uploading video to CloudFlare R2...')
 
-      // Download video
+      // Download video with extra diagnostics
       const videoResponse = await fetch(videoUrl)
+      console.log('📥 VIDEO_FETCH_HEADERS', {
+        status: videoResponse.status,
+        contentType: videoResponse.headers.get('content-type'),
+        contentLength: videoResponse.headers.get('content-length'),
+        url: videoUrl
+      })
+
       if (!videoResponse.ok) {
         throw new Error(`Failed to download video: ${videoResponse.status}`)
       }
@@ -493,8 +504,16 @@ export class FalVideoService {
       const videoBuffer = Buffer.from(await videoResponse.arrayBuffer())
       const fileSize = videoBuffer.length
 
+      // Quick sanity-check on header bytes (should include ftyp mp4)
+      const headerHex = videoBuffer.subarray(0, 12).toString('hex')
+      console.log('📑 VIDEO_HEADER_HEX', headerHex)
+
+      if (fileSize < 250_000) {
+        console.warn('⚠️ VIDEO_SUSPICIOUS_SIZE', fileSize)
+      }
+
       console.log('📊 Video downloaded:', {
-        size: (fileSize / 1024 / 1024).toFixed(2) + 'MB',
+        sizeMB: (fileSize / 1024 / 1024).toFixed(2),
         filename
       })
 
@@ -532,6 +551,20 @@ export class FalVideoService {
         } catch (thumbnailError) {
           console.warn('⚠️ Failed to process thumbnail:', thumbnailError)
         }
+      }
+
+      console.log('✅ File uploaded to Cloudflare R2:', uploadResult.url)
+
+      // Fetch the HEAD to verify metadata immediately
+      try {
+        const headResp = await fetch(uploadResult.url, { method: 'HEAD' })
+        console.log('📄 R2_HEAD_METADATA', {
+          status: headResp.status,
+          contentType: headResp.headers.get('content-type'),
+          contentLength: headResp.headers.get('content-length')
+        })
+      } catch (headErr) {
+        console.warn('⚠️ R2_HEAD_FAILED', headErr)
       }
 
       console.log('✅ Video uploaded to CloudFlare R2:', {
@@ -644,6 +677,7 @@ export class FalVideoService {
             id: jobId,
             status: 'completed',
             videoUrl: processedVideo.videoUrl,
+            fallbackUrl: videoUrl,
             thumbnailUrl: processedVideo.thumbnailUrl,
             fileSize: processedVideo.fileSize
           }

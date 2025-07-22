@@ -87,6 +87,7 @@ interface GeneratedVideo {
   fps: number
   fileSize?: number
   createdAt: string
+  fallbackUrl?: string
 }
 
 // VideoModel interface imported from video-models.ts
@@ -446,7 +447,7 @@ export default function VideoGenerationPage() {
       // eslint-disable-next-line no-console
       console.log('VIDEO_GEN_API_RESPONSE_STATUS', response.status)
 
-      clearInterval(progressInterval)
+      // Keep progress bar running; will clear when polling detects completion
 
       if (!response.ok) {
         const errorData = await response.json()
@@ -1013,47 +1014,75 @@ export default function VideoGenerationPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {generatedVideo && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5" />
-                  Generated Video
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <video 
-                  src={generatedVideo.videoUrl}
-                  controls
-                  poster={generatedVideo.thumbnailUrl}
-                  className="w-full h-auto rounded-lg"
-                >
-                  Your browser does not support the video tag.
-                </video>
-
-                {/* Debug: display video URL */}
-                <p className="break-all text-xs text-gray-500 select-all">
-                  {generatedVideo.videoUrl}
-                </p>
-                
-                <div className="flex gap-2">
-                  <Button size="sm" className="flex-1" asChild>
-                    <a href={generatedVideo.videoUrl} download>
-                      <Download className="mr-2 h-4 w-4" />
-                      Download
-                    </a>
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/dashboard/gallery">
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Gallery
-                    </Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <VideoPlayerWithFallback video={generatedVideo} />
           )}
         </div>
       </div>
     </div>
+  )
+} 
+
+// ---------- helper component ----------
+
+function VideoPlayerWithFallback({ video }: { video: GeneratedVideo }) {
+  const [src, setSrc] = useState<string>(video.fallbackUrl || video.videoUrl)
+
+  useEffect(() => {
+    setSrc(video.fallbackUrl || video.videoUrl)
+
+    if (video.fallbackUrl && video.videoUrl && video.videoUrl !== video.fallbackUrl) {
+      const interval = setInterval(async () => {
+        try {
+          const head = await fetch(video.videoUrl, { method: 'HEAD' })
+          if (head.ok) {
+            setSrc(video.videoUrl)
+            clearInterval(interval)
+          }
+        } catch (_) {
+          // ignore errors until available
+        }
+      }, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [video])
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5" />
+          Generated Video
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <video
+          src={src}
+          controls
+          poster={video.thumbnailUrl}
+          className="w-full h-auto rounded-lg"
+        >
+          Your browser does not support the video tag.
+        </video>
+
+        <p className="break-all text-xs text-gray-500 select-all">
+          {src}
+        </p>
+
+        <div className="flex gap-2">
+          <Button size="sm" className="flex-1" asChild>
+            <a href={video.videoUrl} download>
+              <Download className="mr-2 h-4 w-4" />
+              Download
+            </a>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/dashboard/gallery">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Gallery
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 } 

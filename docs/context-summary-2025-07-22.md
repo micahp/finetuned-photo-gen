@@ -14,6 +14,10 @@
 
 ## Open Tasks (derived from Decision follow-ups)
 
+- [ ] Add detailed timing logs for video generation pipeline (queue submit latency, Fal completion, download time, R2 upload/propagation) to diagnose end-to-end delay.
+- [ ] Expose fallbackUrl (original Fal video link) from backend APIs and include it in client payloads.
+- [ ] Update dashboard player to load fallbackUrl immediately, swap to Cloudflare URL once available, and keep progress bar animating during polling.
+- [ ] Generate/handle thumbnail fallback when Fal returns none and log occurrences.
 - [ ] Update advanced video settings (see `docs/video-advanced-settings-audit-2025-07-22.md`). 
 - [ ] Implement dynamic backend estimation using historical job durations (`decisions/video-generation-time-metadata-2025-07-22.md`).
 - [ ] Remove verbose watermark debug logs once visibility confirmed (`decisions/watermark-visibility-fix-2025-07-22.md`).
