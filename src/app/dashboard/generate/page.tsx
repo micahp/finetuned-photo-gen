@@ -81,6 +81,30 @@ export default function GeneratePage() {
   const [_loadingModels, _setLoadingModels] = useState(true)
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false)
   const [generatingPrompt, setGeneratingPrompt] = useState(false)
+  // Track remaining free generations for today (null = unknown/loading)
+  const [freeRemaining, setFreeRemaining] = useState<number | null>(null)
+
+  // Fetch remaining free allowance once per session
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    const fetchAllowance = async () => {
+      try {
+        const res = await fetch('/api/free-generation/remaining')
+        if (!res.ok) throw new Error('Failed to fetch')
+        const data = await res.json()
+        if (typeof data.remaining === 'number') {
+          setFreeRemaining(data.remaining)
+        } else {
+          setFreeRemaining(0)
+        }
+      } catch {
+        setFreeRemaining(0) // fallback to 0 on error
+      }
+    }
+
+    fetchAllowance()
+  }, [session?.user?.id])
 
   // Keep local creditsRemaining in sync with session changes
   useEffect(() => {
@@ -263,7 +287,11 @@ export default function GeneratePage() {
   }
 
   const onSubmit = async (data: GenerateFormData) => {
-    if (creditsRemaining < CREDIT_COSTS.photo) {
+    const selectedBaseModel = baseModels.find((m) => m.id === data.modelId)
+    const isFreeModelSelected = selectedBaseModel?.free ?? false
+    const hasFreeAllowance = isFreeModelSelected && (freeRemaining ?? 0) > 0
+
+    if (!hasFreeAllowance && creditsRemaining < CREDIT_COSTS.photo) {
       setError('Insufficient credits. Please upgrade your plan.')
       return
     }
@@ -905,25 +933,37 @@ export default function GeneratePage() {
                 </CardContent>
               </Card>
 
-              <Button 
-                type="submit" 
-                disabled={isGenerating || creditsRemaining < CREDIT_COSTS.photo} 
-                className="w-full"
-                size="lg"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Generate Image ({CREDIT_COSTS.photo} credits)
-                  </>
-                )}
-              </Button>
+              {(() => {
+                const selectedBaseModel = baseModels.find((m) => m.id === form.watch('modelId'))
+                const isFreeModelSelected = selectedBaseModel?.free ?? false
+                const hasFreeAllowance = isFreeModelSelected && (freeRemaining ?? 0) > 0
+                const shouldDisable = isGenerating || (!hasFreeAllowance && creditsRemaining < CREDIT_COSTS.photo)
 
+                return (
+                  <Button
+                    type="submit"
+                    disabled={shouldDisable}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Generate Image ({CREDIT_COSTS.photo} credits)
+                        {hasFreeAllowance && creditsRemaining < CREDIT_COSTS.photo && (
+                          <span className="ml-2 text-xs text-green-600">Free!</span>
+                        )}
+                      </>
+                    )}
+                  </Button>
+                )
+              })()}
+               
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
                   {typeof error === 'string' ? error : error}
