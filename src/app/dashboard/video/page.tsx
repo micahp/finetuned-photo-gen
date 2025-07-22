@@ -1030,20 +1030,31 @@ function VideoPlayerWithFallback({ video }: { video: GeneratedVideo }) {
   useEffect(() => {
     setSrc(video.fallbackUrl || video.videoUrl)
 
-    if (video.fallbackUrl && video.videoUrl && video.videoUrl !== video.fallbackUrl) {
-      const interval = setInterval(async () => {
+    const checkCloudflareReady = async (): Promise<boolean> => {
+      if (video.videoUrl && video.videoUrl !== video.fallbackUrl) {
         try {
           const head = await fetch(video.videoUrl, { method: 'HEAD' })
           if (head.ok) {
             setSrc(video.videoUrl)
-            clearInterval(interval)
+            return true
           }
-        } catch (_) {
-          // ignore errors until available
+        } catch {
+          /* swallow */
         }
-      }, 5000)
-      return () => clearInterval(interval)
+      }
+      return false
     }
+
+    // Run an immediate check – in many cases propagation is already done
+    checkCloudflareReady()
+
+    // Continue polling every 2 s until Cloudflare copy is reachable
+    const interval = setInterval(async () => {
+      const ready = await checkCloudflareReady()
+      if (ready) clearInterval(interval)
+    }, 2000)
+
+    return () => clearInterval(interval)
   }, [video])
 
   return (
