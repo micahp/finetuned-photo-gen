@@ -51,12 +51,20 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
   const supportsFirstLastFrame = !!capability?.firstLastFrame
   const supportsResolution = !!selectedModel?.resolutionMultipliers
 
-  // Auto-select first resolution when applicable
+  // Ensure the selected resolution is always valid for the current model
   useEffect(() => {
     if (!supportsResolution) return
+
     const current = watch('resolution') as string
-    if (current) return
-    if (selectedModel && selectedModel.resolutionMultipliers) {
+    const isStillValid =
+      current &&
+      selectedModel?.resolutionMultipliers &&
+      current in selectedModel.resolutionMultipliers
+
+    // Keep current value only if it is actually offered by the model
+    if (isStillValid) return
+
+    if (selectedModel?.resolutionMultipliers) {
       const firstRes = Object.keys(selectedModel.resolutionMultipliers)[0]
       if (firstRes) setValue('resolution', firstRes)
     }
@@ -188,8 +196,8 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
                   </SelectTrigger>
                   <SelectContent>
                     {selectedModel &&
-                      Object.keys(selectedModel.resolutionMultipliers || {}).map((res) => (
-                        <SelectItem key={res} value={res}>{res}</SelectItem>
+                      Object.keys(selectedModel.resolutionMultipliers || {}).map((res, idx) => (
+                        <SelectItem key={res} value={res}>{res}{idx === 0 ? ' (default)' : ''}</SelectItem>
                       ))}
                   </SelectContent>
                 </Select>

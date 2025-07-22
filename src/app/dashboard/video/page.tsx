@@ -232,6 +232,22 @@ export default function VideoGenerationPage() {
     }
   }, [selectedModel, form])
 
+  useEffect(() => {
+    if (selectedModel?.resolutionMultipliers) {
+      const keys = Object.keys(selectedModel.resolutionMultipliers)
+      if (keys.length === 0) return
+      const current = form.getValues('resolution')
+      if (!current || !(current in selectedModel.resolutionMultipliers)) {
+        form.setValue('resolution', keys[0])
+      }
+    } else {
+      // Clear resolution if model has none
+      if (form.getValues('resolution')) {
+        form.setValue('resolution', '')
+      }
+    }
+  }, [selectedModel])
+
   // Show upgrade prompt while session is loading for non-premium users
   if (session && !isDev && !hasPremiumAccess) {
     return (
@@ -741,7 +757,7 @@ export default function VideoGenerationPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Video Parameters */}
+                  {/* Video Parameters & Advanced Settings */}
                   <Card>
                     <CardHeader>
                       <CardTitle>Video Settings</CardTitle>
@@ -816,33 +832,32 @@ export default function VideoGenerationPage() {
                           </FormItem>
                         )}
                       />
-                    </CardContent>
-                  </Card>
 
-                  {/* Advanced Parameters Accordion */}
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between py-3">
-                      <CardTitle>Additional Settings</CardTitle>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="flex items-center gap-1"
-                        onClick={() => setShowAdvanced(!showAdvanced)}
-                      >
-                        <span className="font-medium">More</span>
-                        {showAdvanced ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
+                      {/* Advanced Settings */}
+                      <div className="border-t border-gray-200 pt-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-gray-900">Advanced Settings</h3>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="flex items-center gap-1"
+                            onClick={() => setShowAdvanced(!showAdvanced)}
+                          >
+                            <span className="font-medium">More</span>
+                            {showAdvanced ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+
+                        {showAdvanced && (
+                          <AdvancedParametersForm selectedModel={selectedModel} />
                         )}
-                      </Button>
-                    </CardHeader>
-                    {showAdvanced && (
-                      <CardContent className="pt-0">
-                        <AdvancedParametersForm selectedModel={selectedModel} />
-                      </CardContent>
-                    )}
+                      </div>
+                    </CardContent>
                   </Card>
 
                   {/* Cost Estimation */}

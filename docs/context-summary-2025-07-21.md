@@ -8,7 +8,9 @@ This document rolls up **all work completed on July-21** and revises the roadmap
 * **Advanced Parameters UI** – see `decisions/phase-3b-advanced-params-ui-2025-07-21.md`.
 * **Video Pricing Adjustment** – see `decisions/video-pricing-adjustment-2025-07-21.md`.
 * **Env-Driven Pricing Overrides & Input Groups UI** – see `decisions/env-pricing-overrides-input-groups-ui-2025-07-21.md`.  
+* **Resolution Default Fix** – see `decisions/resolution-default-fix-2025-07-22.md`.  
 * **Video UI Refinements** – see `decisions/video-ui-refinements-2025-07-22.md`.  
+- **Free Zero-Credit Daily Generations** – see `decisions/free-generation-zero-credit-2025-07-22.md`.
 
 ---
 
