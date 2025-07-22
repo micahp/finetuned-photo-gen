@@ -13,6 +13,7 @@ This document rolls up **all work completed on July-21** and revises the roadmap
 - **Free Zero-Credit Daily Generations** – see `decisions/free-generation-zero-credit-2025-07-22.md`.
 * **Watermark Visibility Fix** – see `decisions/watermark-visibility-fix-2025-07-22.md`.
 * **Video-UI Tooltips & Conditional Advanced Section** – see `decisions/video-ui-tooltips-conditional-advanced-2025-07-22.md`.
+* **Video Tab Always Visible** – see `decisions/video-tab-always-visible-2025-07-22.md`.
 
 ---
 
