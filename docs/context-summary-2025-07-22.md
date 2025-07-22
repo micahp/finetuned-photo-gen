@@ -10,6 +10,7 @@
 - **Completed full-stack security audit** and published findings (see `docs/security-audit-2025-07-22.md`).
 - Upgraded LTX video models to v0.9.8 (image, text & multiconditioning), renamed IDs, unified cost at 5 credits/s, and lowered Stable Video Diffusion i2v rate to 2 credits/s (see `decisions/ltx-video-model-upgrade-2025-07-22.md`).
 - Added guide to preventing gender flips in Flux LoRA training (see `docs/flux-lora-gender-mitigation.md`). 
+- Fixed mismatch between video generation API response (`url`) and UI expectation (`videoUrl`), restoring video playback in dashboard (see `decisions/video-api-response-field-fix-2025-07-22.md`). 
 
 ## Open Tasks (derived from Decision follow-ups)
 

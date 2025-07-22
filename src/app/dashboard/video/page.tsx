@@ -47,7 +47,8 @@ import AdvancedParametersForm from '@/components/video/AdvancedParametersForm'
 import inputGroups from '@/data/fal_input_groups.json'
 
 const videoGenerationSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
+  // Prompt is required only for text-to-video. For image-to-video we allow it to be blank.
+  prompt: z.string().max(2000, 'Prompt too long').optional(),
   modelId: z.string().min(1, 'Model is required'),
   duration: z.number().min(3).max(60),
   aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3']),
@@ -63,8 +64,14 @@ const videoGenerationSchema = z.object({
   enhancePrompt: z.boolean().optional(),
   effects: z.string().optional(),
   extend: z.boolean().optional(),
-  firstFrame: z.string().url().optional(),
-  lastFrame: z.string().url().optional(),
+  firstFrame: z
+    .preprocess(val => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+      z.string().url())
+    .optional(),
+  lastFrame: z
+    .preprocess(val => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+      z.string().url())
+    .optional(),
   resolution: z.string().optional(),
 })
 
@@ -72,7 +79,7 @@ type VideoGenerationFormData = z.infer<typeof videoGenerationSchema>
 
 interface GeneratedVideo {
   id: string
-  url: string
+  videoUrl: string
   thumbnailUrl?: string
   prompt: string
   duration: number
@@ -186,8 +193,8 @@ export default function VideoGenerationPage() {
       enhancePrompt: false,
       effects: '',
       extend: false,
-      firstFrame: '',
-      lastFrame: '',
+      firstFrame: undefined,
+      lastFrame: undefined,
       resolution: baselineResolution,
     },
   })
@@ -341,7 +348,23 @@ export default function VideoGenerationPage() {
     }
   }
 
+  const handleSubmitInvalid = (errors: any) => {
+    /* eslint-disable no-console */
+    console.error('❌ VIDEO_GEN_FORM_INVALID', errors)
+    /* eslint-enable no-console */
+    setError('Please fix the highlighted errors before generating the video.')
+  }
+
   const onSubmit = async (data: VideoGenerationFormData) => {
+    /* eslint-disable no-console */
+    console.log('▶️ VIDEO_GEN_FORM_SUBMIT', {
+      activeMode,
+      data,
+      hasImage: !!data.imageFile,
+      creditsRemaining,
+      estimatedCost,
+    })
+    /* eslint-enable no-console */
     try {
       setIsGenerating(true)
       setError(null)
@@ -386,7 +409,7 @@ export default function VideoGenerationPage() {
 
       // Prepare form data for API call
       const formData = new FormData()
-      formData.append('prompt', data.prompt)
+      formData.append('prompt', data.prompt || '') // Ensure prompt is always sent, even if empty
       formData.append('modelId', data.modelId)
       formData.append('duration', data.duration.toString())
       formData.append('aspectRatio', data.aspectRatio)
@@ -500,6 +523,14 @@ export default function VideoGenerationPage() {
     }, 300)
   }
 
+  // Add effect to log URL when video changes
+  useEffect(() => {
+    if (generatedVideo) {
+      // eslint-disable-next-line no-console
+      console.log('DISPLAYING_VIDEO_URL', generatedVideo.videoUrl)
+    }
+  }, [generatedVideo])
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
@@ -520,7 +551,7 @@ export default function VideoGenerationPage() {
 
             <TabsContent value={activeMode} asChild>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form onSubmit={form.handleSubmit(onSubmit, handleSubmitInvalid)} className="space-y-6">
                   {/* Model Selection */}
                   <Card>
                     <CardHeader>
@@ -991,18 +1022,25 @@ export default function VideoGenerationPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <video 
-                  src={generatedVideo.url}
+                  src={generatedVideo.videoUrl}
                   controls
                   poster={generatedVideo.thumbnailUrl}
                   className="w-full h-auto rounded-lg"
                 >
                   Your browser does not support the video tag.
                 </video>
+
+                {/* Debug: display video URL */}
+                <p className="break-all text-xs text-gray-500 select-all">
+                  {generatedVideo.videoUrl}
+                </p>
                 
                 <div className="flex gap-2">
-                  <Button size="sm" className="flex-1">
-                    <Download className="mr-2 h-4 w-4" />
-                    Download
+                  <Button size="sm" className="flex-1" asChild>
+                    <a href={generatedVideo.videoUrl} download>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download
+                    </a>
                   </Button>
                   <Button variant="outline" size="sm" asChild>
                     <Link href="/dashboard/gallery">
