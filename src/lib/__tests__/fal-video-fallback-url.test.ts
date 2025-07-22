@@ -22,7 +22,7 @@ describe('FalVideoService – fallbackUrl', () => {
 
     const res = await service.generateVideo({
       prompt: 'hello',
-      modelId: 'seedance-lite-text',
+      modelId: 'stable-video-diffusion',
       duration: 3,
     })
 
