@@ -28,6 +28,7 @@ export interface VideoModel {
   baselineResolution?: string
   /** Resolution-specific cost multipliers relative to the baseline costPerSecond */
   resolutionMultipliers?: Record<string, number>
+  avgGenerationTimeMinutes?: number
 }
 
 /**
@@ -374,6 +375,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 4 },
     durationOptions: [5],
     hasAudio: false,
+    avgGenerationTimeMinutes: 1,
   }, // We have to add resolution to our pricing for this model 
 
   {
@@ -390,6 +392,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
     hasAudio: false,
+    avgGenerationTimeMinutes: 1,
   },
   // We have to add resolution to our pricing for this model 
   
@@ -409,6 +412,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
     hasAudio: false,
+    avgGenerationTimeMinutes: 1,
   }, // We have to add resolution to our pricing for this model 
   {
     id: 'pixverse-v4.5-effects',
@@ -425,6 +429,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
     hasAudio: false,
+    avgGenerationTimeMinutes: 1,
   }, // We have to add resolution to our pricing for this model 
 
   {
@@ -442,6 +447,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
     hasAudio: false,
+    avgGenerationTimeMinutes: 1,
   }, // We have to add resolution to our pricing for this model 
 
   {
@@ -455,20 +461,26 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
     hasAudio: false,
-  },
+    avgGenerationTimeMinutes: 4,
+  }, // For a video generation, your request will cost $0.8 at 512p resolution and 2.4$ at 720p resolution.
+  // We were trying to add hunyuan default video model but for some reason got this instead
+  // other model IDs we wan to support now:
+  // fal-ai/hunyuan-video,  fal-ai/hunyuan-video-image-to-video, 
+  // And eventually: fal-ai/hunyuan-video-img2vid-lora, fal-ai/hunyuan-video/video-to-video
 
-  {
-    id: 'hunyuan-avatar',
-    name: 'Hunyuan Avatar – Image → Video',
-    falModelId: 'fal-ai/hunyuan-avatar',
-    mode: 'image-to-video',
-    maxDuration: 5,
-    costPerSecond: 35, // Fal cost 28¢/s, markup ×1.25 → 35 credits
-    supportedAspectRatios: ['1:1', '9:16'],
-    defaultParams: { fps: 24, motionLevel: 5 },
-    durationOptions: [5],
-    hasAudio: false,
-  },
+
+  // {
+  //   id: 'hunyuan-avatar',
+  //   name: 'Hunyuan Avatar – Image → Video',
+  //   falModelId: 'fal-ai/hunyuan-avatar',
+  //   mode: 'image-to-video',
+  //   maxDuration: 5,
+  //   costPerSecond: 35, // Fal cost 28¢/s, markup ×1.25 → 35 credits
+  //   supportedAspectRatios: ['1:1', '9:16'],
+  //   defaultParams: { fps: 24, motionLevel: 5 },
+  //   durationOptions: [5],
+  //   hasAudio: false,
+  // },
 
   {
     id: 'magi-1',
@@ -481,7 +493,10 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 6 },
     durationOptions: [4, 6, 8, 10],
     hasAudio: false,
-  },
+    avgGenerationTimeMinutes: 9,
+  }, // Your request will cost $0.80 to generate one four-second video. For $1 you can run this model approximately 1 time.
+  // Additional seconds will cost $0.20 each, calculated at 24 frames per second.
+  // Additional inference steps above 16 incur a 1/16 multiplier each, such that your total cost will be multiplied x2 at 32 steps, x3 at 48 and x4 at 64.
 
   /* ----------------------- Newly Added Fal.ai Endpoints ----------------------- */
   {
@@ -630,18 +645,18 @@ export const VIDEO_MODELS: VideoModel[] = [
     durationOptions: [5],
     hasAudio: false,
   },
-  {
-    id: 'ltx-13b-dev-extend',
-    name: 'LTX Video 13B Dev Extend – Video → Video',
-    falModelId: 'fal-ai/ltx-video-13b-dev/extend',
-    mode: 'image-to-video',
-    maxDuration: 5,
-    costPerSecond: 2,
-    supportedAspectRatios: ['16:9', '9:16', '1:1'],
-    defaultParams: { fps: 24, motionLevel: 4 },
-    durationOptions: [5],
-    hasAudio: false,
-  },
+  // {
+  //   id: 'ltx-13b-dev-extend',
+  //   name: 'LTX Video 13B Dev Extend – Video → Video',
+  //   falModelId: 'fal-ai/ltx-video-13b-dev/extend',
+  //   mode: 'video-to-video',
+  //   maxDuration: 5,
+  //   costPerSecond: 2,
+  //   supportedAspectRatios: ['16:9', '9:16', '1:1'],
+  //   defaultParams: { fps: 24, motionLevel: 4 },
+  //   durationOptions: [5],
+  //   hasAudio: false,
+  // },
   {
     id: 'stable-video-diffusion-t2v',
     name: 'Stable Video Diffusion – Text → Video',
@@ -660,6 +675,8 @@ export const VIDEO_MODELS: VideoModel[] = [
   // We will implement this later. Free users will also be able to use this model. Paying users should never have a watermark on any generations. 
 
 ] 
+
+// LTX, Hunyuan, & Wan all support text to video & image to video loras which will be freaking huge to support. 
 
 // Runtime pricing overrides
 // Allow dynamic adjustment of video pricing without code changes.

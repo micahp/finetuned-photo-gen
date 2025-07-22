@@ -673,6 +673,11 @@ export default function VideoGenerationPage() {
                                 </div>
                               )}
                             </div>
+                            {selectedModel.avgGenerationTimeMinutes && (
+                              <div>
+                                <span className="font-medium">Gen&nbsp;Time:</span>{' '}≈{selectedModel.avgGenerationTimeMinutes}&nbsp;min
+                              </div>
+                            )}
                           </div>
                           {(selectedModel.hasAudio || selectedModel.falModelId.includes('kling-video')) && (
                             <div className="mt-3 space-y-1 text-sm">
