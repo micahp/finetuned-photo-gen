@@ -53,7 +53,10 @@ const videoGenerationSchema = z.object({
   fps: z.number().min(12).max(30),
   motionLevel: z.number().min(1).max(10),
   seed: z.number().optional(),
-  imageFile: z.instanceof(File).optional(),
+  // Use custom check to avoid ReferenceError in SSR where File is undefined
+  imageFile: z
+    .custom<File>(() => true)
+    .optional(),
   // Phase 3b advanced params
   negativePrompt: z.string().max(2000).optional(),
   enhancePrompt: z.boolean().optional(),
