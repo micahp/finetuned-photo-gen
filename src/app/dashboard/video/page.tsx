@@ -1086,3 +1086,5 @@ function VideoPlayerWithFallback({ video }: { video: GeneratedVideo }) {
     </Card>
   )
 } 
+
+export { VideoPlayerWithFallback } 
