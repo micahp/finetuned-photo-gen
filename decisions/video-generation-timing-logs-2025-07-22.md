@@ -18,3 +18,12 @@ Video generation latency was difficult to diagnose without granular measurements
 • Engineers can now correlate backend timings with dashboard progress bar behaviour and identify bottlenecks quickly.  
 • The logs lay groundwork for future ingestion into Grafana/Tempo without code changes (simply ship logs via Loki).  
 • Next step: instrument Fal completion timing once async job result is received (requires DB update path). 
+
+## Update – Immediate Cloudflare Swap (2025-07-22)
+
+The initial implementation used a fixed 5 s polling interval which resulted in up to ~10 s of extra latency before swapping from the Fal stream to the Cloudflare copy.  We have now:
+
+1. Added an **immediate HEAD check** when `VideoPlayerWithFallback` mounts, capturing the common case where propagation has already finished.
+2. Reduced the polling interval from **5 s → 2 s** for much snappier fallback removal when propagation is still in-flight.
+
+Result: The visible delay has dropped from ~10 s to <2 s in most cases, often instant.  Unit test updated to reflect the new timing logic. 
