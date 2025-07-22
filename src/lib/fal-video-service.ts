@@ -2,6 +2,8 @@ import { fal } from '@fal-ai/client'
 import { CloudStorageService } from './cloud-storage'
 import { ImageProcessingService } from './image-processing-service'
 import { VIDEO_MODELS, VideoModel } from './video-models'
+// Added for high-resolution timing of long-running operations
+import { performance } from 'perf_hooks'
 
 // Video generation parameters based on Fal.ai video models
 export interface VideoGenerationParams {
@@ -230,9 +232,11 @@ export class FalVideoService {
 
         // Prefer asynchronous queue submission (no inbound webhook required)
         try {
+          const queueStart = performance.now()
           const submitResult = await fal.queue.submit(model.falModelId, {
             input: requestPayload
           }) as any
+          this.logDuration('Fal queue.submit', queueStart)
 
           console.log('✅ Fal.ai async job submitted (queue):', {
             requestId: submitResult.request_id || submitResult.requestId,
@@ -381,9 +385,11 @@ export class FalVideoService {
 
         // Prefer asynchronous queue submission (no inbound webhook required)
         try {
+          const queueStart = performance.now()
           const submitResult = await fal.queue.submit(model.falModelId, {
             input: requestPayload
           }) as any
+          this.logDuration('Fal queue.submit', queueStart)
 
           console.log('✅ Fal.ai async job submitted (queue):', {
             requestId: submitResult.request_id || submitResult.requestId,
@@ -489,7 +495,9 @@ export class FalVideoService {
       console.log('🔄 Processing and uploading video to CloudFlare R2...')
 
       // Download video with extra diagnostics
+      const downloadStart = performance.now()
       const videoResponse = await fetch(videoUrl)
+      this.logDuration('Video download', downloadStart)
       console.log('📥 VIDEO_FETCH_HEADERS', {
         status: videoResponse.status,
         contentType: videoResponse.headers.get('content-type'),
@@ -518,12 +526,14 @@ export class FalVideoService {
       })
 
       // Upload to CloudFlare R2
+      const uploadStart = performance.now()
       const uploadResult = await this.cloudStorage.uploadFile(
         filename,
         videoBuffer,
         'video/mp4',
         { folder: 'videos' }
       )
+      this.logDuration('R2 video upload', uploadStart)
 
       if (!uploadResult.success || !uploadResult.url) {
         throw new Error(`Failed to upload video: ${uploadResult.error || 'No URL returned'}`)
@@ -557,7 +567,9 @@ export class FalVideoService {
 
       // Fetch the HEAD to verify metadata immediately
       try {
+        const headStart = performance.now()
         const headResp = await fetch(uploadResult.url, { method: 'HEAD' })
+        this.logDuration('R2 HEAD check', headStart)
         console.log('📄 R2_HEAD_METADATA', {
           status: headResp.status,
           contentType: headResp.headers.get('content-type'),
@@ -623,6 +635,23 @@ export class FalVideoService {
       return 'image/gif';
     } else {
       return 'application/octet-stream'; // Default or unknown
+    }
+  }
+
+  /**
+   * Helper to log human-readable duration of an operation.
+   * Example usage:
+   *   const t0 = performance.now()
+   *   await doSomething()
+   *   this.logDuration('doSomething', t0)
+   */
+  private logDuration(label: string, start: number) {
+    try {
+      const durationMs = Math.round(performance.now() - start)
+      // eslint-disable-next-line no-console
+      console.log(`⏱️  ${label} took ${durationMs} ms`)
+    } catch {
+      /* noop – timing logs should never crash the app */
     }
   }
 
