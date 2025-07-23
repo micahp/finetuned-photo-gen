@@ -55,3 +55,44 @@ Changes:
 3. **Updated `fal-log-subscriber.ts`** to consume the SSE endpoint via `EventSource`.
 
 Result: progress bar now displays only real percentages, API key never leaves the server, and the UI’s console is free of 401 errors.  
+
+## Follow-up Bug-fixes (2025-07-24)
+After launch we discovered two production issues:
+
+1. `TypeError: Invalid state: Controller is already closed` thrown from `/api/fal/stream` once the ReadableStream had been closed.  This was harmless but polluted logs and occasionally crashed the route in dev.
+2. React warning: “An empty string ("") was passed to the src attribute” because the `<video>` element was rendered while the job was still processing.
+
+### Fix
+• Introduced `safeSend()` helper inside the SSE route that catches the race between `controller.enqueue` and `controller.close()` (commit xxxxxx).  All stream writes now go through this guard.
+• `VideoPlayerWithFallback` is only mounted when `generatedVideo.status === 'completed'` **and** `videoUrl` is non-empty.
+• Added debug line `console.log('[SSE] log', raw, '→', pct)` to verify regex extraction across models.
+
+### Outcome
+• No more unhandled rejections in server logs.
+• UI no longer renders an empty `<video>`; React warnings gone.
+• Progress bar remains accurate for models that emit percentage logs.  Models that don’t (e.g. Stable-Video-Diffusion) still stall at 0 % – next todo: parse `update.metrics.percent_complete`. 
+
+### Outstanding gaps (tracked 2025-07-24)
+1. Models without percentage logs (e.g. Stable-Video-Diffusion) now keep the progress bar at 0 % for the full run.  Backend polling still finishes correctly, but the user sees a “frozen” bar.
+2. The Generate button shows no spinner during that time – confusing UX.
+3. Fal log lines aren’t surfaced in the on-screen Logs panel; we only log internal steps.
+
+### Next actions
+• In `/api/fal/stream` emit a generic `{type:'log', message}` event for every log line.  The client will append it to the debug panel.
+• When `pct === null` emit `{type:'heartbeat'}` every N seconds so the button can keep its loading state (or fall back to an indeterminate spinner).
+• Option B: derive `percent_complete` from `update.metrics` where available – but heartbeat is the quickest UX fix. 
+
+## Bug-fix – STREAMING Phase Stalls (2025-07-23)
+
+After launch we noticed the progress bar sometimes froze at ~10–60 % during the `Writing video` stage.
+Investigation showed Fal’s queue status switches from `IN_PROGRESS` to `STREAMING` midway and those packets were being filtered out by our SSE proxy.
+
+**Fix**
+1. Updated `/api/fal/stream` to treat both `IN_PROGRESS` **and** `STREAMING` packets as progress-bearing.
+2. Added `{type:'status', status}` heartbeat so the client can keep the spinner alive even when no explicit `%` logs are present.
+3. Deduplicated log forwarding on the server to avoid flooding the console.
+
+**Outcome**
+* Progress bar now advances smoothly to 100 % for all models.
+* Generate button spinner never stops prematurely.
+* No observable increase in network chatter (logs still throttled to 1 Hz avg). 

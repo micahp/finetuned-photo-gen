@@ -6,6 +6,7 @@
 - Added import of `logOnce` and deduped storage-backend selection logs in `CloudStorageService.validateConfig()`.
 - - Disabled Prisma SQL query logging by default; developers can re-enable by editing the constructor (see `decisions/prisma-query-logging-disable-2025-07-23.md`).
 - Default model selection now picks the first **budget**-tier option for each mode, and Fal SSE logs are deduplicated to reduce noise (see `decisions/video-default-budget-models-dedup-fal-logs-2025-07-23.md`).
+- **Video progress bar stall fix:** SSE proxy now forwards `STREAMING` packets and emits status heartbeats; progress bar reaches 100 % consistently (see decision doc update).
 
 ## Open Tasks (derived from Decision follow-ups)
 
