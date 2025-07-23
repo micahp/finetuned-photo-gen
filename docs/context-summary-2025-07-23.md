@@ -7,7 +7,7 @@
 - - Disabled Prisma SQL query logging by default; developers can re-enable by editing the constructor (see `decisions/prisma-query-logging-disable-2025-07-23.md`).
 - Default model selection now picks the first **budget**-tier option for each mode, and Fal SSE logs are deduplicated to reduce noise (see `decisions/video-default-budget-models-dedup-fal-logs-2025-07-23.md`).
 - **Video progress bar stall fix:** SSE proxy now forwards `STREAMING` packets and emits status heartbeats; progress bar reaches 100 % consistently (see decision doc update).
-- **Fal SSE source updated:** Backend now proxies `.../status/stream?logs=1` instead of misusing `fal.subscribe`, eliminating 422 errors while keeping live logs for all models (see `decisions/use-status-stream-endpoint-2025-07-23.md`).
+- **Fal SSE source updated:** Backend now proxies `.../stream?logs=1` instead of misusing `fal.subscribe`, eliminating 422 errors while keeping live logs for all models (see `decisions/use-status-stream-endpoint-2025-07-23.md`).
 - **Logs toggle bug fixed:** Moving Logs card out of form and setting button `type="button"` prevents accidental video generation when hiding logs (see `decisions/video-log-toggle-submit-fix-2025-07-23.md`).
 
 ## Open Tasks (derived from Decision follow-ups)

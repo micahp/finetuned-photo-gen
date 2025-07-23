@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
           // -----------------------------------------------------------------
           // NEW: stream queue logs via official /status/stream endpoint
           // -----------------------------------------------------------------
-          const streamUrl = `https://queue.fal.run/${encodeURIComponent(modelId)}/requests/${requestId}/status/stream?logs=1`
+          const streamUrl = `https://queue.fal.run/${encodeURIComponent(modelId)}/requests/${requestId}/stream?logs=1`
 
           // Fetch upstream SSE
           const upstream = await fetch(streamUrl, {

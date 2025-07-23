@@ -12,7 +12,7 @@ We keep a **two-step** flow for video generation:
 
 Fal exposes a dedicated SSE feed for existing jobs:
 ```
-GET https://queue.fal.run/{model}/requests/{request_id}/status/stream?logs=1
+GET https://queue.fal.run/{model_slug}/requests/{request_id}/stream?logs=1
 ```
 This returns the same `IN_PROGRESS` / `COMPLETED` packets (optionally with `logs`) that `subscribe()` would stream, but without resubmitting the job.
 
