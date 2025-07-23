@@ -2,8 +2,9 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 // AWS SDK for Cloudflare R2 (S3-compatible API)
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { logOnce } from './log-once'
 
 interface UploadResult {
   success: boolean
@@ -397,12 +398,12 @@ export class CloudStorageService {
    */
   private validateConfig(): void {
     if (this.config.useLocal) {
-      console.log('⚠️  Using LOCAL storage for ZIP files (emergency dev mode)')
+      logOnce('boot.storage_local', () => console.log('⚠️  Using LOCAL storage for ZIP files (emergency dev mode)'))
       if (!this.config.localConfig) {
         throw new Error('Local storage configuration missing')
       }
     } else {
-      console.log('☁️  Using Cloudflare R2 for ZIP file storage')
+      logOnce('boot.storage_r2', () => console.log('☁️  Using Cloudflare R2 for ZIP file storage'))
       if (!this.config.r2Config?.accessKeyId || !this.config.r2Config?.secretAccessKey) {
         throw new Error('Cloudflare R2 credentials missing. Set CLOUDFLARE_R2_ACCESS_KEY_ID and CLOUDFLARE_R2_SECRET_ACCESS_KEY')
       }

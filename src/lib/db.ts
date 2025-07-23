@@ -3,11 +3,8 @@ import './server-only';
 import { PrismaClient } from '@/generated/prisma'
 
 // Quick visibility into what Prisma thinks the connection string is.
-if (process.env.DATABASE_URL) {
-  console.log('[Boot] DATABASE_URL:', process.env.DATABASE_URL)
-} else {
-  console.warn('[Boot] DATABASE_URL is undefined')
-}
+// Moved below Prisma instantiation and guarded with logOnce to avoid repeat logs
+import { logOnce } from './log-once'
 
 // This prevents PrismaClient from being instantiated in browser contexts
 // https://www.prisma.io/docs/guides/other/troubleshooting-orm/help-articles/nextjs-prisma-client-dev-practices
@@ -31,11 +28,21 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
+// Initialize Prisma (cached in global for dev)
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: ['query'],
   })
+
+// Log once, after Prisma is ensured to be initialised
+logOnce('boot.database_url', () => {
+  if (process.env.DATABASE_URL) {
+    console.log('[Boot] DATABASE_URL is set ✅')
+  } else {
+    console.warn('[Boot] DATABASE_URL is undefined')
+  }
+})
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
