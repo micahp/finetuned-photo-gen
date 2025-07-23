@@ -10,6 +10,7 @@
 - **Completed full-stack security audit** and published findings (see `docs/security-audit-2025-07-22.md`).
 - Upgraded LTX video models to v0.9.8 (image, text & multiconditioning), renamed IDs, unified cost at 5 credits/s, and lowered Stable Video Diffusion i2v rate to 2 credits/s (see `decisions/ltx-video-model-upgrade-2025-07-22.md`).
 - Added guide to preventing gender flips in Flux LoRA training (see `docs/flux-lora-gender-mitigation.md`). 
+- Implemented real-time video progress bar driven by Fal logs (see `decisions/video-progress-bar-real-time-fal-logs-2025-07-22.md`). 
 - Fixed mismatch between video generation API response (`url`) and UI expectation (`videoUrl`), restoring video playback in dashboard (see `decisions/video-api-response-field-fix-2025-07-22.md`). 
 - Implemented fallback video pipeline: backend now returns original Fal URL (`fallbackUrl`) and dashboard player streams it until Cloudflare copy is ready (commit `feat(video latency)` 2025-07-22). 
 
@@ -19,7 +20,7 @@
 - [x] Add detailed timing logs for video generation pipeline (queue submit latency, Fal completion, download time, R2 upload/propagation) to diagnose end-to-end delay.
 - [x] Expose fallbackUrl (original Fal video link) from backend APIs and include it in client payloads.
 - [x] Update dashboard player to load fallbackUrl immediately, swap to Cloudflare URL once available, and keep progress bar animating during polling.
-- [ ] Power generation progress bar with real-time Fal logs instead of synthetic random increments.
+- [x] Power generation progress bar with real-time Fal logs instead of synthetic random increments.
 - [ ] Generate/handle thumbnail fallback when Fal returns none and log occurrences.
 
 ### Low Priority
