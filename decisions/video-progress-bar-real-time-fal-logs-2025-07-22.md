@@ -28,3 +28,18 @@ Fal’s `subscribe` websocket API streams live log messages containing percentag
 ## References
 – Fal real-time docs: <https://www.fal.ai/docs/real-time>
 – JS client reference: <https://github.com/fal-ai/fal-js> 
+
+## Follow-up Improvements (2025-07-23)
+After field testing on Stable Video Diffusion text-to-video we found Fal’s queue can mark jobs **COMPLETED** a few seconds before the file is fully written to Fal’s CDN.  Fetching at that moment returns a zero-byte or partially encoded MP4 that later breaks playback.
+
+Mitigations added 2025-07-23:
+1. **Removed synchronous `fal.run` fallback**
+   – If `fal.queue.submit` fails we now propagate the error instead of falling back to `fal.run` (which exposes the same premature‐file risk but without queue status).
+2. **File-size stabilisation check** in `getJobStatus`:
+   – Two successive `HEAD` requests (2 s apart) to the Fal video URL must return identical `content-length` before we treat the job as `completed` and start the R2 upload.
+   – If the size is still growing we return `status: processing`; the dashboard keeps polling.
+3. **Decision rationale**
+   – Guarantees we never store/serve a truncated file.
+   – Keeps a single, predictable async code-path; easier to reason about and test.
+
+These changes were implemented in `src/lib/fal-video-service.ts` (commit 35bfc8e). 
