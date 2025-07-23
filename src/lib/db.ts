@@ -28,12 +28,13 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-// Initialize Prisma (cached in global for dev)
+// Detailed SQL query logging is disabled by default to avoid noisy logs.
+// If you need to see every generated SQL statement, temporarily replace the
+// constructor below with:
+//   new PrismaClient({ log: ['query'] })
 export const prisma =
   globalForPrisma.prisma ??
-  new PrismaClient({
-    log: ['query'],
-  })
+  new PrismaClient()
 
 // Log once, after Prisma is ensured to be initialised
 logOnce('boot.database_url', () => {
