@@ -498,21 +498,21 @@ export default function VideoGenerationPage() {
           setGeneratedVideo(result.video)
           setCreditsRemaining(result.creditsRemaining)
 
-          // Kick off SSE subscription for live logs / progress
-          // Text-to-video endpoints currently don’t expose streaming log support.
-          // We only open the SSE channel when the selected model is **image-to-video**
-          // (all of them emit logs) – this prevents futile subscribe() calls that
-          // generate 422 errors on Fal’s side.
+          // Kick off SSE subscription for live logs / progress. While most
+          // image-to-video endpoints support streaming logs, an increasing
+          // number of text-to-video models (e.g. LTX Video 13B) also expose
+          // real-time percentages.  We therefore attempt the subscription for
+          // *any* model that has a valid `falModelId`. If the endpoint rejects
+          // streaming (HTTP 422), our error callback will log and we’ll fall
+          // back to backend polling without affecting the user experience.
 
-          if (selectedModel?.mode === 'image-to-video') {
-            const modelFalId = selectedModel?.falModelId
-            if (!modelFalId && process.env.NODE_ENV === 'development') {
-              // eslint-disable-next-line no-console
-              console.warn('selectedModel.falModelId is undefined for', selectedModel?.id)
-            }
+          const modelFalId = selectedModel?.falModelId
 
-            falUnsubscribeRef.current = await subscribeFalJob(
-              modelFalId || data.modelId,
+          if (!modelFalId) {
+            pushLog('No falModelId; skipping SSE subscription')
+          } else {
+            falUnsubscribeRef.current = subscribeFalJob(
+              modelFalId,
               result.video.jobId,
               (pct) => {
                 setGenerationProgress(pct)
@@ -533,8 +533,6 @@ export default function VideoGenerationPage() {
                 pushLog(`SSE status: ${status}`)
               }
             )
-          } else {
-            pushLog('Skipping SSE subscription – model does not expose streaming logs')
           }
 
           // Begin backend polling loop (includes size-stabilisation guard)
@@ -1099,21 +1097,24 @@ export default function VideoGenerationPage() {
                     </div>
                   )}
 
-                  {/* --- Debug Logs Panel --- */}
-                  <Card className="mt-6">
-                    <CardHeader className="flex flex-row items-center justify-between py-2">
-                      <CardTitle className="text-sm">Logs</CardTitle>
-                      <Button variant="ghost" size="sm" onClick={() => setShowLogs(!showLogs)}>{showLogs ? 'Hide' : 'Show'}</Button>
-                    </CardHeader>
-                    {showLogs && (
-                      <CardContent className="p-0">
-                        <pre className="bg-gray-900 text-gray-100 text-xs p-4 max-h-64 overflow-y-auto whitespace-pre-wrap">
-                          {debugLogs.length ? debugLogs.join('\n') : 'No logs yet'}
-                        </pre>
-                      </CardContent>
-                    )}
-                  </Card>
                 </form>
+
+                {/* --- Debug Logs Panel (moved outside <form>) --- */}
+                <Card className="mt-6">
+                  <CardHeader className="flex flex-row items-center justify-between py-2">
+                    <CardTitle className="text-sm">Logs</CardTitle>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowLogs(!showLogs)}>
+                      {showLogs ? 'Hide' : 'Show'}
+                    </Button>
+                  </CardHeader>
+                  {showLogs && (
+                    <CardContent className="p-0">
+                      <pre className="bg-gray-900 text-gray-100 text-xs p-4 max-h-64 overflow-y-auto whitespace-pre-wrap">
+                        {debugLogs.length ? debugLogs.join('\n') : 'No logs yet'}
+                      </pre>
+                    </CardContent>
+                  )}
+                </Card>
               </Form>
             </TabsContent>
           </Tabs>
