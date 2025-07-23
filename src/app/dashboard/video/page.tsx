@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -45,6 +45,7 @@ import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AdvancedParametersForm from '@/components/video/AdvancedParametersForm'
 import inputGroups from '@/data/fal_input_groups.json'
+import { subscribeFalJob } from '../../../lib/fal-log-subscriber'
 
 const videoGenerationSchema = z.object({
   // Prompt is required only for text-to-video. For image-to-video we allow it to be blank.
@@ -151,6 +152,27 @@ export default function VideoGenerationPage() {
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [generatingPrompt, setGeneratingPrompt] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+
+  /** DEBUG: accumulated log lines for on-screen inspection */
+  const [debugLogs, setDebugLogs] = useState<string[]>([])
+  const [showLogs, setShowLogs] = useState<boolean>(true)
+  const pushLog = (msg: string) => {
+    setDebugLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`])
+  }
+
+  /**
+   * Interval ref for the synthetic random progress updates that we used prior
+   * to integrating real-time Fal logs.  Cleared automatically once the first
+   * real progress value is received (or on generation completion).
+   */
+  const syntheticProgressRef = useRef<NodeJS.Timeout | null>(null)
+
+  /**
+   * Holds the unsubscribe function returned by `subscribeFalJob` so we can
+   * clean up WebSocket connections when the user navigates away or when the
+   * generation completes.
+   */
+  const falUnsubscribeRef = useRef<() => void>()
 
   // Track which generation mode (text or image) the user is on
   const [activeMode, setActiveMode] = useState<'text-to-video' | 'image-to-video'>(
@@ -357,6 +379,8 @@ export default function VideoGenerationPage() {
   }
 
   const onSubmit = async (data: VideoGenerationFormData) => {
+    pushLog('Form submitted')
+    pushLog(JSON.stringify({ modelId: data.modelId, duration: data.duration }))
     /* eslint-disable no-console */
     console.log('▶️ VIDEO_GEN_FORM_SUBMIT', {
       activeMode,
@@ -403,10 +427,7 @@ export default function VideoGenerationPage() {
 
       // All video models require premium access - handled at page level
 
-      // Start with fake progress, will switch to real progress if job is processing
-      const progressInterval = setInterval(() => {
-        setGenerationProgress(prev => Math.min(prev + Math.random() * 15, 95))
-      }, 2000)
+      // Synthetic progress disabled – rely solely on real-time Fal logs
 
       // Prepare form data for API call
       const formData = new FormData()
@@ -444,12 +465,15 @@ export default function VideoGenerationPage() {
         body: formData,
       })
 
+      pushLog(`POST /api/video/generate → ${response.status}`)
+
       // eslint-disable-next-line no-console
       console.log('VIDEO_GEN_API_RESPONSE_STATUS', response.status)
 
       // Keep progress bar running; will clear when polling detects completion
 
       if (!response.ok) {
+        pushLog('API responded with error; aborting')
         const errorData = await response.json()
         // eslint-disable-next-line no-console
         console.error('VIDEO_GEN_API_ERROR', errorData)
@@ -457,6 +481,7 @@ export default function VideoGenerationPage() {
       }
 
       const result = await response.json()
+      pushLog(`Generation request accepted: jobId=${result?.video?.jobId}`)
       // eslint-disable-next-line no-console
       console.log('VIDEO_GEN_API_RESULT', result)
       
@@ -465,7 +490,37 @@ export default function VideoGenerationPage() {
           // Start polling for async job completion
           setGeneratedVideo(result.video)
           setCreditsRemaining(result.creditsRemaining)
-          await pollVideoStatus(result.video.jobId, progressInterval)
+          // Kick off real-time Fal log subscription to replace synthetic updates
+          const modelFalId = selectedModel?.falModelId
+          if (!modelFalId) {
+            // Warn in dev builds so mis-mappings are caught early
+            if (process.env.NODE_ENV === 'development') {
+              // eslint-disable-next-line no-console
+              console.warn('selectedModel.falModelId is undefined for', selectedModel?.id)
+            }
+          }
+
+          falUnsubscribeRef.current = await subscribeFalJob(
+            modelFalId || data.modelId,
+            result.video.jobId,
+            (pct) => {
+              // Real progress only
+              setGenerationProgress(pct)
+              pushLog(`Progress ${pct}%`)
+            },
+            () => {
+              setGenerationProgress(100)
+              pushLog('Fal reported completion')
+            },
+            (err) => {
+              console.error('Fal subscribe error', err)
+              const msg = (err as Error)?.message || String(err)
+              pushLog(`Fal subscribe error: ${msg}`)
+            }
+          )
+
+          await pollVideoStatus(result.video.jobId, null as any)
+          pushLog('Started backend status polling')
         } else {
           // Synchronous completion
           setGeneratedVideo(result.video)
@@ -481,10 +536,25 @@ export default function VideoGenerationPage() {
       console.error('Generation error:', error)
       setError(error instanceof Error ? error.message : 'An error occurred')
       setGenerationProgress(0)
+      pushLog(`Generation error: ${error instanceof Error ? error.message : 'unknown'}`)
     } finally {
+      // Ensure we cancel any outstanding WebSocket subscription when generation
+      // cycle ends (success or failure)
+      if (falUnsubscribeRef.current) {
+        falUnsubscribeRef.current()
+        falUnsubscribeRef.current = undefined
+      }
+      // No synthetic progress to clean up
       setIsGenerating(false)
     }
   }
+
+  // Clean up on unmount in case the user navigates away mid-generation
+  useEffect(() => {
+    return () => {
+      falUnsubscribeRef.current?.()
+    }
+  }, [])
 
   const getAspectRatioLabel = (ratio: string) => {
     const labels: Record<string, string> = {
@@ -1005,6 +1075,21 @@ export default function VideoGenerationPage() {
                       <p className="text-sm text-red-700">{error}</p>
                     </div>
                   )}
+
+                  {/* --- Debug Logs Panel --- */}
+                  <Card className="mt-6">
+                    <CardHeader className="flex flex-row items-center justify-between py-2">
+                      <CardTitle className="text-sm">Logs</CardTitle>
+                      <Button variant="ghost" size="sm" onClick={() => setShowLogs(!showLogs)}>{showLogs ? 'Hide' : 'Show'}</Button>
+                    </CardHeader>
+                    {showLogs && (
+                      <CardContent className="p-0">
+                        <pre className="bg-gray-900 text-gray-100 text-xs p-4 max-h-64 overflow-y-auto whitespace-pre-wrap">
+                          {debugLogs.length ? debugLogs.join('\n') : 'No logs yet'}
+                        </pre>
+                      </CardContent>
+                    )}
+                  </Card>
                 </form>
               </Form>
             </TabsContent>
@@ -1025,37 +1110,13 @@ export default function VideoGenerationPage() {
 // ---------- helper component ----------
 
 function VideoPlayerWithFallback({ video }: { video: GeneratedVideo }) {
-  const [src, setSrc] = useState<string>(video.fallbackUrl || video.videoUrl)
+  // Server now guarantees Cloudflare asset readiness via size-stabilisation, so
+  // we can load the primary `videoUrl` immediately without a client-side HEAD
+  // probe that triggers noisy CORS pre-flights.  We still fall back to
+  // `fallbackUrl` if for some reason `videoUrl` is missing.
+  const [src] = useState<string>(video.videoUrl || video.fallbackUrl || '')
 
-  useEffect(() => {
-    setSrc(video.fallbackUrl || video.videoUrl)
-
-    const checkCloudflareReady = async (): Promise<boolean> => {
-      if (video.videoUrl && video.videoUrl !== video.fallbackUrl) {
-        try {
-          const head = await fetch(video.videoUrl, { method: 'HEAD' })
-          if (head.ok) {
-            setSrc(video.videoUrl)
-            return true
-          }
-        } catch {
-          /* swallow */
-        }
-      }
-      return false
-    }
-
-    // Run an immediate check – in many cases propagation is already done
-    checkCloudflareReady()
-
-    // Continue polling every 2 s until Cloudflare copy is reachable
-    const interval = setInterval(async () => {
-      const ready = await checkCloudflareReady()
-      if (ready) clearInterval(interval)
-    }, 2000)
-
-    return () => clearInterval(interval)
-  }, [video])
+  // No polling needed – backend ensures the file is fully propagated.
 
   return (
     <Card>

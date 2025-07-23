@@ -43,3 +43,15 @@ Mitigations added 2025-07-23:
    – Keeps a single, predictable async code-path; easier to reason about and test.
 
 These changes were implemented in `src/lib/fal-video-service.ts` (commit 35bfc8e). 
+
+## Follow-up Improvements (2025-07-23)
+Effective now the progress bar no longer shows *any* synthetic estimates – it remains at 0 % until the first real Fal log arrives.
+
+Changes:
+1. **Removed synthetic interval entirely** in `video/page.tsx`.
+2. **Introduced secure SSE proxy** (`/api/fal/stream`):
+   – Server holds the Fal API key and opens the WebSocket.
+   – Streams only `{type:'progress'| 'done' | 'error'}` events to the browser.
+3. **Updated `fal-log-subscriber.ts`** to consume the SSE endpoint via `EventSource`.
+
+Result: progress bar now displays only real percentages, API key never leaves the server, and the UI’s console is free of 401 errors.  
