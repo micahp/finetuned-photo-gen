@@ -89,6 +89,7 @@ interface GeneratedVideo {
   fileSize?: number
   createdAt: string
   fallbackUrl?: string
+  status: 'processing' | 'completed' | 'failed'
 }
 
 // VideoModel interface imported from video-models.ts
@@ -179,22 +180,27 @@ export default function VideoGenerationPage() {
     'text-to-video'
   )
 
-  // Find Veo 3 model for text-to-video default, fallback to cheapest
-  const veo3Model = AVAILABLE_VIDEO_MODELS.find(m => m.id === 'veo-3-text')
+  // Select the first budget-tier model (cheapest cost) for each mode; fall back to the overall cheapest if
+  // no budget model exists.
+  const budgetTextModel = AVAILABLE_VIDEO_MODELS
+    .filter((m) => m.mode === 'text-to-video' && getTier(m.costPerSecond) === 'budget')
+    .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
+
   const cheapestTextModel = AVAILABLE_VIDEO_MODELS
     .filter((m) => m.mode === 'text-to-video')
     .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
-  
-  // Find SeeDANCE Pro model for image-to-video default, fallback to cheapest
-  const seedanceProModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === 'seedance-pro-image')
+
+  const budgetImageModel = AVAILABLE_VIDEO_MODELS
+    .filter((m) => m.mode === 'image-to-video' && getTier(m.costPerSecond) === 'budget')
+    .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
+
   const cheapestImageModel = AVAILABLE_VIDEO_MODELS
     .filter((m) => m.mode === 'image-to-video')
     .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
 
-  // Set defaults with Veo 3 preferred for text-to-video and SeeDANCE Pro for image-to-video
   const defaultModelIdByMode: Record<'text-to-video' | 'image-to-video', string> = {
-    'text-to-video': veo3Model?.id || cheapestTextModel?.id || '',
-    'image-to-video': seedanceProModel?.id || cheapestImageModel?.id || '',
+    'text-to-video': budgetTextModel?.id || cheapestTextModel?.id || '',
+    'image-to-video': budgetImageModel?.id || cheapestImageModel?.id || '',
   }
 
   const defaultSelectedModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === defaultModelIdByMode['text-to-video'])
@@ -392,6 +398,7 @@ export default function VideoGenerationPage() {
     /* eslint-enable no-console */
     try {
       setIsGenerating(true)
+      pushLog('Spinner START — isGenerating=true')
       setError(null)
       setGenerationProgress(0)
 
@@ -487,45 +494,61 @@ export default function VideoGenerationPage() {
       
       if (result.success) {
         if (result.video.status === 'processing') {
-          // Start polling for async job completion
+          // Store placeholder record so UI can show job ID immediately
           setGeneratedVideo(result.video)
           setCreditsRemaining(result.creditsRemaining)
-          // Kick off real-time Fal log subscription to replace synthetic updates
-          const modelFalId = selectedModel?.falModelId
-          if (!modelFalId) {
-            // Warn in dev builds so mis-mappings are caught early
-            if (process.env.NODE_ENV === 'development') {
+
+          // Kick off SSE subscription for live logs / progress
+          // Text-to-video endpoints currently don’t expose streaming log support.
+          // We only open the SSE channel when the selected model is **image-to-video**
+          // (all of them emit logs) – this prevents futile subscribe() calls that
+          // generate 422 errors on Fal’s side.
+
+          if (selectedModel?.mode === 'image-to-video') {
+            const modelFalId = selectedModel?.falModelId
+            if (!modelFalId && process.env.NODE_ENV === 'development') {
               // eslint-disable-next-line no-console
               console.warn('selectedModel.falModelId is undefined for', selectedModel?.id)
             }
+
+            falUnsubscribeRef.current = await subscribeFalJob(
+              modelFalId || data.modelId,
+              result.video.jobId,
+              (pct) => {
+                setGenerationProgress(pct)
+                pushLog(`Progress ${pct}%`)
+              },
+              () => {
+                setGenerationProgress(100)
+                pushLog('Fal reported completion')
+              },
+              (err) => {
+                console.error('Fal subscribe error', err)
+                pushLog(`Fal subscribe error: ${(err as Error)?.message || String(err)}`)
+              },
+              (line) => {
+                pushLog(line)
+              },
+              (status) => {
+                pushLog(`SSE status: ${status}`)
+              }
+            )
+          } else {
+            pushLog('Skipping SSE subscription – model does not expose streaming logs')
           }
 
-          falUnsubscribeRef.current = await subscribeFalJob(
-            modelFalId || data.modelId,
-            result.video.jobId,
-            (pct) => {
-              // Real progress only
-              setGenerationProgress(pct)
-              pushLog(`Progress ${pct}%`)
-            },
-            () => {
-              setGenerationProgress(100)
-              pushLog('Fal reported completion')
-            },
-            (err) => {
-              console.error('Fal subscribe error', err)
-              const msg = (err as Error)?.message || String(err)
-              pushLog(`Fal subscribe error: ${msg}`)
-            }
-          )
-
+          // Begin backend polling loop (includes size-stabilisation guard)
           await pollVideoStatus(result.video.jobId, null as any)
           pushLog('Started backend status polling')
+
         } else {
-          // Synchronous completion
+          // Immediate completion (rare)
           setGeneratedVideo(result.video)
           setCreditsRemaining(result.creditsRemaining)
           setGenerationProgress(100)
+          pushLog('Job already completed (synchronous)')
+          setIsGenerating(false)
+          pushLog('Spinner STOP — isGenerating=false')
         }
         await update()
       } else {
@@ -545,7 +568,7 @@ export default function VideoGenerationPage() {
         falUnsubscribeRef.current = undefined
       }
       // No synthetic progress to clean up
-      setIsGenerating(false)
+      // IMPORTANT: do NOT clear isGenerating here; let success/failure paths handle it
     }
   }
 
@@ -1098,7 +1121,7 @@ export default function VideoGenerationPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {generatedVideo && (
+          {generatedVideo?.status === 'completed' && generatedVideo.videoUrl && (
             <VideoPlayerWithFallback video={generatedVideo} />
           )}
         </div>
