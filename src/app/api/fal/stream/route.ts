@@ -90,7 +90,8 @@ export async function GET(req: NextRequest) {
               if (!dataLine) continue
 
               try {
-                const update: any = JSON.parse(dataLine.slice(5))
+                const json = dataLine.replace(/^data:\s*/, '')
+                const update: any = JSON.parse(json)
 
                 // forward new log lines
                 if (Array.isArray(update.logs)) {
