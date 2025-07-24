@@ -13,7 +13,7 @@ export function subscribeFalJob(
   onStatus?: (status: string) => void,
 ) {
   let maxProgress = 0
-  const url = `/api/fal/stream?modelId=${encodeURIComponent(modelId)}&requestId=${requestId}`
+  const url = `/api/fal/stream?modelId=${modelId}&requestId=${requestId}`
   const es = new EventSource(url)
 
   es.onopen = () => {

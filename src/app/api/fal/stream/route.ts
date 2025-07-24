@@ -9,7 +9,8 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     // Accept both camelCase and snake_case for flexibility
-    const modelId   = searchParams.get('modelId')   || searchParams.get('model_id')   || ''
+    const rawModelId = searchParams.get('modelId')   || searchParams.get('model_id')   || ''
+    const modelId = decodeURIComponent(rawModelId)
     const requestId = searchParams.get('requestId') || searchParams.get('request_id') || ''
 
     if (!modelId || !requestId) {

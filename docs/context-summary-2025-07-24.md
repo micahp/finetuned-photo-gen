@@ -13,6 +13,7 @@
 - **Live CLI validator** – `scripts/test-fal-stream.ts` streams events from a real Fal job for local debugging.
 - **Dual URL fallback** – SSE route now alternates between encoded and raw `modelId` path forms when opening the Fal stream, eliminating 404/405 collisions across different queue back-ends.
 - **Unified progress tracking** – Introduced `useJobProgress` React hook that prefers SSE (`/api/fal/stream` or Replicate) and falls back to JSON polling, replacing custom logic in video page.
+- **ModelId decode fix** – `/api/fal/stream` now `decodeURIComponent`-s the `modelId` query param; subscriber stops double-encoding, preventing 422 loops.
 
 ## Open Tasks (derived from Decision follow-ups)
 
