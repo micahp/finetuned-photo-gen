@@ -29,6 +29,8 @@ export interface VideoModel {
   /** Resolution-specific cost multipliers relative to the baseline costPerSecond */
   resolutionMultipliers?: Record<string, number>
   avgGenerationTimeMinutes?: number
+  /** Whether the model supports Fal.ai streaming logs via subscribe() */
+  supportsStreamingLogs?: boolean
 }
 
 /**
@@ -302,7 +304,7 @@ export const VIDEO_MODELS: VideoModel[] = [
 
   {
     id: 'stable-video-diffusion',
-    name: 'Stable Video Diffusion – Image → Video',
+    name: 'Stable Video Diffusion (No Prompt) – Image → Video', // You cannot use a prompt with this model. need to update UI for this model
     falModelId: 'fal-ai/stable-video',
     mode: 'image-to-video',
     maxDuration: 5,
@@ -324,6 +326,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 4 },
     durationOptions: [5],
     hasAudio: false,
+    supportsStreamingLogs: true,
   },
 
   {
@@ -621,6 +624,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 4 },
     durationOptions: [5],
     hasAudio: false,
+    supportsStreamingLogs: true,
   },
   // {
   //   id: 'ltx-13b-dev-extend', // 0.9.7 13B and custom LoRA, i guess we can keep since it's 9.7 dev vs the vs 9.7 distilled
