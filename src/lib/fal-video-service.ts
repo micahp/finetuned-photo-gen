@@ -33,6 +33,8 @@ export interface VideoGenerationResponse {
   id: string
   status: 'processing' | 'completed' | 'failed'
   videoUrl?: string
+  /** The Fal.ai model slug used for the job (e.g. "fal-ai/ltxv-13b...") */
+  falModelId?: string
   thumbnailUrl?: string
   duration?: number
   fileSize?: number
@@ -245,7 +247,8 @@ export class FalVideoService {
 
           return {
             id: submitResult.request_id || submitResult.requestId,
-            status: 'processing'
+            status: 'processing',
+            falModelId: model.falModelId
           }
         } catch (queueError) {
           // Propagate error – frontend will keep polling / allow retry instead of
@@ -336,7 +339,8 @@ export class FalVideoService {
 
           return {
             id: submitResult.request_id || submitResult.requestId,
-            status: 'processing'
+            status: 'processing',
+            falModelId: model.falModelId
           }
         } catch (queueError) {
           console.error('❌ Fal.ai queue submission failed – aborting:', queueError)

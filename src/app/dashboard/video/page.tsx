@@ -90,6 +90,7 @@ interface GeneratedVideo {
   createdAt: string
   fallbackUrl?: string
   status: 'processing' | 'completed' | 'failed'
+  falModelId?: string
 }
 
 // VideoModel interface imported from video-models.ts
@@ -506,13 +507,13 @@ export default function VideoGenerationPage() {
           // streaming (HTTP 422), our error callback will log and we’ll fall
           // back to backend polling without affecting the user experience.
 
-          const modelFalId = selectedModel?.falModelId
+          const modelFalId = result.video.falModelId || selectedModel?.falModelId
 
           if (!modelFalId) {
             pushLog('No falModelId; skipping SSE subscription')
           } else {
             falUnsubscribeRef.current = subscribeFalJob(
-              modelFalId,
+              modelFalId!,
               result.video.jobId,
               (pct) => {
                 setGenerationProgress(pct)

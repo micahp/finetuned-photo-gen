@@ -28,6 +28,9 @@ export function subscribeFalJob(
   }
 
   es.onmessage = (ev) => {
+    // Temporary debug – remove once verified
+    // eslint-disable-next-line no-console
+    console.log('[RAW]', ev.data)
     try {
       const msg: any = JSON.parse(ev.data.trim())
       // eslint-disable-next-line no-console
@@ -43,6 +46,9 @@ export function subscribeFalJob(
         }
       } else if (msg.type === 'status') {
         onStatus?.(msg.status)
+      } else if (msg.type === 'heartbeat') {
+        // Keep spinner alive or trigger any polling watchdogs
+        onStatus?.('HEARTBEAT')
       } else if (msg.type === 'done') {
         onProgress(100)
         onDone(msg.videoUrl || '')

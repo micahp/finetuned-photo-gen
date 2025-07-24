@@ -365,6 +365,7 @@ export async function POST(request: NextRequest) {
           id: generatedVideo.id,
           status: 'processing',
           jobId: videoResult.id,
+          falModelId: videoResult.falModelId,
           prompt: validatedData.prompt,
           modelId: validatedData.modelId,
           duration: validatedData.duration,

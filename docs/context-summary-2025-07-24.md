@@ -2,10 +2,16 @@
 
 - **SSE stability hardening** – Added `closeController()` guard to prevent double-close errors and removed forbidden headers in Edge runtime.
 - **Progress fallback for silent models** – `/api/fal/stream` now emits `progress` events based on `metrics.percent_complete` when log lines lack percentages (e.g. Stable-Video-Diffusion).
-- **URL encoding fix** – Dropped `encodeURIComponent(modelId)` in SSE proxy path, eliminating 404/405 retries.
+- **URL encoding fix** – Dropped `encodeURIComponent(modelId)` in the SSE proxy path so identifiers with `/` resolve correctly.
 - **Global gzip off** – `compress:false` in `next.config.js` stops Node from buffering SSE responses; no Edge dependency.
-- **Client error propagation** – `fal-log-subscriber.ts` forwards `EventSource` errors to the caller’s `onError` handler.
-- **Route simplification** – `/api/fal/stream` refactored to 80 LOC: unified retry loop, single close guard, deduped logs, metrics-based progress.  Easier to audit and extend.
+- **Client error propagation** – `fal-log-subscriber.ts` forwards EventSource errors to callers’ `onError`.
+- **Route simplification** – `/api/fal/stream` trimmed to ~80 LOC: single retry loop, close guard, metrics progress.
+- **Heartbeat & raw debug** – Route emits `{type:'heartbeat'}` during silent stretches and subscriber logs raw frames.
+- **Parameter naming fallback** – Route accepts both camelCase and snake_case query params.
+- **Un-deduped Fal logs** – Forwards every log line (no skipping duplicates).
+- **Polling loop logs** – Fallback queue polling forwards logs & derived progress.
+- **Live CLI validator** – `scripts/test-fal-stream.ts` streams events from a real Fal job for local debugging.
+- **Dual URL fallback** – SSE route now alternates between encoded and raw `modelId` path forms when opening the Fal stream, eliminating 404/405 collisions across different queue back-ends.
 
 ## Open Tasks (derived from Decision follow-ups)
 
