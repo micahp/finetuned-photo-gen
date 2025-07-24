@@ -12,6 +12,7 @@
 - **Polling loop logs** – Fallback queue polling forwards logs & derived progress.
 - **Live CLI validator** – `scripts/test-fal-stream.ts` streams events from a real Fal job for local debugging.
 - **Dual URL fallback** – SSE route now alternates between encoded and raw `modelId` path forms when opening the Fal stream, eliminating 404/405 collisions across different queue back-ends.
+- **Unified progress tracking** – Introduced `useJobProgress` React hook that prefers SSE (`/api/fal/stream` or Replicate) and falls back to JSON polling, replacing custom logic in video page.
 
 ## Open Tasks (derived from Decision follow-ups)
 

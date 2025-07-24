@@ -45,7 +45,7 @@ import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AdvancedParametersForm from '@/components/video/AdvancedParametersForm'
 import inputGroups from '@/data/fal_input_groups.json'
-import { subscribeFalJob } from '../../../lib/fal-log-subscriber'
+import { useJobProgress } from '@/hooks/use-job-progress'
 
 const videoGenerationSchema = z.object({
   // Prompt is required only for text-to-video. For image-to-video we allow it to be blank.
@@ -162,6 +162,30 @@ export default function VideoGenerationPage() {
     setDebugLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`])
   }
 
+  /** Job info for unified progress tracking */
+  const [jobInfo, setJobInfo] = useState<{ provider: 'fal' | 'replicate' | 'other'; modelId: string; jobId: string } | null>(null)
+
+  const jobProgress = useJobProgress({
+    provider: jobInfo?.provider || 'other',
+    modelId: jobInfo?.modelId || '',
+    jobId: jobInfo?.jobId || '',
+    onDone: () => {
+      pushLog('Job completed (hook)')
+      setGenerationProgress(100)
+      setIsGenerating(false)
+    },
+    onError: (err) => {
+      console.error('Job progress error', err)
+      pushLog(`Job progress error: ${String(err)}`)
+    }
+  })
+
+  useEffect(() => {
+    if (jobProgress.pct > 0) {
+      setGenerationProgress(jobProgress.pct)
+    }
+  }, [jobProgress.pct])
+
   /**
    * Interval ref for the synthetic random progress updates that we used prior
    * to integrating real-time Fal logs.  Cleared automatically once the first
@@ -169,12 +193,7 @@ export default function VideoGenerationPage() {
    */
   const syntheticProgressRef = useRef<NodeJS.Timeout | null>(null)
 
-  /**
-   * Holds the unsubscribe function returned by `subscribeFalJob` so we can
-   * clean up WebSocket connections when the user navigates away or when the
-   * generation completes.
-   */
-  const falUnsubscribeRef = useRef<() => void>()
+  // Removed falUnsubscribeRef – unified hook manages cleanup
 
   // Track which generation mode (text or image) the user is on
   const [activeMode, setActiveMode] = useState<'text-to-video' | 'image-to-video'>(
@@ -499,46 +518,10 @@ export default function VideoGenerationPage() {
           setGeneratedVideo(result.video)
           setCreditsRemaining(result.creditsRemaining)
 
-          // Kick off SSE subscription for live logs / progress. While most
-          // image-to-video endpoints support streaming logs, an increasing
-          // number of text-to-video models (e.g. LTX Video 13B) also expose
-          // real-time percentages.  We therefore attempt the subscription for
-          // *any* model that has a valid `falModelId`. If the endpoint rejects
-          // streaming (HTTP 422), our error callback will log and we’ll fall
-          // back to backend polling without affecting the user experience.
-
+          // Determine Fal model slug (if available)
           const modelFalId = result.video.falModelId || selectedModel?.falModelId
-
-          if (!modelFalId) {
-            pushLog('No falModelId; skipping SSE subscription')
-          } else {
-            falUnsubscribeRef.current = subscribeFalJob(
-              modelFalId!,
-              result.video.jobId,
-              (pct) => {
-                setGenerationProgress(pct)
-                pushLog(`Progress ${pct}%`)
-              },
-              () => {
-                setGenerationProgress(100)
-                pushLog('Fal reported completion')
-              },
-              (err) => {
-                console.error('Fal subscribe error', err)
-                pushLog(`Fal subscribe error: ${(err as Error)?.message || String(err)}`)
-              },
-              (line) => {
-                pushLog(line)
-              },
-              (status) => {
-                pushLog(`SSE status: ${status}`)
-              }
-            )
-          }
-
-          // Begin backend polling loop (includes size-stabilisation guard)
-          await pollVideoStatus(result.video.jobId, null as any)
-          pushLog('Started backend status polling')
+          const provider: 'fal' | 'replicate' | 'other' = modelFalId ? 'fal' : 'other'
+          setJobInfo({ provider, modelId: modelFalId || '', jobId: result.video.jobId })
 
         } else {
           // Immediate completion (rare)
@@ -562,21 +545,13 @@ export default function VideoGenerationPage() {
     } finally {
       // Ensure we cancel any outstanding WebSocket subscription when generation
       // cycle ends (success or failure)
-      if (falUnsubscribeRef.current) {
-        falUnsubscribeRef.current()
-        falUnsubscribeRef.current = undefined
-      }
+      // Unified hook handles cleanup implicitly
       // No synthetic progress to clean up
       // IMPORTANT: do NOT clear isGenerating here; let success/failure paths handle it
     }
   }
 
-  // Clean up on unmount in case the user navigates away mid-generation
-  useEffect(() => {
-    return () => {
-      falUnsubscribeRef.current?.()
-    }
-  }, [])
+  // Unified hook handles cleanup implicitly
 
   const getAspectRatioLabel = (ratio: string) => {
     const labels: Record<string, string> = {
