@@ -14,6 +14,7 @@
 - **Dual URL fallback** – SSE route now alternates between encoded and raw `modelId` path forms when opening the Fal stream, eliminating 404/405 collisions across different queue back-ends.
 - **Unified progress tracking** – Introduced `useJobProgress` React hook that prefers SSE (`/api/fal/stream` or Replicate) and falls back to JSON polling, replacing custom logic in video page.
 - **ModelId decode fix** – `/api/fal/stream` now `decodeURIComponent`-s the `modelId` query param; subscriber stops double-encoding, preventing 422 loops.
+- **Non-streaming Fal models** – Discovered that text-to-video endpoints like `fal-ai/ltxv-13b-*` close `/status/stream` immediately. SSE hook now skips streaming for models without `supportsStreamingLogs`, preventing endless reconnect loops and relying on JSON polling to fetch final video.
 
 ## Open Tasks (derived from Decision follow-ups)
 
