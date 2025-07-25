@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { subscribeFalJob } from '@/lib/fal-log-subscriber'
 
 export interface JobProgress {
   pct: number
@@ -18,6 +17,8 @@ interface UseJobProgressProps {
   onDone?: () => void
   /** Callback fired when the job fails */
   onError?: (err: unknown) => void
+  /** Optional callback for raw log lines */
+  onLog?: (line: string) => void
 }
 
 /**
@@ -33,79 +34,31 @@ export function useJobProgress({
   jobId,
   onDone,
   onError,
+  onLog,
 }: UseJobProgressProps): JobProgress {
   const [pct, setPct] = useState(0)
   const [status, setStatus] = useState('PENDING')
   const pollTimeout = useRef<NodeJS.Timeout>()
-  const unsubscribeRef = useRef<() => void>()
+  const lastLogRef = useRef<string[]>([])
+
+  // Mark unused parameters to satisfy TypeScript no-unused-vars when strict options are enabled
+  void provider
+  void modelId
 
   useEffect(() => {
-    // Clear any previous trackers when inputs change
-    unsubscribeRef.current?.()
     if (pollTimeout.current) clearTimeout(pollTimeout.current)
     setPct(0)
     setStatus('PENDING')
 
-    if (!jobId) {
-      return // no active job → nothing to track yet
-    }
+    if (!jobId) return
 
-    if (provider === 'fal') {
-      // Prefer SSE proxy
-      unsubscribeRef.current = subscribeFalJob(
-        modelId,
-        jobId,
-        (p) => {
-          setPct(p)
-        },
-        () => {
-          setPct(100)
-          setStatus('COMPLETED')
-          onDone?.()
-        },
-        (err) => {
-          // Fallback to polling
-          console.error('Fal SSE error, falling back to polling', err)
-          startPolling()
-          onError?.(err)
-        },
-        undefined,
-        (s) => setStatus(s)
-      )
-    } else if (provider === 'replicate') {
-      // Replicate already returns SSE on its own URL
-      // Directly open EventSource to their endpoint
-      const es = new EventSource(`/api/replicate/stream?requestId=${jobId}`)
-      es.onmessage = (ev) => {
-        try {
-          const data: any = JSON.parse(ev.data)
-          if (typeof data.pct === 'number') setPct(data.pct)
-          if (data.status) setStatus(data.status)
-          if (data.status === 'COMPLETED') {
-            setPct(100)
-            onDone?.()
-            es.close()
-          }
-        } catch {}
-      }
-      es.onerror = (err) => {
-        console.error('Replicate SSE error', err)
-        es.close()
-        startPolling()
-        onError?.(err)
-      }
-      unsubscribeRef.current = () => es.close()
-    } else {
-      // Unknown provider → poll only
-      startPolling()
-    }
+    startPolling()
 
     return () => {
-      unsubscribeRef.current?.()
       if (pollTimeout.current) clearTimeout(pollTimeout.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, modelId, jobId])
+  }, [jobId])
 
   /** Poll `/api/video/status/[jobId]` every 5 s until COMPLETE/FAILED */
   const startPolling = () => {
@@ -116,14 +69,27 @@ export function useJobProgress({
           const json = await res.json()
           if (json?.success) {
             const video = json.video || {}
-            if (typeof video.progress === 'number') setPct(video.progress)
+            if (Array.isArray(video.logs)) {
+              const newLines = video.logs.filter((l: string) => !lastLogRef.current.includes(l))
+              newLines.forEach(l => onLog?.(l))
+              // Keep only last 50 lines
+              lastLogRef.current = [...lastLogRef.current, ...newLines].slice(-50)
+            }
+
+            if (typeof video.progress === 'number') {
+              let p = video.progress
+              if (p >= 100 && (video.status ?? '').toLowerCase() !== 'completed') {
+                p = 99
+              }
+              setPct(p)
+            }
             if (video.status) setStatus(video.status)
-            if (video.status === 'completed') {
+            if (video.status === 'completed' || video.status === 'COMPLETED') {
               setPct(100)
               onDone?.()
               return // stop polling
             }
-            if (video.status === 'failed') {
+            if (video.status === 'failed' || video.status === 'FAILED') {
               setStatus('FAILED')
               onError?.(new Error('Job failed'))
               return
@@ -133,7 +99,7 @@ export function useJobProgress({
       } catch (err) {
         console.error('Job progress poll error', err)
       }
-      pollTimeout.current = setTimeout(poll, 5000)
+      pollTimeout.current = setTimeout(poll, 1000)
     }
     poll()
   }

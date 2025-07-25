@@ -1,8 +1,10 @@
 // src/app/api/fal/stream/route.ts – simplified SSE proxy (attach-only)
 import { NextRequest } from 'next/server'
 import { parseFalProgress } from '@/lib/fal-progress-parser'
+// Enable verbose debugging by setting DEBUG_FAL_SSE=1 in the environment
+const DEBUG = process.env.DEBUG_FAL_SSE === '1'
 
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
@@ -49,20 +51,47 @@ export async function GET(req: NextRequest) {
         const urlRaw     = `https://queue.fal.run/${modelId}/requests/${requestId}/status/stream?logs=1`
         const candidateUrls = [urlEncoded, urlRaw]
 
+        if (DEBUG) console.log('[SSE] candidate URLs', candidateUrls)
+
         const openStream = async (): Promise<Response> => {
+          const startedAt = Date.now()
           let attempt = 0
-          while (attempt < 8) {
+          let delay = 500 // initial back-off in ms
+          const MAX_DELAY = 5000 // cap individual delay to 5 s
+          const MAX_WAIT  = 5 * 60 * 1000 // give up after 5 minutes
+
+          while (Date.now() - startedAt < MAX_WAIT && !closed) {
             const url = candidateUrls[attempt % candidateUrls.length]
+            attempt += 1
+
+            if (DEBUG) console.log(`[SSE] Attempt ${attempt}→`, url)
+
+            // Inform client we are still waiting so they can show spinner
+            send({ type: 'heartbeat', waiting: true, attempt })
+
             const res = await fetch(url, {
               headers: { Authorization: `Key ${apiKey}` },
             })
-            if (res.ok && res.body) return res
-            const transient = res.status === 404 || res.status === 405
-            if (!transient) throw new Error(`Upstream error ${res.status}`)
-            await new Promise(r => setTimeout(r, 250 + attempt * 200))
-            attempt += 1
+
+            if (res.ok && res.body) {
+              if (DEBUG) console.log('[SSE] Upstream stream opened', url)
+              return res
+            }
+
+            if (DEBUG) console.log('[SSE] Upstream not ready', { status: res.status, url })
+
+            const transient = res.status === 404 || res.status === 405 || res.status === 202
+            if (!transient) {
+              // Non-retryable error – surface immediately
+              throw new Error(`Upstream error ${res.status}`)
+            }
+
+            // Wait with exponential back-off capped at MAX_DELAY
+            await new Promise(r => setTimeout(r, delay))
+            delay = Math.min(delay * 1.5, MAX_DELAY)
           }
-          throw new Error('Upstream stream unavailable after retries')
+
+          throw new Error('Upstream stream unavailable after max wait')
         }
 
         /* ------------------------------------------------------------------ */
@@ -74,9 +103,20 @@ export async function GET(req: NextRequest) {
             controller.enqueue(encoder.encode(':' + ' '.repeat(2048) + '\n\n'))
 
             const upstream  = await openStream()
-            const reader    = upstream.body!.getReader()
+            // node-fetch returns a Node.js stream that doesn't implement getReader.
+            // Convert it to a Web ReadableStream if necessary.
+            // @ts-ignore – Node 18+ exposes Readable to Web conversion.
+            const webBody: ReadableStream<Uint8Array> = (typeof upstream.body?.getReader === 'function')
+              ? (upstream.body as any)
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-ignore
+              : (await import('node:stream')).Readable.toWeb(upstream.body as any)
+
+            const reader    = webBody.getReader()
             const decoder   = new TextDecoder()
             let   buffer    = ''
+
+            if (DEBUG) console.log('[SSE] Start reading upstream')
 
             while (true) {
               const { value, done } = await reader.read()
@@ -93,12 +133,20 @@ export async function GET(req: NextRequest) {
                 try {
                    const update: any = JSON.parse(dataLineMatch[1])
 
+                    if (DEBUG) console.log('[SSE] update', {
+                      status: update.status,
+                      logs: Array.isArray(update.logs) ? update.logs.length : 0,
+                      metricPct: update?.metrics?.percent_complete,
+                    })
+
                     // forward new log lines
                     if (Array.isArray(update.logs)) {
                         for (const l of update.logs) {
                             send({ type: 'log', message: l.message })
                             const pct = parseFalProgress(l.message)
                             if (pct !== null) send({ type: 'progress', pct })
+                            if (DEBUG) console.log('[SSE] forwarded log', l.message?.slice?.(0, 120) || '')
+                            if (DEBUG) console.log('[SSE] forwarded pct', pct)
                         }
                     }
 
@@ -114,23 +162,29 @@ export async function GET(req: NextRequest) {
                    }
 
                    send({ type: 'status', status: update.status })
+                   if (DEBUG) console.log('[SSE] forwarded status', update.status)
 
                   if (update.status === 'COMPLETED') {
                     send({ type: 'done', videoUrl: update?.video?.url })
+                    if (DEBUG) console.log('[SSE] job completed, closing stream')
                     close()
                   }
                   if (update.status === 'FAILED') {
                     send({ type: 'error', error: 'Fal job failed' })
+                    if (DEBUG) console.log('[SSE] job failed, closing stream')
                     close()
                   }
                 } catch (err) {
                   send({ type: 'error', error: String(err) })
+                  if (DEBUG) console.error('[SSE] JSON parse forward error', err)
                 }
               }
             }
             close()
+            if (DEBUG) console.log('[SSE] upstream closed')
           } catch (err) {
             send({ type: 'error', error: String(err) })
+            if (DEBUG) console.error('[SSE] stream loop error', err)
             close()
           }
         })()
@@ -142,6 +196,7 @@ export async function GET(req: NextRequest) {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=120',
         'X-Accel-Buffering': 'no',
       },
     })

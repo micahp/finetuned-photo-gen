@@ -16,6 +16,9 @@ export function subscribeFalJob(
   const url = `/api/fal/stream?modelId=${modelId}&requestId=${requestId}`
   const es = new EventSource(url)
 
+  let retries = 0
+  const maxRetries = 3
+
   es.onopen = () => {
     // eslint-disable-next-line no-console
     console.log('[ES] open')
@@ -24,6 +27,17 @@ export function subscribeFalJob(
   es.onerror = (err) => {
     // eslint-disable-next-line no-console
     console.error('[ES] error', err)
+    if (retries < maxRetries) {
+      retries += 1
+      // eslint-disable-next-line no-console
+      console.log(`[ES] retrying (${retries}/${maxRetries}) in 1s`)
+      es.close()
+      setTimeout(() => {
+        subscribeFalJob(modelId, requestId, onProgress, onDone, onError, onLog, onStatus)
+      }, 1000)
+      return
+    }
+
     onError?.(err)
   }
 

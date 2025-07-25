@@ -1,4 +1,5 @@
 import { fal } from '@fal-ai/client'
+import { parseFalProgress } from '@/lib/fal-progress-parser'
 import { CloudStorageService } from './cloud-storage'
 import { ImageProcessingService } from './image-processing-service'
 import { VIDEO_MODELS, VideoModel } from './video-models'
@@ -41,6 +42,10 @@ export interface VideoGenerationResponse {
   width?: number
   height?: number
   fps?: number
+  /** Percentage progress 0-100 when job is still processing */
+  progress?: number
+  /** Latest raw log lines for UI debug (max 10) */
+  logs?: string[]
   error?: string
   /** Original Fal.ai video URL that can be streamed while the Cloudflare copy is propagating */
   fallbackUrl?: string
@@ -554,11 +559,26 @@ export class FalVideoService {
       const model = modelId ? this.getModelConfig(modelId) : null
       const falModelId = model?.falModelId || 'fal-ai/bytedance/seedance/v1/lite/image-to-video'
 
-      // Use the Fal.ai client to check queue status
-      const result = await fal.queue.status(falModelId, {
+      // Use the Fal.ai client to check queue status (include logs for progress heuristics)
+      const result: any = await fal.queue.status(falModelId, {
         requestId: jobId,
         logs: true
       })
+
+      // Derive progress percentage from metrics or logs
+      let progressPct: number | undefined
+      let latestLogs: string[] | undefined
+      if (typeof result?.metrics?.percent_complete === 'number') {
+        progressPct = Math.round(result.metrics.percent_complete)
+      } else if (Array.isArray(result?.logs)) {
+        for (const l of result.logs) {
+          const pct = parseFalProgress(l.message || '')
+          if (pct !== null) {
+            progressPct = Math.max(progressPct ?? 0, pct)
+          }
+        }
+        latestLogs = result.logs.map((l: any) => l.message).slice(-10)
+      }
 
       console.log('📊 Fal.ai queue status:', result)
 
@@ -624,7 +644,9 @@ export class FalVideoService {
             videoUrl: processedVideo.videoUrl,
             fallbackUrl: videoUrl,
             thumbnailUrl: processedVideo.thumbnailUrl,
-            fileSize: processedVideo.fileSize
+            fileSize: processedVideo.fileSize,
+            progress: 100,
+            logs: latestLogs
           }
         }
       }
@@ -632,7 +654,9 @@ export class FalVideoService {
       // For any other status (IN_PROGRESS, IN_QUEUE) or if no video data
       return {
         id: jobId,
-        status: 'processing'
+        status: 'processing',
+        progress: progressPct,
+        logs: latestLogs
       }
 
     } catch (error) {

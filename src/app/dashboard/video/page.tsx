@@ -177,14 +177,32 @@ export default function VideoGenerationPage() {
     onError: (err) => {
       console.error('Job progress error', err)
       pushLog(`Job progress error: ${String(err)}`)
-    }
+    },
+    onLog: (line: string) => pushLog(line),
   })
 
   useEffect(() => {
     if (jobProgress.pct > 0) {
       setGenerationProgress(jobProgress.pct)
     }
-  }, [jobProgress.pct])
+
+    if (jobProgress.status.toLowerCase() === 'completed' && jobInfo?.jobId) {
+      // Fetch final video data once
+      ;(async () => {
+        try {
+          const res = await fetch(`/api/video/status/${jobInfo.jobId}`)
+          if (res.ok) {
+            const json = await res.json()
+            if (json?.success) {
+              setGeneratedVideo(json.video)
+            }
+          }
+        } catch (err) {
+          console.error('Fetch final video failed', err)
+        }
+      })()
+    }
+  }, [jobProgress.pct, jobProgress.status])
 
   /**
    * Interval ref for the synthetic random progress updates that we used prior

@@ -28,6 +28,8 @@ export async function GET(
       return NextResponse.json({ error: 'Video not found' }, { status: 404 })
     }
 
+    let latestProgress: number | undefined
+    let latestLogs: string[] | undefined
     // If video is still processing and we have a falJobId, poll Fal.ai for an update
     if (generatedVideo.status === 'processing' && generatedVideo.falJobId) {
       let latestFallbackUrl: string | undefined
@@ -36,6 +38,8 @@ export async function GET(
         const falStatus = await falVideoService.getJobStatus(generatedVideo.falJobId, generatedVideo.modelId)
 
         latestFallbackUrl = falStatus.fallbackUrl
+        latestProgress = falStatus.progress
+        latestLogs = falStatus.logs
 
         if (falStatus.status === 'completed') {
           // Update DB with completed info
@@ -86,6 +90,8 @@ export async function GET(
         fps: generatedVideo.fps,
         fileSize: generatedVideo.fileSize,
         fallbackUrl: (generatedVideo as any).fallbackUrl,
+        logs: latestLogs,
+        progress: latestProgress,
         createdAt: generatedVideo.createdAt,
         error: generatedVideo.status === 'failed' ? 'Video generation failed' : null
       }
