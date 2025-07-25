@@ -16,6 +16,12 @@
 - **ModelId decode fix** – `/api/fal/stream` now `decodeURIComponent`-s the `modelId` query param; subscriber stops double-encoding, preventing 422 loops.
 - **Non-streaming Fal models** – Discovered that text-to-video endpoints like `fal-ai/ltxv-13b-*` close `/status/stream` immediately. SSE hook now skips streaming for models without `supportsStreamingLogs`, preventing endless reconnect loops and relying on JSON polling to fetch final video.
 
+- **Fast-feedback & loop-break framework** – Added `docs/video-gen-fast-feedback-plan-2025-07-24.md`, outlining past pivot timeline, TDD harness (contract, e2e, smoke), and meta-level practices (decision-log lint, daily context bot, fragility alerts) to prevent recurring debugging loops.
+
+- **Longer attach window** – `/api/fal/stream` now retries 404/405 up to 60 times (30 s) before bailing, eliminating races where Fal exposes `status/stream` a few seconds after job submit.
+
+- **Hide prompt field for Stable-Video Diffusion models** – UI now omits the text prompt box whenever a user selects `fal-ai/stable-video` (image→video) to prevent confusion; see `docs/hide-stable-video-prompt-field-2025-07-24.md`. 
+
 ## Open Tasks (derived from Decision follow-ups)
 
 ### High Priority
