@@ -1,31 +1,84 @@
-### [Decision 1]: Add video support to Gallery & Recent-Activity
-**Timestamp (UTC):** 2025-07-25T18:42:00Z  
-**Scope:**  
-• `src/app/api/dashboard/stats/route.ts`  
-• `src/app/dashboard/page.tsx`  
-• `src/app/dashboard/gallery/page.tsx`  
+### [Decision 3]: Implement Lazy Loading for Gallery Tabs
+**Timestamp (UTC):** 2025-07-25T21:00:00Z
+**Scope:**
+• `src/app/dashboard/gallery/page.tsx`
 
-**Change Summary:**  
-1. Dashboard stats API now returns latest videos and merges them with images into a unified `recentActivity`.  
-2. Dashboard UI renders video rows with an icon, thumbnail poster and external link.  
+**Change Summary:**
+1. Modified the gallery to fetch data only when a tab (Images or Videos) is active, preventing unnecessary loading of all assets at once.
+2. Introduced `useRef` hooks (`imagesFetchedRef`, `videosFetchedRef`) to track the fetched state of each tab's data, avoiding redundant API calls on tab switching.
+3. Ensured a loading indicator is displayed on each tab while its content is being fetched for the first time.
+
+**Rationale:**
+• Addresses a significant performance bottleneck where all images and videos were being fetched on page load, leading to a poor user experience for users with large galleries.
+• Improves initial page load time and reduces unnecessary data transfer.
+
+**Alternatives Considered:**
+- Full infinite scrolling implementation — deferred in favor of this quicker, high-impact change. True infinite scrolling will be addressed as a separate, more involved task.
+
+**Trade-offs / Risks:**
+- This is an intermediate step. While it improves performance significantly, users with very large galleries (1000+ items) may still experience some sluggishness within a single tab.
+
+**Follow-ups / TODOs:**
+- Implement full infinite scrolling for a more robust solution.
+
+**Source Prompt(s):**
+“we gotta be smarter about how these thumbnails load. can't wait for every single image to load before going to the video tab like what the heck”
+
+### [Decision 2]: Align Gallery UI and Add Video Detail Modal
+**Timestamp (UTC):** 2025-07-25T20:15:00Z
+**Scope:**
+• `src/app/dashboard/gallery/page.tsx`
+
+**Change Summary:**
+1. Replaced the `Button`-based image/video toggle with a `Tabs` component to align with the Video Generation page's UI.
+2. Implemented a detailed view modal for videos, achieving feature parity with the image gallery.
+3. The modal displays the video player, prompt, generation parameters, and other metadata.
+4. Includes actions for downloading, copying the prompt, and sharing the video.
+
+**Rationale:**
+• Fulfills user request for UI consistency across related pages.
+• Improves user experience by providing detailed inspection capabilities for generated videos, matching the functionality available for images.
+
+**Alternatives Considered:**
+- Linking to a separate page for video details — rejected as a modal view provides a faster, more integrated experience without leaving the gallery context.
+
+**Trade-offs / Risks:**
+- Marginally increased component complexity in `gallery/page.tsx` is an acceptable trade-off for the significant feature enhancement.
+
+**Follow-ups / TODOs:**
+- None for this specific change.
+
+**Source Prompt(s):**
+“Design for image vs video toggle should match video gen page toggle. We should have feature parity on gallery page for images and video.”
+
+### [Decision 1]: Add video support to Gallery & Recent-Activity
+**Timestamp (UTC):** 2025-07-25T18:42:00Z
+**Scope:**
+• `src/app/api/dashboard/stats/route.ts`
+• `src/app/dashboard/page.tsx`
+• `src/app/dashboard/gallery/page.tsx`
+
+**Change Summary:**
+1. Dashboard stats API now returns latest videos and merges them with images into a unified `recentActivity`.
+2. Dashboard UI renders video rows with an icon, thumbnail poster and external link.
 3. Gallery page gains a Images / Videos tab, fetches `/api/video/gallery`, re-uses filters, and displays inline `<video>` previews.
 
-**Rationale:**  
-• Users requested one place to view/manage generated videos (Decision log 2025-07-25).  
-• Unifying the activity feed keeps dashboards consistent and surfacing videos alongside images improves discoverability.  
+**Rationale:**
+• Users requested one place to view/manage generated videos (Decision log 2025-07-25).
+• Unifying the activity feed keeps dashboards consistent and surfacing videos alongside images improves discoverability.
 
-**Alternatives Considered:**  
-- Separate “Video Gallery” route — rejected to avoid nav clutter.  
-- Keeping activity feed image-only — rejected as inconsistent UX.  
+**Alternatives Considered:**
+- Separate “Video Gallery” route — rejected to avoid nav clutter.
+- Keeping activity feed image-only — rejected as inconsistent UX.
 
-**Trade-offs / Risks:**  
-- Slightly heavier dashboard query (two additional DB calls) — mitigated with limits + combined post-processing.  
-- Initial gallery video tab lacks bulk actions & modal; staged for follow-up.  
+**Trade-offs / Risks:**
+- Slightly heavier dashboard query (two additional DB calls) — mitigated with limits + combined post-processing.
+- Initial gallery video tab lacks bulk actions & modal; staged for follow-up. (Now resolved)
 
-**Follow-ups / TODOs:**  
-- Finish parity features for video list (bulk delete, share, details modal).  
-- Add Playwright e2e covering tab switch + playback.  
-- Remove legacy SSE code once CI passes (`fal-log-subscriber`, `/api/fal/stream`).  
+**Follow-ups / TODOs:**
+- ~Finish parity features for video list (bulk delete, share, details modal).~ (Completed)
+- Add Playwright e2e covering tab switch + playback.
+- Remove legacy SSE code once CI passes (`fal-log-subscriber`, `/api/fal/stream`).
 
-**Source Prompt(s):**  
+**Source Prompt(s):**
 “implement the next two open tasks in context summary … COMMIT” 

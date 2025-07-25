@@ -7,6 +7,7 @@
 - **Raw Fal logs surfaced** – Backend now returns the last 10 queue log lines; React hook de-dupes and streams them into the dashboard “Logs” panel.
 - **Progress heuristics** – `fal-video-service` derives `progress` from `metrics.percent_complete` or parsed log percentages; UI caps at 99 % until status === `completed` to avoid premature 100 %.
 - **Video in Gallery & Activity:** The image gallery now includes a video tab with filtering and inline previews. The dashboard's "Recent Activity" feed now shows both generated images and videos.
+- **Gallery UI Alignment:** The gallery's image/video toggle has been updated to match the design of the video generation page, and a detail view modal has been added for videos to achieve feature parity with images.
 - **Decision logs** – Added:
   - `remove-sse-adopt-polling-2025-07-25.md`
   - `add-fal-logs-and-1s-polling-2025-07-25.md`
@@ -19,6 +20,7 @@ Yesterday we hardened the SSE proxy but user testing still showed buffering and 
 - [X] Evaluate post-generation UX: where can users view/manage generated videos (gallery, share links, delete)?
 - [X] Upgrade existing Image Gallery to support videos (list, filter, play inline).
 - [X] Extend Recent Activity feed to include video generation events. 
+- [ ] Align Gallery UI with Video Generation page and add video detail view.
 - [ ] Remove dead SSE files (`/api/fal/stream`, `fal-log-subscriber.ts`) once CI passes.
 - [ ] Adaptive back-off after 90 % to save API calls.
 - [ ] Consolidate duplicated progress parsing into shared util. 

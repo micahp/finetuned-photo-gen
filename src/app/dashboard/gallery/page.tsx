@@ -25,6 +25,8 @@ import {
   Video as VideoIcon
 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useRef } from 'react'
 
 interface GeneratedImage {
   id: string
@@ -69,6 +71,7 @@ interface GeneratedVideo {
   createdAt: string
   generationParams?: any
   model?: string
+  originalTempUrl?: string
 }
 
 export default function GalleryPage() {
@@ -79,7 +82,10 @@ export default function GalleryPage() {
   const [filteredVideos, setFilteredVideos] = useState<GeneratedVideo[]>([])
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set<string>())
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null)
+  const [selectedVideo, setSelectedVideo] = useState<GeneratedVideo | null>(null)
   const [loading, setLoading] = useState(true)
+  const imagesFetchedRef = useRef(false)
+  const videosFetchedRef = useRef(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [showFilters, setShowFilters] = useState(false)
   const [activeTab, setActiveTab] = useState<'images' | 'videos'>('images')
@@ -93,6 +99,7 @@ export default function GalleryPage() {
 
   // Fetch images from API
   const fetchImages = useCallback(async () => {
+    if (imagesFetchedRef.current) return
     try {
       setLoading(true)
       const response = await fetch('/api/gallery')
@@ -101,6 +108,7 @@ export default function GalleryPage() {
       if (data.success) {
         setImages(data.images)
         setFilteredImages(data.images)
+        imagesFetchedRef.current = true
       }
     } catch (error) {
       console.error('Failed to fetch images:', error)
@@ -109,26 +117,34 @@ export default function GalleryPage() {
     }
   }, [])
 
-  useEffect(() => {
-    if (session?.user) {
-      fetchImages()
-      fetchVideos()
-    }
-  }, [session, fetchImages])
-
   // Fetch videos
   const fetchVideos = useCallback(async () => {
+    if (videosFetchedRef.current) return
     try {
+      setLoading(true)
       const res = await fetch('/api/video/gallery')
       const json = await res.json()
       if (json.success) {
         setVideos(json.videos)
         setFilteredVideos(json.videos)
+        videosFetchedRef.current = true
       }
     } catch (err) {
       console.error('Failed to fetch videos', err)
+    } finally {
+      setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    if (session?.user) {
+      if (activeTab === 'images') {
+        fetchImages()
+      } else if (activeTab === 'videos') {
+        fetchVideos()
+      }
+    }
+  }, [session, activeTab, fetchImages, fetchVideos])
 
   // Apply filters
   useEffect(() => {
@@ -341,16 +357,28 @@ export default function GalleryPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       {/* Tabs for Images / Videos */}
-      <div className="mb-4 flex gap-2">
-        <Button variant={activeTab==='images'?'default':'outline'} size="sm" onClick={()=>setActiveTab('images')}>
-          <ImageIcon className="h-4 w-4 mr-1"/> Images
-        </Button>
-        <Button variant={activeTab==='videos'?'default':'outline'} size="sm" onClick={()=>setActiveTab('videos')}>
-          <VideoIcon className="h-4 w-4 mr-1"/> Videos
-        </Button>
-      </div>
+      <Tabs
+        value={activeTab}
+        onValueChange={value =>
+          setActiveTab(value as 'images' | 'videos')
+        }
+        className="mb-4"
+      >
+        <TabsList>
+          <TabsTrigger value="images">
+            <ImageIcon className="h-4 w-4 mr-2" />
+            Images
+          </TabsTrigger>
+          <TabsTrigger value="videos">
+            <VideoIcon className="h-4 w-4 mr-2" />
+            Videos
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">{activeTab==='images'?'Image Gallery':'Video Gallery'}</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          {activeTab === 'images' ? 'Image Gallery' : 'Video Gallery'}
+        </h1>
         <p className="text-gray-600">
           View and manage all your AI-generated {activeTab==='images'?'images':'videos'}
         </p>
@@ -709,10 +737,32 @@ export default function GalleryPage() {
               ))}
             </div>
           )
+        ) : loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading your videos...</p>
+            </div>
+          </div>
+        ) : filteredVideos.length === 0 ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <VideoIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">
+                {videos.length === 0
+                  ? 'No videos generated yet'
+                  : 'No videos match your filters'}
+              </p>
+            </div>
+          </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {filteredVideos.map(video => (
-              <div key={video.id} className="relative group">
+              <div
+                key={video.id}
+                className="relative group cursor-pointer"
+                onClick={() => setSelectedVideo(video)}
+              >
                 <video
                   src={video.videoUrl}
                   poster={video.thumbnailUrl || ''}
@@ -838,6 +888,132 @@ export default function GalleryPage() {
                       <Button
                         variant="outline"
                         onClick={() => shareImage(selectedImage)}
+                      >
+                        <Share className="h-4 w-4 mr-2" />
+                        Share
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Video Details Modal */}
+        <Dialog open={!!selectedVideo} onOpenChange={() => setSelectedVideo(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            {selectedVideo && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Video Details</DialogTitle>
+                </DialogHeader>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <video
+                      src={selectedVideo.videoUrl}
+                      poster={selectedVideo.thumbnailUrl || ''}
+                      className="w-full rounded-lg shadow-lg"
+                      controls
+                    />
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-medium text-gray-900 mb-2">Prompt</h3>
+                      <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">
+                        {selectedVideo.prompt}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-medium text-gray-900 mb-2">Generation Parameters</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Model:</span>
+                          <span>{selectedVideo.generationParams?.model || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Aspect Ratio:</span>
+                          <span>{selectedVideo.aspectRatio}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Duration:</span>
+                          <span>{selectedVideo.duration}s</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">FPS:</span>
+                          <span>{selectedVideo.fps}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Seed:</span>
+                          <span>{selectedVideo.generationParams?.seed ?? 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Style:</span>
+                          <span className="capitalize">{selectedVideo.generationParams?.style || 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-medium text-gray-900 mb-2">Enhanced Metadata</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Created:</span>
+                          <span>{new Date(selectedVideo.createdAt).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Credits Used:</span>
+                          <span>{selectedVideo.creditsUsed}</span>
+                        </div>
+                        {selectedVideo.originalTempUrl && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Original URL:</span>
+                            <span className="text-xs text-blue-600 truncate max-w-32" title={selectedVideo.originalTempUrl}>
+                              {selectedVideo.originalTempUrl.split('/').pop()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 pt-4">
+                      <Button
+                        onClick={() => {
+                          const a = document.createElement('a');
+                          a.href = selectedVideo.videoUrl;
+                          a.download = `generated-video-${selectedVideo.id}.mp4`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                        }}
+                        className="flex-1"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => copyPrompt(selectedVideo.prompt)}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy Prompt
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          if (navigator.share) {
+                            navigator.share({
+                              title: 'AI Generated Video',
+                              text: selectedVideo.prompt,
+                              url: selectedVideo.videoUrl
+                            });
+                          } else {
+                            navigator.clipboard.writeText(selectedVideo.videoUrl);
+                          }
+                        }}
                       >
                         <Share className="h-4 w-4 mr-2" />
                         Share
