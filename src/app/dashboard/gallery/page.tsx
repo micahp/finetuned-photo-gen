@@ -1040,7 +1040,7 @@ export default function GalleryPage() {
                   >
                     <video
                       src={video.videoUrl}
-                      poster={video.thumbnailUrl || ''}
+                      poster={video.thumbnailUrl || undefined}
                       className="w-full h-auto rounded-lg object-cover"
                       muted
                       playsInline
@@ -1059,7 +1059,7 @@ export default function GalleryPage() {
                   >
                     <video
                       src={video.videoUrl}
-                      poster={video.thumbnailUrl || ''}
+                      poster={video.thumbnailUrl || undefined}
                       className="w-full h-auto rounded-lg object-cover"
                       muted
                       playsInline

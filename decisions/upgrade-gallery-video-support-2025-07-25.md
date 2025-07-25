@@ -1,3 +1,31 @@
+### [Decision 6]: Suppress Share Cancellation Errors and Fix Empty `src` Warnings
+**Timestamp (UTC):** 2024-07-26T18:35:00Z
+**Scope:**
+• `src/app/dashboard/gallery/page.tsx`
+• `src/components/ui/smart-image.tsx`
+
+**Change Summary:**
+1. Wrapped `navigator.share()` calls within the gallery page in a `try...catch` block to gracefully handle the `AbortError` that occurs when a user cancels the native share dialog.
+2. Modified the `SmartImage` component to return a placeholder or `null` if its `src` prop is an empty string, preventing the browser warning about re-requesting the page.
+3. Updated `<video>` elements to use `undefined` instead of an empty string for the `poster` attribute when a thumbnail URL is missing, addressing the same warning.
+
+**Rationale:**
+These changes address two distinct frontend issues to improve robustness and eliminate console warnings. Suppressing the `AbortError` provides a cleaner console experience for a common user action (canceling a share). Preventing empty `src` and `poster` attributes fixes a browser warning and avoids unnecessary network requests, improving performance.
+
+**Alternatives Considered:**
+- For the share error: Leaving the unhandled promise rejection — rejected as it creates unnecessary noise in error logs and developer console.
+- For the empty `src`: Relying on the component's `onError` handler — rejected because the browser issues the warning and makes the network request before the JavaScript error handler can execute.
+
+**Trade-offs / Risks:**
+- None. These are minor, low-risk fixes that improve frontend stability.
+
+**Follow-ups / TODOs:**
+- None.
+
+**Source Prompt(s):**
+"suppress this error AbortError: Share canceled."
+"keep getting thsi error randomly. what is it about? An empty string ("") was passed to the src attribute."
+
 ### [Decision 5]: Refine Video Detail View Layout and Typography
 **Timestamp (UTC):** 2024-07-26T18:03:00Z
 **Scope:**

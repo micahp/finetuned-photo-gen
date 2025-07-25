@@ -34,6 +34,24 @@ export function SmartImage({
     setImageError(false)
   }
 
+  // If src is empty, immediately show placeholder or nothing
+  if (!src) {
+    if (showPlaceholder) {
+      return (
+        <div 
+          className={`bg-gray-100 flex items-center justify-center ${className}`}
+          onClick={onClick}
+        >
+          <div className="text-center text-gray-400">
+            <ImageIcon className="h-8 w-8 mx-auto mb-2" />
+            <p className="text-xs">Image unavailable</p>
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
+
   // If we have an error and no fallback, show placeholder
   if (imageError && !fallbackSrc) {
     return showPlaceholder ? (
