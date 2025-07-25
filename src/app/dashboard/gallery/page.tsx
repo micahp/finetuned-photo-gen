@@ -22,7 +22,8 @@ import {
   Copy,
   Share,
   MoreHorizontal,
-  Video as VideoIcon
+  Video as VideoIcon,
+  Loader2
 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -82,8 +83,45 @@ export default function GalleryPage() {
   const [filteredVideos, setFilteredVideos] = useState<GeneratedVideo[]>([])
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set<string>())
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null)
-  const [selectedVideo, setSelectedVideo] = useState<GeneratedVideo | null>(null)
+  const [selectedVideo, setSelectedVideo] = useState<GeneratedVideo | null>(
+    null
+  )
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [imagePage, setImagePage] = useState(1)
+  const [hasMoreImages, setHasMoreImages] = useState(true)
+  const [videoPage, setVideoPage] = useState(1)
+  const [hasMoreVideos, setHasMoreVideos] = useState(true)
+
+  const observer = useRef<IntersectionObserver>()
+  const lastImageElementRef = useCallback(
+    node => {
+      if (loading) return
+      if (observer.current) observer.current.disconnect()
+      observer.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && hasMoreImages) {
+          setImagePage(prevPage => prevPage + 1)
+        }
+      })
+      if (node) observer.current.observe(node)
+    },
+    [loading, hasMoreImages]
+  )
+
+  const lastVideoElementRef = useCallback(
+    node => {
+      if (loading) return
+      if (observer.current) observer.current.disconnect()
+      observer.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && hasMoreVideos) {
+          setVideoPage(prevPage => prevPage + 1)
+        }
+      })
+      if (node) observer.current.observe(node)
+    },
+    [loading, hasMoreVideos]
+  )
+
   const imagesFetchedRef = useRef(false)
   const videosFetchedRef = useRef(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
@@ -98,53 +136,96 @@ export default function GalleryPage() {
   })
 
   // Fetch images from API
-  const fetchImages = useCallback(async () => {
-    if (imagesFetchedRef.current) return
-    try {
-      setLoading(true)
-      const response = await fetch('/api/gallery')
-      const data = await response.json()
-      
-      if (data.success) {
-        setImages(data.images)
-        setFilteredImages(data.images)
-        imagesFetchedRef.current = true
+  const fetchImages = useCallback(
+    async (page: number) => {
+      if (!hasMoreImages && page > 1) return
+      setLoadingMore(true)
+      try {
+        const response = await fetch(`/api/gallery?page=${page}&limit=20`)
+        const data = await response.json()
+
+        if (data.success) {
+          setImages(prev => (page === 1 ? data.images : [...prev, ...data.images]))
+          setFilteredImages(prev =>
+            page === 1 ? data.images : [...prev, ...data.images]
+          )
+          setHasMoreImages(data.pagination.hasNext)
+        }
+      } catch (error) {
+        console.error('Failed to fetch images:', error)
+      } finally {
+        setLoading(false)
+        setLoadingMore(false)
       }
-    } catch (error) {
-      console.error('Failed to fetch images:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    },
+    [hasMoreImages]
+  )
 
   // Fetch videos
-  const fetchVideos = useCallback(async () => {
-    if (videosFetchedRef.current) return
-    try {
-      setLoading(true)
-      const res = await fetch('/api/video/gallery')
-      const json = await res.json()
-      if (json.success) {
-        setVideos(json.videos)
-        setFilteredVideos(json.videos)
-        videosFetchedRef.current = true
+  const fetchVideos = useCallback(
+    async (page: number) => {
+      if (!hasMoreVideos && page > 1) return
+      setLoadingMore(true)
+      try {
+        const res = await fetch(`/api/video/gallery?page=${page}&limit=20`)
+        const json = await res.json()
+        if (json.success) {
+          setVideos(prev => (page === 1 ? json.videos : [...prev, ...json.videos]))
+          setFilteredVideos(prev =>
+            page === 1 ? json.videos : [...prev, ...json.videos]
+          )
+          setHasMoreVideos(json.pagination.hasNextPage)
+        }
+      } catch (err) {
+        console.error('Failed to fetch videos', err)
+      } finally {
+        setLoading(false)
+        setLoadingMore(false)
       }
-    } catch (err) {
-      console.error('Failed to fetch videos', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    },
+    [hasMoreVideos]
+  )
 
   useEffect(() => {
     if (session?.user) {
       if (activeTab === 'images') {
-        fetchImages()
-      } else if (activeTab === 'videos') {
-        fetchVideos()
+        fetchImages(imagePage)
       }
     }
-  }, [session, activeTab, fetchImages, fetchVideos])
+  }, [session, imagePage])
+
+  useEffect(() => {
+    if (session?.user) {
+      if (activeTab === 'videos') {
+        fetchVideos(videoPage)
+      }
+    }
+  }, [session, videoPage])
+
+  useEffect(() => {
+    if (activeTab === 'images' && !images.length) {
+      fetchImages(1)
+    } else if (activeTab === 'videos' && !videos.length) {
+      fetchVideos(1)
+    }
+  }, [activeTab])
+
+  // Reset state when filters change
+  useEffect(() => {
+    setImagePage(1)
+    setVideoPage(1)
+    setImages([])
+    setVideos([])
+    setFilteredImages([])
+    setFilteredVideos([])
+    setHasMoreImages(true)
+    setHasMoreVideos(true)
+    if (activeTab === 'images') {
+      fetchImages(1)
+    } else {
+      fetchVideos(1)
+    }
+  }, [filters])
 
   // Apply filters
   useEffect(() => {
@@ -775,6 +856,11 @@ export default function GalleryPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {loadingMore && (
+          <div className="text-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-500" />
           </div>
         )}
 
