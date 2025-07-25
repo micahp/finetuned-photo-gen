@@ -1,3 +1,29 @@
+### [Decision 5]: Refine Video Detail View Layout and Typography
+**Timestamp (UTC):** 2024-07-26T18:03:00Z
+**Scope:**
+• `src/app/dashboard/gallery/page.tsx`
+
+**Change Summary:**
+1. Relocated the prompt display in the video detail modal to appear directly below the video player.
+2. Adjusted the font size of the prompt text to `13px` for better visual hierarchy and to match user specifications.
+
+**Rationale:**
+The previous layout placed the prompt in the right-hand column, separating it from the video it described. Moving it directly below the video creates a more logical and intuitive grouping of related content. The font size adjustment provides finer control over the UI's typography.
+
+**Alternatives Considered:**
+- Keeping the prompt on the right side — rejected for a less intuitive user experience.
+- Using a standard Tailwind text size (e.g., `text-xs` or `text-sm`) — rejected in favor of the precise `13px` value requested by the user.
+
+**Trade-offs / Risks:**
+- None. This is a minor, low-risk UI tweak.
+
+**Follow-ups / TODOs:**
+- None.
+
+**Source Prompt(s):**
+"in the video detail view, let's move the prompt from the right side to below the video preview"
+"change the font size for p tag that the prompt is inside in the gallery video detail view to 13px"
+
 ### [Decision 4]: Implement Infinite Scrolling in Gallery
 **Timestamp (UTC):** 2025-07-25T22:00:00Z
 **Scope:**
