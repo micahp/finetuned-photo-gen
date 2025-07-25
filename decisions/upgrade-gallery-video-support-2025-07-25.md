@@ -1,3 +1,34 @@
+### [Decision 4]: Implement Infinite Scrolling in Gallery
+**Timestamp (UTC):** 2025-07-25T22:00:00Z
+**Scope:**
+• `src/app/api/gallery/route.ts`
+• `src/app/api/video/gallery/route.ts`
+• `src/app/dashboard/gallery/page.tsx`
+
+**Change Summary:**
+1. **Backend:** Verified that both image and video gallery APIs support pagination (`page`, `limit`).
+2. **Frontend:**
+   - Implemented state to manage pagination for both image and video tabs (`imagePage`, `videoPage`, `hasMoreImages`, `hasMoreVideos`).
+   - Used `IntersectionObserver` to detect when the user scrolls to the bottom of the list, triggering a fetch for the next page of results.
+   - Modified fetch functions to append new items to the list, creating the infinite scroll effect.
+   - Added a loading indicator that appears at the bottom of the grid when more items are being fetched.
+
+**Rationale:**
+• Replaces the previous "load all" and tab-based loading models with a much more scalable and performant solution.
+• Drastically improves the user experience for users with large numbers of generated images or videos by loading content on demand.
+
+**Alternatives Considered:**
+- "Load More" button — rejected in favor of the smoother, more modern user experience of infinite scrolling.
+
+**Trade-offs / Risks:**
+- A complex filter change could still require a full reset and reload, but this is an acceptable trade-off for the performance gains in the primary browsing use case.
+
+**Follow-ups / TODOs:**
+- Implement a skeleton loader for the initial loading state to prevent the "no content" flash.
+
+**Source Prompt(s):**
+“and what is the experience liek when the user has generated 100 images and 100 videos? do we wait for them all to load? is it lazy loading? or what?”
+
 ### [Decision 3]: Implement Lazy Loading for Gallery Tabs
 **Timestamp (UTC):** 2025-07-25T21:00:00Z
 **Scope:**
