@@ -160,6 +160,11 @@ export default function GalleryPage() {
         if (filters.model !== 'all') params.append('modelId', filters.model);
         if (filters.aspectRatio !== 'all') params.append('aspectRatio', filters.aspectRatio);
         
+        if (page === 1) {
+          // First page load – trigger global loading state so the UI shows a placeholder instead of 0
+          setLoading(true)
+        }
+
         const response = await fetch(`/api/gallery?${params.toString()}`)
         const data = await response.json()
 
@@ -201,6 +206,11 @@ export default function GalleryPage() {
         if (filters.search) params.append('search', filters.search);
         if (filters.model !== 'all') params.append('modelId', filters.model);
         if (filters.aspectRatio !== 'all') params.append('aspectRatio', filters.aspectRatio);
+
+        if (page === 1) {
+          // First page load – trigger global loading state so the UI shows a placeholder instead of 0
+          setLoading(true)
+        }
 
         const res = await fetch(`/api/video/gallery?${params.toString()}`)
         const json = await res.json()
@@ -534,13 +544,16 @@ export default function GalleryPage() {
             {activeTab==='images' ? (
               <>
                 <ImageIcon className="h-3 w-3" />
-                {imageTotalCount ?? filteredImages.length} image{(imageTotalCount ?? filteredImages.length)!==1?'s':''}
+                {imageTotalCount !== null
+                  ? `${imageTotalCount} image${imageTotalCount!==1?'s':''}`
+                  : '—'}
               </>
             ) : (
               <>
                 <VideoIcon className="h-3 w-3" />
-                {/* Show total videos when available, otherwise fallback to currently loaded count */}
-                {videoTotalCount ?? filteredVideos.length} video{(videoTotalCount ?? filteredVideos.length)!==1?'s':''}
+                {videoTotalCount !== null
+                  ? `${videoTotalCount} video${videoTotalCount!==1?'s':''}`
+                  : '—'}
               </>
             )}
           </Badge>

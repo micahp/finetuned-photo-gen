@@ -1,3 +1,53 @@
+### [Decision 8]: Prevent "0 items" Flash by Showing Placeholder Counts During Initial Load
+**Timestamp (UTC):** 2025-07-26T00:15:00Z
+**Scope:**
+• `src/app/dashboard/gallery/page.tsx`
+
+**Change Summary:**
+1. Added a global `setLoading(true)` trigger when requesting page 1 of images or videos.
+2. Gallery badge now displays an em dash (`—`) until `imageTotalCount` or `videoTotalCount` is received, eliminating the misleading "0 images/videos" state.
+
+**Rationale:**
+• Users perceived the brief "0 images/videos" display as a bug or data loss. The placeholder communicates that counts are still loading.
+• Solution required minimal code (no additional components) and leverages existing `loading` state.
+
+**Alternatives Considered:**
+- Skeleton loader overlay — heavier DOM changes and didn't address the badge count specifically.
+- Hiding the badge entirely until data loads — rejected; the badge anchors the content header visually.
+
+**Trade-offs / Risks:**
+- None; the change is purely presentational and low-risk.
+
+**Follow-ups / TODOs:**
+- Monitor analytics for reduced bounce on gallery page during slow network conditions.
+
+**Source Prompt(s):**
+> “This thing where the gallery page says zero images or zero videos before it loads is not acceptable… I can't have it zero when user has videos or images.”
+
+### [Decision 7]: Center Video List View Items
+**Timestamp (UTC):** 2025-07-26T00:00:00Z
+**Scope:**
+• `src/components/video/VideoGalleryCard.tsx`
+
+**Change Summary:**
+1. Removed the default `CardContent` padding (`className="p-0"`) for video list-view rows to ensure thumbnails and metadata are vertically centered.
+2. Confirms visual consistency between image and video list-view layouts.
+
+**Rationale:**
+Extra padding in `CardContent` pushed content downward, making list-view rows appear misaligned. Eliminating this padding directly addresses the layout issue with minimal code.
+
+**Alternatives Considered:**
+- Tweaking individual element margins — rejected for being more brittle and less maintainable than addressing the root padding.
+
+**Trade-offs / Risks:**
+- None; purely cosmetic UI fix.
+
+**Follow-ups / TODOs:**
+- None.
+
+**Source Prompt(s):**
+"I want the gallery video list view items to look like this but they are not cnetered for some reason"
+
 ### [Decision 6]: Suppress Share Cancellation Errors and Fix Empty `src` Warnings
 **Timestamp (UTC):** 2024-07-26T18:35:00Z
 **Scope:**

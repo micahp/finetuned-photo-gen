@@ -153,7 +153,7 @@ export function VideoGalleryCard({
   // List View
   return (
     <Card className="group p-4 animate-fade-in">
-      <CardContent>
+      <CardContent className="p-0">
         <div className="flex gap-4 items-center" onClick={() => onViewDetails(video)}>
           <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
             <Checkbox
