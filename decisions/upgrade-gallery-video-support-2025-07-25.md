@@ -43,10 +43,14 @@ The previous layout placed the prompt in the right-hand column, separating it fr
 - Using a standard Tailwind text size (e.g., `text-xs` or `text-sm`) — rejected in favor of the precise `13px` value requested by the user.
 
 **Trade-offs / Risks:**
-- None. This is a minor, low-risk UI tweak.
+- None. This is a minor,low-risk UI tweak.
 
 **Follow-ups / TODOs:**
-- None.
+- [x] Enable video selection and bulk actions in the gallery grid.
+- [x] Standardize video preview cards to match image styling.
+- [x] Unify prompt styling in the image detail view to match the video view.
+- [~] Enhance video metadata display in both grid and detail views. (Partially complete, prompt added to grid).
+- [x] Document view alternatives and follow-up tasks in `docs/gallery-view-options.md` (2024-07-26).
 
 **Source Prompt(s):**
 "in the video detail view, let's move the prompt from the right side to below the video preview"
@@ -66,6 +70,8 @@ The previous layout placed the prompt in the right-hand column, separating it fr
    - Used `IntersectionObserver` to detect when the user scrolls to the bottom of the list, triggering a fetch for the next page of results.
    - Modified fetch functions to append new items to the list, creating the infinite scroll effect.
    - Added a loading indicator that appears at the bottom of the grid when more items are being fetched.
+   - Attached the `IntersectionObserver` ref to the **final video card**, fixing a bug that limited scrolling to the first page of videos.
+   - Introduced `imageTotalCount` and `videoTotalCount` state to display **accurate total counts** in the gallery badges rather than the number of items currently rendered.
 
 **Rationale:**
 • Replaces the previous "load all" and tab-based loading models with a much more scalable and performant solution.
