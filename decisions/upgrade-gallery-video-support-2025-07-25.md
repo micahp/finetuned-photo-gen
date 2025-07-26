@@ -72,6 +72,8 @@ The previous layout placed the prompt in the right-hand column, separating it fr
    - Added a loading indicator that appears at the bottom of the grid when more items are being fetched.
    - Attached the `IntersectionObserver` ref to the **final video card**, fixing a bug that limited scrolling to the first page of videos.
    - Introduced `imageTotalCount` and `videoTotalCount` state to display **accurate total counts** in the gallery badges rather than the number of items currently rendered.
+   - Added **list view layout** for videos, mirroring the image tab’s “Recent Activity” style with thumbnails, metadata, and quick actions.
+   - Updated `<video>` elements to omit the `poster` attribute when no thumbnail is available, eliminating the *empty src* warning and related `AbortError`.
 
 **Rationale:**
 • Replaces the previous "load all" and tab-based loading models with a much more scalable and performant solution.
