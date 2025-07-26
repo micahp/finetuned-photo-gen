@@ -119,7 +119,7 @@ export function VideoGalleryCard({
               {isLoaded ? (
                 <video
                   src={video.videoUrl}
-                  poster={video.thumbnailUrl}
+                  poster={video.thumbnailUrl || undefined}
                   className="w-full h-full object-cover rounded-t-lg transition-opacity duration-300 animate-fade-in"
                   muted
                   playsInline
@@ -166,7 +166,7 @@ export function VideoGalleryCard({
             {isLoaded ? (
               <video
                 src={video.videoUrl}
-                poster={video.thumbnailUrl}
+                poster={video.thumbnailUrl || undefined}
                 className="w-full h-full object-cover"
                 muted
                 playsInline
