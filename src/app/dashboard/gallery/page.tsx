@@ -16,6 +16,7 @@ import {
   Image as ImageIcon, 
   Grid3X3, 
   List, 
+  StretchHorizontal,
   Filter,
   Trash2,
   Eye,
@@ -132,7 +133,7 @@ export default function GalleryPage() {
 
   const imagesFetchedRef = useRef(false)
   const videosFetchedRef = useRef(false)
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'wide'>('grid')
   const [showFilters, setShowFilters] = useState(false)
   const [activeTab, setActiveTab] = useState<'images' | 'videos'>('images')
   const [filters, setFilters] = useState<FilterState>({
@@ -611,6 +612,14 @@ export default function GalleryPage() {
                 <Grid3X3 className="h-4 w-4" />
               </Button>
               <Button
+                variant={viewMode === 'wide' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('wide')}
+                className="-mx-px rounded-none" /* Negative margin to avoid double border */
+              >
+                <StretchHorizontal className="h-4 w-4" />
+              </Button>
+              <Button
                 variant={viewMode === 'list' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('list')}
@@ -807,8 +816,8 @@ export default function GalleryPage() {
           ) : (
             <div
               className={
-                viewMode === 'grid'
-                  ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'
+                (viewMode !== 'list')
+                  ? `grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 ${viewMode === 'wide' ? 'auto-rows-fr' : ''}`
                   : 'space-y-4'
               }
             >
@@ -825,7 +834,7 @@ export default function GalleryPage() {
                       <CardContent
                         className={viewMode === 'grid' ? 'p-0' : 'p-0'}
                       >
-                        {viewMode === 'grid' ? (
+                        {(viewMode !== 'list') ? (
                           // Grid View
                           <div className="relative">
                             <div className="absolute top-2 left-2 z-10">
@@ -890,7 +899,7 @@ export default function GalleryPage() {
                             <SmartImage
                               src={image.imageUrl}
                               alt={image.prompt}
-                              className="w-full aspect-square object-cover rounded-lg cursor-pointer"
+                              className={`w-full ${viewMode === 'wide' ? 'aspect-video' : 'aspect-square'} object-cover rounded-lg cursor-pointer`}
                               onClick={() => setSelectedImage(image)}
                             />
 
@@ -989,7 +998,7 @@ export default function GalleryPage() {
                       <CardContent
                         className={viewMode === 'grid' ? 'p-0' : 'p-0'}
                       >
-                        {viewMode === 'grid' ? (
+                        {(viewMode !== 'list') ? (
                           // Grid View
                           <div className="relative">
                             <div className="absolute top-2 left-2 z-10">
@@ -1054,7 +1063,7 @@ export default function GalleryPage() {
                             <SmartImage
                               src={image.imageUrl}
                               alt={image.prompt}
-                              className="w-full aspect-square object-cover rounded-lg cursor-pointer"
+                              className={`w-full ${viewMode === 'wide' ? 'aspect-video' : 'aspect-square'} object-cover rounded-lg cursor-pointer`}
                               onClick={() => setSelectedImage(image)}
                             />
 
@@ -1164,7 +1173,7 @@ export default function GalleryPage() {
             </div>
           </div>
         ) : (
-          <div className={viewMode === 'grid' ? 'grid grid-cols-2 md:grid-cols-4 gap-4' : 'space-y-4'}>
+          <div className={viewMode !== 'list' ? 'grid grid-cols-2 md:grid-cols-4 gap-4' : 'space-y-4'}>
             {filteredVideos.map((video, index) => {
               // Attach the IntersectionObserver ref to the last element to trigger pagination
               if (filteredVideos.length === index + 1) {

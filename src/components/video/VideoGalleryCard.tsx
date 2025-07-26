@@ -28,7 +28,7 @@ interface GeneratedVideo {
 interface VideoGalleryCardProps {
   video: GeneratedVideo;
   isSelected: boolean;
-  viewMode?: 'grid' | 'list';
+  viewMode?: 'grid' | 'wide' | 'list';
   onSelectionChange: (id: string) => void;
   onViewDetails: (video: GeneratedVideo) => void;
   onDelete: (id: string) => void;
@@ -60,7 +60,7 @@ export function VideoGalleryCard({
     }
   }, [video.thumbnailUrl, video.id])
 
-  if (viewMode === 'grid') {
+  if (viewMode === 'grid' || viewMode === 'wide') {
     return (
       <Card className="group animate-fade-in">
         <CardContent className="p-0">
@@ -115,7 +115,7 @@ export function VideoGalleryCard({
               </DropdownMenu>
             </div>
             
-            <div className="w-full aspect-square bg-muted rounded-t-lg">
+            <div className={`w-full ${viewMode === 'wide' ? 'aspect-video' : 'aspect-square'} bg-muted rounded-t-lg`}>
               {isLoaded ? (
                 <video
                   src={video.videoUrl}

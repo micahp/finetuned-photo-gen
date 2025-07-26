@@ -1,3 +1,32 @@
+### [Decision 9]: Add Experimental 16:9 "Wide" Gallery View
+**Timestamp (UTC):** 2025-07-26T01:00:00Z
+**Scope:**
+• `src/app/dashboard/gallery/page.tsx`
+• `src/components/video/VideoGalleryCard.tsx`
+
+**Change Summary:**
+1. Introduced `viewMode = 'wide'` alongside existing `grid` and `list` modes.
+2. Added a *StretchHorizontal* icon button to the view toggle bar.
+3. For images/videos, `aspect-video` (16:9) is used instead of `aspect-square` when in wide mode.
+4. Default remains `grid`; wide view is opt-in for upcoming A/B test.
+
+**Rationale:**
+• Users requested a cinematic layout for landscape content. An optional mode lets us test engagement without disrupting familiar defaults.
+
+**Alternatives Considered:**
+- Auto-detect based on asset aspect ratio — postponed; explicit mode keeps logic simple for the test.
+- Replacing square grid entirely — rejected until A/B results justify.
+
+**Trade-offs / Risks:**
+- Slight increase in conditionals; mitigated by keeping `wide` branch parallel to `grid`.
+
+**Follow-ups / TODOs:**
+- Add localStorage persistence for user-selected view after test.
+- Track click-through and dwell metrics to compare view modes.
+
+**Source Prompt(s):**
+> “Add another gallery view option next to the two we have that displays items in 16 × 9 but keep default the same. This is for an A/B.”
+
 ### [Decision 8]: Prevent "0 items" Flash by Showing Placeholder Counts During Initial Load
 **Timestamp (UTC):** 2025-07-26T00:15:00Z
 **Scope:**
