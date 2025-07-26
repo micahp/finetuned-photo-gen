@@ -50,19 +50,14 @@ export function Navbar() {
     { href: '/dashboard', label: 'Dashboard', icon: Home },
     { href: '/dashboard/generate', label: 'Generate', icon: Sparkles },
     { href: '/dashboard/edit', label: 'Edit', icon: Palette },
-    { href: '/dashboard/video', label: 'Video', icon: Video, requiresPremium: true },
+    { href: '/dashboard/video', label: 'Video', icon: Video },
     { href: '/dashboard/gallery', label: 'Gallery', icon: Camera },
     { href: '/dashboard/models', label: 'Models', icon: Cpu },
     { href: '/dashboard/training', label: 'Training', icon: Activity },
   ]
 
-  // Filter navigation items based on premium access
-  const filteredNavigationItems = navigationItems.filter(item => {
-    if (item.requiresPremium) {
-      return showVideoNavigation
-    }
-    return true
-  })
+  // No premium gating needed; simply use all items
+  const filteredNavigationItems = navigationItems
 
   return (
     <nav className="border-b bg-white">
@@ -94,9 +89,6 @@ export function Navbar() {
                     <Link key={item.href} href={item.href}>
                       <Button variant="ghost" size="sm" className="flex items-center gap-1">
                         {item.label}
-                        {item.requiresPremium && !hasPremiumAccess && isDev && (
-                          <Crown className="h-3 w-3 text-yellow-500" />
-                        )}
                       </Button>
                     </Link>
                   ))}
@@ -166,9 +158,6 @@ export function Navbar() {
                               <Icon className="h-5 w-5 text-gray-500" />
                               <span className="font-medium flex items-center gap-1">
                                 {item.label}
-                                {item.requiresPremium && !hasPremiumAccess && isDev && (
-                                  <Crown className="h-3 w-3 text-yellow-500" />
-                                )}
                               </span>
                             </Link>
                           )

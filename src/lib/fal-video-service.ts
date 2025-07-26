@@ -1,19 +1,32 @@
 import { fal } from '@fal-ai/client'
+import { parseFalProgress } from '@/lib/fal-progress-parser'
 import { CloudStorageService } from './cloud-storage'
 import { ImageProcessingService } from './image-processing-service'
 import { VIDEO_MODELS, VideoModel } from './video-models'
+import { logOnce } from './log-once'
+// Added for high-resolution timing of long-running operations
+import { performance } from 'perf_hooks'
 
 // Video generation parameters based on Fal.ai video models
 export interface VideoGenerationParams {
   prompt: string
   modelId: string
   duration?: number // seconds, 3-30
-  aspectRatio?: '16:9' | '9:16' | '1:1' | '3:4' | '4:3'
+  aspectRatio?: '16:9' | '9:16' | '1:1' | '3:4' | '4:3' | '4:5'
   fps?: number // frames per second, 12-30
   motionLevel?: number // 1-10, controls amount of motion
   seed?: number
   width?: number
   height?: number
+  /** Optional additional parameters uncovered in latest Fal specs */
+  negativePrompt?: string // veo, fast-svd, ltx, pixverse
+  enhancePrompt?: boolean // veo, fast-svd, ltx
+  effects?: string[] // pixverse effect variant
+  extend?: boolean // ltx dev_extend flag
+  firstFrame?: string // wan-flf2v first frame URL
+  lastFrame?: string // wan-flf2v last frame URL
+  resolution?: string // High-resolution hint, e.g. "480p" | "720p" | "1080p"
+
   imageBuffer?: Buffer // For image-to-video generation
 }
 
@@ -21,13 +34,21 @@ export interface VideoGenerationResponse {
   id: string
   status: 'processing' | 'completed' | 'failed'
   videoUrl?: string
+  /** The Fal.ai model slug used for the job (e.g. "fal-ai/ltxv-13b...") */
+  falModelId?: string
   thumbnailUrl?: string
   duration?: number
   fileSize?: number
   width?: number
   height?: number
   fps?: number
+  /** Percentage progress 0-100 when job is still processing */
+  progress?: number
+  /** Latest raw log lines for UI debug (max 10) */
+  logs?: string[]
   error?: string
+  /** Original Fal.ai video URL that can be streamed while the Cloudflare copy is propagating */
+  fallbackUrl?: string
 }
 
 export class FalVideoService {
@@ -44,9 +65,14 @@ export class FalVideoService {
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.FAL_API_TOKEN || ''
+    // Log whether key present (parity with ReplicateService)
     if (!this.apiKey) {
-      throw new Error('Fal.ai API key is required')
+      // eslint-disable-next-line no-console
+      console.error('FAL_API_TOKEN missing. Available env vars:',
+        Object.keys(process.env).filter(key => key.toUpperCase().includes('FAL')))
+      throw new Error('Fal.ai API key is required. Please set FAL_API_TOKEN environment variable.')
     }
+    logOnce('boot.fal_token', () => console.log('✅ Fal.ai API token found'))
     
     // Configure the fal client
     fal.config({
@@ -85,12 +111,64 @@ export class FalVideoService {
   }
 
   /**
-   * Calculate cost for video generation
+   * Check if a given resolution is supported by a specific model.
+   * A model supports a resolution when it declares it as its baseline or via
+   * `resolutionMultipliers` in the pricing metadata.
+   */
+  isResolutionSupported(modelId: string, resolution: string): boolean {
+    const model = this.getModelConfig(modelId)
+    if (!model) return false
+
+    // Collect allowed resolutions from baseline + multipliers if present
+    const allowed: string[] = []
+    if (model.baselineResolution) allowed.push(model.baselineResolution)
+    if (model.resolutionMultipliers) {
+      allowed.push(...Object.keys(model.resolutionMultipliers))
+    }
+    return allowed.includes(resolution)
+  }
+
+  /**
+   * Calculate credits charged for a video generation request.
+   *
+   * The calculation supports two environment-level overrides that are useful
+   * during testing or promotional pricing experiments:
+   *  1. `VIDEO_MODEL_<MODEL_ID>_COST` – sets a fixed baseline
+   *     `costPerSecond` **for that specific model** (after slug → env key
+   *     transformation). When present, this value takes precedence over the
+   *     global multiplier.
+   *  2. `VIDEO_PRICING_MULTIPLIER` – a numeric multiplier applied to the
+   *     model’s baseline `costPerSecond` to uniformly raise/lower prices.
+   *
+   * Both env vars should contain positive numbers. Invalid values (non-numbers
+   * or ≤0) are ignored gracefully.
    */
   calculateCost(modelId: string, duration: number): number {
     const model = this.getModelConfig(modelId)
     if (!model) return 0
-    return model.costPerSecond * duration
+
+    // 1️⃣ Model-specific override → VIDEO_MODEL_<MODEL_ID>_COST
+    const envKey = `VIDEO_MODEL_${modelId.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_COST`
+    const modelOverrideRaw = process.env[envKey]
+    let costPerSecond = model.costPerSecond
+
+    if (modelOverrideRaw) {
+      const parsed = Number(modelOverrideRaw)
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        costPerSecond = parsed
+      }
+    } else {
+      // 2️⃣ Global multiplier override → VIDEO_PRICING_MULTIPLIER
+      const multiplierRaw = process.env.VIDEO_PRICING_MULTIPLIER
+      if (multiplierRaw) {
+        const multiplier = Number(multiplierRaw)
+        if (!Number.isNaN(multiplier) && multiplier > 0) {
+          costPerSecond = costPerSecond * multiplier
+        }
+      }
+    }
+
+    return costPerSecond * duration
   }
 
   /**
@@ -130,7 +208,9 @@ export class FalVideoService {
         const requestPayload: any = {
           prompt: enhancedPrompt,
           duration: duration.toString(), // Seedance expects string "5" or "10"
-          resolution: params.width && params.width >= 1280 ? "720p" : "480p", // Default to 720p if high width requested
+          resolution: params.resolution && this.isResolutionSupported(model.id, params.resolution)
+            ? params.resolution
+            : (params.width && params.width >= 1280 ? "720p" : "480p"),
           camera_fixed: false, // Optional, but keep for now
           seed: params.seed,
           // Disable NSFW checker only when explicitly opted-out via env flag
@@ -159,9 +239,11 @@ export class FalVideoService {
 
         // Prefer asynchronous queue submission (no inbound webhook required)
         try {
+          const queueStart = performance.now()
           const submitResult = await fal.queue.submit(model.falModelId, {
             input: requestPayload
           }) as any
+          this.logDuration('Fal queue.submit', queueStart)
 
           console.log('✅ Fal.ai async job submitted (queue):', {
             requestId: submitResult.request_id || submitResult.requestId,
@@ -170,74 +252,14 @@ export class FalVideoService {
 
           return {
             id: submitResult.request_id || submitResult.requestId,
-            status: 'processing'
+            status: 'processing',
+            falModelId: model.falModelId
           }
         } catch (queueError) {
-          console.error('❌ Fal.ai queue submission failed, falling back to synchronous run:', queueError)
-          // Fallback to synchronous processing if queue submission fails
-          
-          try {
-            const result = await fal.run(model.falModelId, {
-              input: requestPayload
-            }) as any
-            
-            console.log('✅ Fal.ai Seedance video generation completed:', {
-              requestId: result.request_id,
-              hasVideo: !!result.video,
-              hasImage: !!result.image,
-              seed: result.seed
-            })
-            
-            // Log entire result object for debugging
-            console.dir(result, { depth: 5 })
-            
-            // Fal may return { video, image } or { data: { video, image } }
-            const videoFile = (result.video || result.data?.video) as any
-            const imageFile = (result.image || result.data?.image) as any
-
-            if (videoFile && videoFile.url) {
-              const videoUrl = videoFile.url
-              const thumbnailUrl = imageFile?.url || null
-
-              // Process and upload video to CloudFlare R2
-              const processedVideo = await this.processAndUploadVideo(
-                videoUrl,
-                thumbnailUrl,
-                `video_${Date.now()}.mp4`
-              )
-
-              if (!processedVideo.videoUrl) {
-                throw new Error('Failed to upload video to cloud storage')
-              }
-
-              return {
-                id: result.request_id || `fal_seedance_${Date.now()}`,
-                status: 'completed',
-                videoUrl: processedVideo.videoUrl,
-                thumbnailUrl: processedVideo.thumbnailUrl,
-                duration: duration,
-                fileSize: processedVideo.fileSize,
-                width: 1344, // Seedance 720p default width
-                height: 768, // Seedance 720p default height
-                fps: 24 // Seedance default fps
-              }
-            } else {
-              // Handle case where no video is returned (likely an error)
-              console.warn('⚠️ No video returned from Fal.ai Seedance generation')
-              return {
-                id: result.request_id || `fal_seedance_failed_${Date.now()}`,
-                status: 'failed',
-                error: 'No video generated by Fal.ai service'
-              }
-            }
-          } catch (error) {
-            console.error('❌ Fal.ai Seedance sync generation failed:', error)
-            return {
-              id: `fal_seedance_error_${Date.now()}`,
-              status: 'failed',
-              error: `Seedance generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-            }
-          }
+          // Propagate error – frontend will keep polling / allow retry instead of
+          // returning a potentially incomplete video from a synchronous path.
+          console.error('❌ Fal.ai queue submission failed – aborting:', queueError)
+          throw queueError
         }
       } else {
         // For other models, use the existing parameter structure
@@ -258,6 +280,40 @@ export class FalVideoService {
           enable_safety_checker: this.enableSafetyChecker
         }
 
+        // ----- Optional parameters (conditional by model capabilities) ----- //
+        const modelSlug = model.falModelId
+
+        // Negative prompt (veo, fast-svd, ltx, pixverse)
+        if (params.negativePrompt && /(veo|fast-svd|ltx|pixverse)/i.test(modelSlug)) {
+          requestPayload.negative_prompt = params.negativePrompt
+        }
+
+        // Enhance prompt flag (veo, fast-svd, ltx)
+        if (typeof params.enhancePrompt === 'boolean' && /(veo|fast-svd|ltx)/i.test(modelSlug)) {
+          requestPayload.enhance_prompt = params.enhancePrompt
+        }
+
+        // Effects array (pixverse effects endpoint)
+        if (params.effects && params.effects.length && /pixverse.*effects/i.test(modelSlug)) {
+          requestPayload.effects = params.effects
+        }
+
+        // Extend frames (ltx dev_extend flag)
+        if (typeof params.extend === 'boolean' && /ltx/i.test(modelSlug)) {
+          requestPayload.extend = params.extend
+        }
+
+        // First / last frame URLs (wan-flf2v)
+        if (/wan-flf2v/i.test(modelSlug)) {
+          if (params.firstFrame) requestPayload.first_frame_url = params.firstFrame
+          if (params.lastFrame) requestPayload.last_frame_url = params.lastFrame
+        }
+
+        // Explicit resolution (models with multipliers)
+        if (params.resolution && this.isResolutionSupported(model.id, params.resolution)) {
+          requestPayload.resolution = params.resolution
+        }
+
         // For image-to-video models, handle image upload
         if (model.mode === 'image-to-video' && params.imageBuffer) {
           // Convert image buffer to base64 data URL for Fal.ai
@@ -275,9 +331,11 @@ export class FalVideoService {
 
         // Prefer asynchronous queue submission (no inbound webhook required)
         try {
+          const queueStart = performance.now()
           const submitResult = await fal.queue.submit(model.falModelId, {
             input: requestPayload
           }) as any
+          this.logDuration('Fal queue.submit', queueStart)
 
           console.log('✅ Fal.ai async job submitted (queue):', {
             requestId: submitResult.request_id || submitResult.requestId,
@@ -286,73 +344,12 @@ export class FalVideoService {
 
           return {
             id: submitResult.request_id || submitResult.requestId,
-            status: 'processing'
+            status: 'processing',
+            falModelId: model.falModelId
           }
         } catch (queueError) {
-          console.error('❌ Fal.ai queue submission failed, falling back to synchronous run:', queueError)
-          // Fallback to synchronous processing if queue submission fails
-          
-          try {
-            const result = await fal.run(model.falModelId, {
-              input: requestPayload
-            }) as any
-            
-            console.log('✅ Fal.ai video generation completed:', {
-              requestId: result.request_id,
-              hasVideo: !!result.video,
-              hasImage: !!result.image
-            })
-            
-            // Log entire result object for debugging
-            console.dir(result, { depth: 5 })
-            
-            // Fal may return { video, image } or { data: { video, image } }
-            const videoFile = (result.video || result.data?.video) as any
-            const imageFile = (result.image || result.data?.image) as any
-
-            if (videoFile && videoFile.url) {
-              const videoUrl = videoFile.url
-              const thumbnailUrl = imageFile?.url || null
-
-              // Process and upload video to CloudFlare R2
-              const processedVideo = await this.processAndUploadVideo(
-                videoUrl,
-                thumbnailUrl,
-                `video_${Date.now()}.mp4`
-              )
-
-              if (!processedVideo.videoUrl) {
-                throw new Error('Failed to upload video to cloud storage')
-              }
-
-              return {
-                id: result.request_id || `fal_video_${Date.now()}`,
-                status: 'completed',
-                videoUrl: processedVideo.videoUrl,
-                thumbnailUrl: processedVideo.thumbnailUrl,
-                duration: duration,
-                fileSize: processedVideo.fileSize,
-                width: dimensions.width,
-                height: dimensions.height,
-                fps: params.fps || model.defaultParams.fps
-              }
-            } else {
-              // Handle case where no video is returned (likely an error)
-              console.warn('⚠️ No video returned from Fal.ai generation')
-              return {
-                id: result.request_id || `fal_failed_${Date.now()}`,
-                status: 'failed',
-                error: 'No video generated by Fal.ai service'
-              }
-            }
-          } catch (error) {
-            console.error('❌ Fal.ai sync generation failed:', error)
-            return {
-              id: `fal_error_${Date.now()}`,
-              status: 'failed',
-              error: `Video generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-            }
-          }
+          console.error('❌ Fal.ai queue submission failed – aborting:', queueError)
+          throw queueError
         }
       }
 
@@ -381,8 +378,17 @@ export class FalVideoService {
     try {
       console.log('🔄 Processing and uploading video to CloudFlare R2...')
 
-      // Download video
+      // Download video with extra diagnostics
+      const downloadStart = performance.now()
       const videoResponse = await fetch(videoUrl)
+      this.logDuration('Video download', downloadStart)
+      console.log('📥 VIDEO_FETCH_HEADERS', {
+        status: videoResponse.status,
+        contentType: videoResponse.headers.get('content-type'),
+        contentLength: videoResponse.headers.get('content-length'),
+        url: videoUrl
+      })
+
       if (!videoResponse.ok) {
         throw new Error(`Failed to download video: ${videoResponse.status}`)
       }
@@ -390,18 +396,28 @@ export class FalVideoService {
       const videoBuffer = Buffer.from(await videoResponse.arrayBuffer())
       const fileSize = videoBuffer.length
 
+      // Quick sanity-check on header bytes (should include ftyp mp4)
+      const headerHex = videoBuffer.subarray(0, 12).toString('hex')
+      console.log('📑 VIDEO_HEADER_HEX', headerHex)
+
+      if (fileSize < 250_000) {
+        console.warn('⚠️ VIDEO_SUSPICIOUS_SIZE', fileSize)
+      }
+
       console.log('📊 Video downloaded:', {
-        size: (fileSize / 1024 / 1024).toFixed(2) + 'MB',
+        sizeMB: (fileSize / 1024 / 1024).toFixed(2),
         filename
       })
 
       // Upload to CloudFlare R2
+      const uploadStart = performance.now()
       const uploadResult = await this.cloudStorage.uploadFile(
         filename,
         videoBuffer,
         'video/mp4',
         { folder: 'videos' }
       )
+      this.logDuration('R2 video upload', uploadStart)
 
       if (!uploadResult.success || !uploadResult.url) {
         throw new Error(`Failed to upload video: ${uploadResult.error || 'No URL returned'}`)
@@ -429,6 +445,22 @@ export class FalVideoService {
         } catch (thumbnailError) {
           console.warn('⚠️ Failed to process thumbnail:', thumbnailError)
         }
+      }
+
+      console.log('✅ File uploaded to Cloudflare R2:', uploadResult.url)
+
+      // Fetch the HEAD to verify metadata immediately
+      try {
+        const headStart = performance.now()
+        const headResp = await fetch(uploadResult.url, { method: 'HEAD' })
+        this.logDuration('R2 HEAD check', headStart)
+        console.log('📄 R2_HEAD_METADATA', {
+          status: headResp.status,
+          contentType: headResp.headers.get('content-type'),
+          contentLength: headResp.headers.get('content-length')
+        })
+      } catch (headErr) {
+        console.warn('⚠️ R2_HEAD_FAILED', headErr)
       }
 
       console.log('✅ Video uploaded to CloudFlare R2:', {
@@ -466,7 +498,8 @@ export class FalVideoService {
       '9:16': { width: 768, height: 1344 },
       '1:1': { width: 1024, height: 1024 },
       '3:4': { width: 768, height: 1024 },
-      '4:3': { width: 1024, height: 768 }
+      '4:3': { width: 1024, height: 768 },
+      '4:5': { width: 720, height: 900 }
     }
     
     return dimensionMap[aspectRatio] || dimensionMap['16:9']
@@ -490,6 +523,23 @@ export class FalVideoService {
   }
 
   /**
+   * Helper to log human-readable duration of an operation.
+   * Example usage:
+   *   const t0 = performance.now()
+   *   await doSomething()
+   *   this.logDuration('doSomething', t0)
+   */
+  private logDuration(label: string, start: number) {
+    try {
+      const durationMs = Math.round(performance.now() - start)
+      // eslint-disable-next-line no-console
+      console.log(`⏱️  ${label} took ${durationMs} ms`)
+    } catch {
+      /* noop – timing logs should never crash the app */
+    }
+  }
+
+  /**
    * Check status of async video generation
    */
   async getJobStatus(jobId: string, modelId?: string): Promise<VideoGenerationResponse> {
@@ -509,11 +559,26 @@ export class FalVideoService {
       const model = modelId ? this.getModelConfig(modelId) : null
       const falModelId = model?.falModelId || 'fal-ai/bytedance/seedance/v1/lite/image-to-video'
 
-      // Use the Fal.ai client to check queue status
-      const result = await fal.queue.status(falModelId, {
+      // Use the Fal.ai client to check queue status (include logs for progress heuristics)
+      const result: any = await fal.queue.status(falModelId, {
         requestId: jobId,
         logs: true
       })
+
+      // Derive progress percentage from metrics or logs
+      let progressPct: number | undefined
+      let latestLogs: string[] | undefined
+      if (typeof result?.metrics?.percent_complete === 'number') {
+        progressPct = Math.round(result.metrics.percent_complete)
+      } else if (Array.isArray(result?.logs)) {
+        for (const l of result.logs) {
+          const pct = parseFalProgress(l.message || '')
+          if (pct !== null) {
+            progressPct = Math.max(progressPct ?? 0, pct)
+          }
+        }
+        latestLogs = result.logs.map((l: any) => l.message).slice(-10)
+      }
 
       console.log('📊 Fal.ai queue status:', result)
 
@@ -527,6 +592,43 @@ export class FalVideoService {
 
         if (resultData.data?.video) {
           const videoUrl = resultData.data.video.url
+
+          /*
+           * Optional consistency guard
+           * -------------------------
+           * Historically Fal’s queue could mark a job COMPLETED before the MP4
+           * was fully flushed to their CDN.  To avoid serving a truncated
+           * video we compared the Content-Length of two HEAD requests spaced
+           * 2 seconds apart and, if still growing, kept the status at
+           * "processing".
+           *
+           * This guard can now be disabled by setting the environment
+           * variable SKIP_VIDEO_SIZE_GUARD=true.  Useful for benchmarking or
+           * validating if Fal’s behaviour has improved.
+           */
+          if (process.env.SKIP_VIDEO_SIZE_GUARD !== 'true') {
+            const contentLength = async (): Promise<number> => {
+              try {
+                const head = await fetch(videoUrl, { method: 'HEAD' })
+                return Number(head.headers.get('content-length') || 0)
+              } catch {
+                return 0
+              }
+            }
+
+            const size1 = await contentLength()
+            await new Promise(r => setTimeout(r, 2000))
+            const size2 = await contentLength()
+
+            if (size2 === 0 || size2 > size1) {
+              console.log('🕒 Video still uploading, size growing – returning processing')
+              return {
+                id: jobId,
+                status: 'processing'
+              }
+            }
+          }
+
           const thumbnailUrl = resultData.data.image?.url || null
 
           // Process and upload video to CloudFlare R2
@@ -540,8 +642,11 @@ export class FalVideoService {
             id: jobId,
             status: 'completed',
             videoUrl: processedVideo.videoUrl,
+            fallbackUrl: videoUrl,
             thumbnailUrl: processedVideo.thumbnailUrl,
-            fileSize: processedVideo.fileSize
+            fileSize: processedVideo.fileSize,
+            progress: 100,
+            logs: latestLogs
           }
         }
       }
@@ -549,7 +654,9 @@ export class FalVideoService {
       // For any other status (IN_PROGRESS, IN_QUEUE) or if no video data
       return {
         id: jobId,
-        status: 'processing'
+        status: 'processing',
+        progress: progressPct,
+        logs: latestLogs
       }
 
     } catch (error) {

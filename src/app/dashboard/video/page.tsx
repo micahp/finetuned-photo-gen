@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'
 import { Slider } from '@/components/ui/slider'
 import { Progress } from '@/components/ui/progress'
@@ -19,10 +19,6 @@ import {
   Play, 
   Download, 
   Crown, 
-  Copy, 
-  Plus, 
-  ChevronDown, 
-  ChevronUp, 
   Wand2, 
   Clock,
   Video,
@@ -36,31 +32,55 @@ import {
   Volume2,
   VolumeX,
   Info,
-  Square
+  Square,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 import { isPremiumUser } from '@/lib/subscription-utils'
-import { VIDEO_MODELS as AVAILABLE_VIDEO_MODELS, VideoModel } from '@/lib/video-models'
+import { VIDEO_MODELS as AVAILABLE_VIDEO_MODELS } from '@/lib/video-models'
+import { getCostRange, getCostPerSecond } from '@/lib/video-pricing'
 import { ImageUpload } from '@/components/upload/ImageUpload'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import AdvancedParametersForm from '@/components/video/AdvancedParametersForm'
+import inputGroups from '@/data/fal_input_groups.json'
+import { useJobProgress } from '@/hooks/use-job-progress'
 
 const videoGenerationSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
+  // Prompt is required only for text-to-video. For image-to-video we allow it to be blank.
+  prompt: z.string().max(2000, 'Prompt too long').optional(),
   modelId: z.string().min(1, 'Model is required'),
   duration: z.number().min(3).max(60),
   aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3']),
   fps: z.number().min(12).max(30),
   motionLevel: z.number().min(1).max(10),
   seed: z.number().optional(),
-  imageFile: z.instanceof(File).optional(),
+  // Use custom check to avoid ReferenceError in SSR where File is undefined
+  imageFile: z
+    .custom<File>(() => true)
+    .optional(),
+  // Phase 3b advanced params
+  negativePrompt: z.string().max(2000).optional(),
+  enhancePrompt: z.boolean().optional(),
+  effects: z.string().optional(),
+  extend: z.boolean().optional(),
+  firstFrame: z
+    .preprocess(val => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+      z.string().url())
+    .optional(),
+  lastFrame: z
+    .preprocess(val => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+      z.string().url())
+    .optional(),
+  resolution: z.string().optional(),
 })
 
 type VideoGenerationFormData = z.infer<typeof videoGenerationSchema>
 
 interface GeneratedVideo {
   id: string
-  url: string
+  videoUrl: string
   thumbnailUrl?: string
   prompt: string
   duration: number
@@ -68,6 +88,9 @@ interface GeneratedVideo {
   fps: number
   fileSize?: number
   createdAt: string
+  fallbackUrl?: string
+  status: 'processing' | 'completed' | 'failed'
+  falModelId?: string
 }
 
 // VideoModel interface imported from video-models.ts
@@ -102,6 +125,20 @@ const IMAGE_TO_VIDEO_PROMPTS: string[] = [
   "Warm, incandescent streetlights paint the rain-slicked cobblestones in pools of amber light as a couple walks hand-in-hand, their silhouettes stark against the blurry backdrop of a city shrouded in a gentle downpour; the camera lingers on the subtle textures of their rain-soaked coats and the glistening reflections dancing on the wet pavement, creating a sense of intimate vulnerability and shared quietude.",
 ]
 
+// Helper to categorise cost tiers if explicit tier field absent
+const getTier = (costPerSecond: number): 'premium' | 'standard' | 'budget' => {
+  if (costPerSecond > 20) return 'premium'
+  if (costPerSecond >= 9) return 'standard'
+  return 'budget'
+}
+
+const TIER_LABELS: Record<'premium' | 'standard' | 'budget', string> = {
+  premium: 'Premium',
+  standard: 'Standard',
+  budget: 'Budget',
+}
+const TIER_ORDER: Array<'premium' | 'standard' | 'budget'> = ['premium', 'standard', 'budget']
+
 export default function VideoGenerationPage() {
   const { data: session, update } = useSession()
   const hasPremiumAccess = isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
@@ -116,31 +153,100 @@ export default function VideoGenerationPage() {
   const [estimatedCost, setEstimatedCost] = useState(0)
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [generatingPrompt, setGeneratingPrompt] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+
+  /** DEBUG: accumulated log lines for on-screen inspection */
+  const [debugLogs, setDebugLogs] = useState<string[]>([])
+  const [showLogs, setShowLogs] = useState<boolean>(true)
+  const pushLog = (msg: string) => {
+    setDebugLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`])
+  }
+
+  /** Job info for unified progress tracking */
+  const [jobInfo, setJobInfo] = useState<{ provider: 'fal' | 'replicate' | 'other'; modelId: string; jobId: string } | null>(null)
+
+  const jobProgress = useJobProgress({
+    provider: jobInfo?.provider || 'other',
+    modelId: jobInfo?.modelId || '',
+    jobId: jobInfo?.jobId || '',
+    onDone: () => {
+      pushLog('Job completed (hook)')
+      setGenerationProgress(100)
+      setIsGenerating(false)
+    },
+    onError: (err) => {
+      console.error('Job progress error', err)
+      pushLog(`Job progress error: ${String(err)}`)
+    },
+    onLog: (line: string) => pushLog(line),
+  })
+
+  useEffect(() => {
+    if (jobProgress.pct > 0) {
+      setGenerationProgress(jobProgress.pct)
+    }
+
+    if (jobProgress.status.toLowerCase() === 'completed' && jobInfo?.jobId) {
+      // Fetch final video data once
+      ;(async () => {
+        try {
+          const res = await fetch(`/api/video/status/${jobInfo.jobId}`)
+          if (res.ok) {
+            const json = await res.json()
+            if (json?.success) {
+              setGeneratedVideo(json.video)
+            }
+          }
+        } catch (err) {
+          console.error('Fetch final video failed', err)
+        }
+      })()
+    }
+  }, [jobProgress.pct, jobProgress.status])
+
+  /**
+   * Interval ref for the synthetic random progress updates that we used prior
+   * to integrating real-time Fal logs.  Cleared automatically once the first
+   * real progress value is received (or on generation completion).
+   */
+  const syntheticProgressRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Removed falUnsubscribeRef – unified hook manages cleanup
 
   // Track which generation mode (text or image) the user is on
   const [activeMode, setActiveMode] = useState<'text-to-video' | 'image-to-video'>(
     'text-to-video'
   )
 
-  // Find Veo 3 model for text-to-video default, fallback to cheapest
-  const veo3Model = AVAILABLE_VIDEO_MODELS.find(m => m.id === 'veo-3-text')
+  // Select the first budget-tier model (cheapest cost) for each mode; fall back to the overall cheapest if
+  // no budget model exists.
+  const budgetTextModel = AVAILABLE_VIDEO_MODELS
+    .filter((m) => m.mode === 'text-to-video' && getTier(m.costPerSecond) === 'budget')
+    .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
+
   const cheapestTextModel = AVAILABLE_VIDEO_MODELS
     .filter((m) => m.mode === 'text-to-video')
     .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
-  
-  // Find SeeDANCE Pro model for image-to-video default, fallback to cheapest
-  const seedanceProModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === 'seedance-pro-image')
+
+  const budgetImageModel = AVAILABLE_VIDEO_MODELS
+    .filter((m) => m.mode === 'image-to-video' && getTier(m.costPerSecond) === 'budget')
+    .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
+
   const cheapestImageModel = AVAILABLE_VIDEO_MODELS
     .filter((m) => m.mode === 'image-to-video')
     .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
 
-  // Set defaults with Veo 3 preferred for text-to-video and SeeDANCE Pro for image-to-video
   const defaultModelIdByMode: Record<'text-to-video' | 'image-to-video', string> = {
-    'text-to-video': veo3Model?.id || cheapestTextModel?.id || '',
-    'image-to-video': seedanceProModel?.id || cheapestImageModel?.id || '',
+    'text-to-video': budgetTextModel?.id || cheapestTextModel?.id || '',
+    'image-to-video': budgetImageModel?.id || cheapestImageModel?.id || '',
   }
 
-  const form = useForm<VideoGenerationFormData>({
+  const defaultSelectedModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === defaultModelIdByMode['text-to-video'])
+  const baselineResolution = defaultSelectedModel && defaultSelectedModel.resolutionMultipliers
+    ? Object.keys(defaultSelectedModel.resolutionMultipliers)[0]
+    : ''
+
+  const form = useForm({
     resolver: zodResolver(videoGenerationSchema),
     defaultValues: {
       prompt: '',
@@ -149,18 +255,38 @@ export default function VideoGenerationPage() {
       aspectRatio: '16:9',
       fps: 24,
       motionLevel: 5,
+      // Advanced params defaults
+      negativePrompt: '',
+      enhancePrompt: false,
+      effects: '',
+      extend: false,
+      firstFrame: undefined,
+      lastFrame: undefined,
+      resolution: baselineResolution,
     },
   })
 
   const selectedModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === form.watch('modelId'))
+
+  // Determine if the selected model actually supports any advanced parameters.
+  const hasAdvancedSettings = useMemo(() => {
+    if (!selectedModel) return false
+    const record = (inputGroups as Record<string, { advanced: string[] }>)[selectedModel.id]
+    const hasAdvancedParams = record && record.advanced && record.advanced.length > 0
+    const hasResolution = !!selectedModel.resolutionMultipliers
+    return hasAdvancedParams || hasResolution
+  }, [selectedModel])
+
   const watchedDuration = form.watch('duration')
+  const watchedResolution = form.watch('resolution')
 
   useEffect(() => {
     if (selectedModel) {
-      const cost = selectedModel.costPerSecond * watchedDuration
+      const costPerSec = getCostPerSecond(selectedModel, watchedResolution)
+      const cost = costPerSec * watchedDuration
       setEstimatedCost(cost)
     }
-  }, [selectedModel, watchedDuration])
+  }, [selectedModel, watchedDuration, watchedResolution])
 
   // Keep local creditsRemaining in sync with session once it loads/updates
   useEffect(() => {
@@ -191,19 +317,30 @@ export default function VideoGenerationPage() {
     }
   }, [selectedModel, form])
 
-  // Show upgrade prompt while session is loading for non-premium users
-  if (session && !isDev && !hasPremiumAccess) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="text-center">
-          <Crown className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Premium Feature</h1>
-          <p className="text-gray-600 mb-6">Video generation requires an active subscription</p>
-          <p className="text-sm text-gray-500 mb-4">Redirecting to billing...</p>
-        </div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    if (selectedModel?.resolutionMultipliers) {
+      const keys = Object.keys(selectedModel.resolutionMultipliers)
+      if (keys.length === 0) return
+      const current = form.getValues('resolution')
+      if (!current || !(current in selectedModel.resolutionMultipliers)) {
+        form.setValue('resolution', keys[0])
+      }
+    } else {
+      // Clear resolution if model has none
+      if (form.getValues('resolution')) {
+        form.setValue('resolution', '')
+      }
+    }
+  }, [selectedModel])
+
+  // Prepare upgrade prompt banner for non-premium users (actual redirect handled above)
+  const upgradeBanner = (session && !isDev && !hasPremiumAccess) ? (
+    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-center space-y-2">
+      <Crown className="h-6 w-6 text-yellow-500 mx-auto" />
+      <p className="font-semibold">Video generation is a premium feature.</p>
+      <p className="text-sm text-gray-600">Redirecting to billing...</p>
+    </div>
+  ) : null
 
   const handleImagesUploaded = (files: File[]) => {
     setUploadedImages(files)
@@ -273,9 +410,28 @@ export default function VideoGenerationPage() {
     }
   }
 
+  const handleSubmitInvalid = (errors: any) => {
+    /* eslint-disable no-console */
+    console.error('❌ VIDEO_GEN_FORM_INVALID', errors)
+    /* eslint-enable no-console */
+    setError('Please fix the highlighted errors before generating the video.')
+  }
+
   const onSubmit = async (data: VideoGenerationFormData) => {
+    pushLog('Form submitted')
+    pushLog(JSON.stringify({ modelId: data.modelId, duration: data.duration }))
+    /* eslint-disable no-console */
+    console.log('▶️ VIDEO_GEN_FORM_SUBMIT', {
+      activeMode,
+      data,
+      hasImage: !!data.imageFile,
+      creditsRemaining,
+      estimatedCost,
+    })
+    /* eslint-enable no-console */
     try {
       setIsGenerating(true)
+      pushLog('Spinner START — isGenerating=true')
       setError(null)
       setGenerationProgress(0)
 
@@ -311,19 +467,24 @@ export default function VideoGenerationPage() {
 
       // All video models require premium access - handled at page level
 
-      // Start with fake progress, will switch to real progress if job is processing
-      const progressInterval = setInterval(() => {
-        setGenerationProgress(prev => Math.min(prev + Math.random() * 15, 95))
-      }, 2000)
+      // Synthetic progress disabled – rely solely on real-time Fal logs
 
       // Prepare form data for API call
       const formData = new FormData()
-      formData.append('prompt', data.prompt)
+      formData.append('prompt', data.prompt || '') // Ensure prompt is always sent, even if empty
       formData.append('modelId', data.modelId)
       formData.append('duration', data.duration.toString())
       formData.append('aspectRatio', data.aspectRatio)
       formData.append('fps', data.fps.toString())
       formData.append('motionLevel', data.motionLevel.toString())
+      // Advanced params
+      if (data.negativePrompt) formData.append('negativePrompt', data.negativePrompt)
+      if (data.enhancePrompt) formData.append('enhancePrompt', String(data.enhancePrompt))
+      if (data.effects) formData.append('effects', data.effects)
+      if (data.extend) formData.append('extend', String(data.extend))
+      if (data.firstFrame) formData.append('firstFrame', data.firstFrame)
+      if (data.lastFrame) formData.append('lastFrame', data.lastFrame)
+      if (data.resolution) formData.append('resolution', data.resolution)
       if (data.seed) {
         formData.append('seed', data.seed.toString())
       }
@@ -344,12 +505,15 @@ export default function VideoGenerationPage() {
         body: formData,
       })
 
+      pushLog(`POST /api/video/generate → ${response.status}`)
+
       // eslint-disable-next-line no-console
       console.log('VIDEO_GEN_API_RESPONSE_STATUS', response.status)
 
-      clearInterval(progressInterval)
+      // Keep progress bar running; will clear when polling detects completion
 
       if (!response.ok) {
+        pushLog('API responded with error; aborting')
         const errorData = await response.json()
         // eslint-disable-next-line no-console
         console.error('VIDEO_GEN_API_ERROR', errorData)
@@ -357,20 +521,29 @@ export default function VideoGenerationPage() {
       }
 
       const result = await response.json()
+      pushLog(`Generation request accepted: jobId=${result?.video?.jobId}`)
       // eslint-disable-next-line no-console
       console.log('VIDEO_GEN_API_RESULT', result)
       
       if (result.success) {
         if (result.video.status === 'processing') {
-          // Start polling for async job completion
+          // Store placeholder record so UI can show job ID immediately
           setGeneratedVideo(result.video)
           setCreditsRemaining(result.creditsRemaining)
-          await pollVideoStatus(result.video.jobId, progressInterval)
+
+          // Determine Fal model slug (if available)
+          const modelFalId = result.video.falModelId || selectedModel?.falModelId
+          const provider: 'fal' | 'replicate' | 'other' = modelFalId ? 'fal' : 'other'
+          setJobInfo({ provider, modelId: modelFalId || '', jobId: result.video.jobId })
+
         } else {
-          // Synchronous completion
+          // Immediate completion (rare)
           setGeneratedVideo(result.video)
           setCreditsRemaining(result.creditsRemaining)
           setGenerationProgress(100)
+          pushLog('Job already completed (synchronous)')
+          setIsGenerating(false)
+          pushLog('Spinner STOP — isGenerating=false')
         }
         await update()
       } else {
@@ -381,10 +554,17 @@ export default function VideoGenerationPage() {
       console.error('Generation error:', error)
       setError(error instanceof Error ? error.message : 'An error occurred')
       setGenerationProgress(0)
+      pushLog(`Generation error: ${error instanceof Error ? error.message : 'unknown'}`)
     } finally {
-      setIsGenerating(false)
+      // Ensure we cancel any outstanding WebSocket subscription when generation
+      // cycle ends (success or failure)
+      // Unified hook handles cleanup implicitly
+      // No synthetic progress to clean up
+      // IMPORTANT: do NOT clear isGenerating here; let success/failure paths handle it
     }
   }
+
+  // Unified hook handles cleanup implicitly
 
   const getAspectRatioLabel = (ratio: string) => {
     const labels: Record<string, string> = {
@@ -424,8 +604,17 @@ export default function VideoGenerationPage() {
     }, 300)
   }
 
+  // Add effect to log URL when video changes
+  useEffect(() => {
+    if (generatedVideo) {
+      // eslint-disable-next-line no-console
+      console.log('DISPLAYING_VIDEO_URL', generatedVideo.videoUrl)
+    }
+  }, [generatedVideo])
+
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 space-y-6">
+      {upgradeBanner}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Video Generation</h1>
         <p className="text-gray-600">Create stunning videos from text prompts or images using advanced AI models</p>
@@ -444,7 +633,7 @@ export default function VideoGenerationPage() {
 
             <TabsContent value={activeMode} asChild>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form onSubmit={form.handleSubmit(onSubmit, handleSubmitInvalid)} className="space-y-6">
                   {/* Model Selection */}
                   <Card>
                     <CardHeader>
@@ -502,28 +691,72 @@ export default function VideoGenerationPage() {
                           <FormItem>
                             <FormControl>
                               <Select onValueChange={field.onChange} value={field.value}>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full">
                                   <SelectValue placeholder="Select a video model" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {AVAILABLE_VIDEO_MODELS.filter(m => m.mode === activeMode).map((model) => (
-                                    <SelectItem 
-                                      key={model.id} 
-                                      value={model.id}
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium">{model.name}</span>
-                                        <div className="flex items-center gap-1">
-                                          {model.hasAudio && (
-                                            <Volume2 className="h-3 w-3 text-green-600" />
-                                          )}
-                                          {model.falModelId.includes('kling-video') && (
-                                            <Clapperboard className="h-3 w-3 text-blue-600" />
-                                          )}
-                                          <Crown className="h-3 w-3 text-yellow-500" />
-                                        </div>
-                                      </div>
-                                    </SelectItem>
+                                  {TIER_ORDER.map((tierKey) => (
+                                    <SelectGroup key={tierKey}>
+                                      <SelectLabel className="text-xs uppercase tracking-wider text-muted-foreground px-2">
+                                        {TIER_LABELS[tierKey]}
+                                      </SelectLabel>
+                                      {AVAILABLE_VIDEO_MODELS.filter(m => m.mode === activeMode && getTier(m.costPerSecond) === tierKey).map((model) => (
+                                        <SelectItem key={model.id} value={model.id}>
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-medium">{model.name}</span>
+                                            <TooltipProvider delayDuration={200}>
+                                              <div className="flex items-center gap-1">
+                                                {/* Lip-sync / Audio support */}
+                                                {model.hasAudio && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Volume2 className="h-3 w-3 text-green-600" aria-label="Audio Lip-sync" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Audio&nbsp;Lip-sync</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                {/* Key-frame / Start-End Frames support */}
+                                                {model.falModelId?.includes('wan-flf2v') && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Film className="h-3 w-3 text-purple-600" aria-label="Start & End Frames" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Start & End Frames</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                {/* Effects parameter support */}
+                                                {model.falModelId?.includes('pixverse') && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Sparkles className="h-3 w-3 text-pink-600" aria-label="Effects Param" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Effects Parameter</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                {/* Kling variants */}
+                                                {model.falModelId?.includes('kling-video') && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Clapperboard className="h-3 w-3 text-blue-600" aria-label="Kling Extras" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Kling-specific Features</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                {/* Tier badge */}
+                                                {tierKey === 'premium' && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Crown className="h-3 w-3 text-yellow-500" aria-label="Premium Tier" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Premium Tier</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                              </div>
+                                            </TooltipProvider>
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
                                   ))}
                                 </SelectContent>
                               </Select>
@@ -540,8 +773,24 @@ export default function VideoGenerationPage() {
                               <span className="font-medium">Max Duration:</span> {selectedModel.maxDuration}s
                             </div>
                             <div>
-                              <span className="font-medium">Cost:</span> {selectedModel.costPerSecond} credits/sec
+                              <span className="font-medium">Cost:</span>{' '}
+                              {(() => {
+                                const range = getCostRange(selectedModel)
+                                return range.low === range.high
+                                  ? `${range.low} credits/sec`
+                                  : `${range.low}-${range.high} credits/sec`
+                              })()}
+                              {selectedModel.priceCostText && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {selectedModel.priceCostText}
+                                </div>
+                              )}
                             </div>
+                            {selectedModel.avgGenerationTimeMinutes && (
+                              <div>
+                                <span className="font-medium">Gen&nbsp;Time:</span>{' '}≈{selectedModel.avgGenerationTimeMinutes}&nbsp;min
+                              </div>
+                            )}
                           </div>
                           {(selectedModel.hasAudio || selectedModel.falModelId.includes('kling-video')) && (
                             <div className="mt-3 space-y-1 text-sm">
@@ -556,6 +805,12 @@ export default function VideoGenerationPage() {
                                 )}
                                 {selectedModel.falModelId.includes('kling-video') && (
                                   <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded">Start & End Frames</span>
+                                )}
+                                {selectedModel.falModelId.includes('wan-flf2v') && (
+                                  <span className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 rounded">Start & End Frames</span>
+                                )}
+                                {selectedModel.falModelId.includes('pixverse') && (
+                                  <span className="flex items-center gap-1 px-2 py-1 bg-pink-100 text-pink-800 rounded">Effects</span>
                                 )}
                               </div>
                             </div>
@@ -660,7 +915,7 @@ export default function VideoGenerationPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Video Parameters */}
+                  {/* Video Parameters & Advanced Settings */}
                   <Card>
                     <CardHeader>
                       <CardTitle>Video Settings</CardTitle>
@@ -735,6 +990,33 @@ export default function VideoGenerationPage() {
                           </FormItem>
                         )}
                       />
+
+                      {/* Advanced Settings */}
+                      {hasAdvancedSettings && (
+                        <div className="border-t border-gray-200 pt-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-gray-900">Advanced Settings</h3>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="flex items-center gap-1"
+                              onClick={() => setShowAdvanced(!showAdvanced)}
+                            >
+                              <span className="font-medium">More</span>
+                              {showAdvanced ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+
+                          {showAdvanced && (
+                            <AdvancedParametersForm selectedModel={selectedModel} />
+                          )}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -804,7 +1086,25 @@ export default function VideoGenerationPage() {
                       <p className="text-sm text-red-700">{error}</p>
                     </div>
                   )}
+
                 </form>
+
+                {/* --- Debug Logs Panel (moved outside <form>) --- */}
+                <Card className="mt-6">
+                  <CardHeader className="flex flex-row items-center justify-between py-2">
+                    <CardTitle className="text-sm">Logs</CardTitle>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowLogs(!showLogs)}>
+                      {showLogs ? 'Hide' : 'Show'}
+                    </Button>
+                  </CardHeader>
+                  {showLogs && (
+                    <CardContent className="p-0">
+                      <pre className="bg-gray-900 text-gray-100 text-xs p-4 max-h-64 overflow-y-auto whitespace-pre-wrap">
+                        {debugLogs.length ? debugLogs.join('\n') : 'No logs yet'}
+                      </pre>
+                    </CardContent>
+                  )}
+                </Card>
               </Form>
             </TabsContent>
           </Tabs>
@@ -812,41 +1112,63 @@ export default function VideoGenerationPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {generatedVideo && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5" />
-                  Generated Video
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <video 
-                  src={generatedVideo.url}
-                  controls
-                  poster={generatedVideo.thumbnailUrl}
-                  className="w-full h-auto rounded-lg"
-                >
-                  Your browser does not support the video tag.
-                </video>
-                
-                <div className="flex gap-2">
-                  <Button size="sm" className="flex-1">
-                    <Download className="mr-2 h-4 w-4" />
-                    Download
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/dashboard/gallery">
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Gallery
-                    </Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          {generatedVideo?.status === 'completed' && generatedVideo.videoUrl && (
+            <VideoPlayerWithFallback video={generatedVideo} />
           )}
         </div>
       </div>
     </div>
+  )
+} 
+
+// ---------- helper component ----------
+
+function VideoPlayerWithFallback({ video }: { video: GeneratedVideo }) {
+  // Server now guarantees Cloudflare asset readiness via size-stabilisation, so
+  // we can load the primary `videoUrl` immediately without a client-side HEAD
+  // probe that triggers noisy CORS pre-flights.  We still fall back to
+  // `fallbackUrl` if for some reason `videoUrl` is missing.
+  const [src] = useState<string>(video.videoUrl || video.fallbackUrl || '')
+
+  // No polling needed – backend ensures the file is fully propagated.
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5" />
+          Generated Video
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <video
+          src={src}
+          controls
+          poster={video.thumbnailUrl}
+          className="w-full h-auto rounded-lg"
+        >
+          Your browser does not support the video tag.
+        </video>
+
+        <p className="break-all text-xs text-gray-500 select-all">
+          {src}
+        </p>
+
+        <div className="flex gap-2">
+          <Button size="sm" className="flex-1" asChild>
+            <a href={video.videoUrl} download>
+              <Download className="mr-2 h-4 w-4" />
+              Download
+            </a>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/dashboard/gallery">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Gallery
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 } 

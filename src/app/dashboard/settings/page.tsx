@@ -30,10 +30,8 @@ import {
   Download, 
   Crown,
   Calendar,
-  Mail,
   Key,
   Eye,
-  EyeOff,
   Save,
   Loader2
 } from 'lucide-react'

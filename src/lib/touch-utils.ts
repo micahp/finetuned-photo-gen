@@ -72,7 +72,7 @@ export class TouchGestureHandler {
     // Prevent text selection during touch
     this.element.style.webkitUserSelect = 'none';
     this.element.style.userSelect = 'none';
-    // @ts-ignore - webkitTouchCallout is a vendor-specific property
+    // @ts-expect-error - webkitTouchCallout is a vendor-specific property
     this.element.style.webkitTouchCallout = 'none';
   }
 
@@ -346,7 +346,7 @@ export function isTouchDevice(): boolean {
   return (
     'ontouchstart' in window ||
     navigator.maxTouchPoints > 0 ||
-    // @ts-ignore
+    // @ts-expect-error - legacy IE property
     navigator.msMaxTouchPoints > 0
   );
 }
@@ -372,15 +372,14 @@ export function addOrientationChangeListener(callback: (orientation: 'portrait' 
 // Performance utilities for mobile
 export function requestIdleCallback(callback: () => void, timeout = 2000) {
   if ('requestIdleCallback' in window) {
-    // @ts-ignore
-    return window.requestIdleCallback(callback, { timeout });
+    return (window as any).requestIdleCallback(callback, { timeout });
   } else {
     return setTimeout(callback, 0);
   }
 }
 
 export function isSlowDevice(): boolean {
-  // @ts-ignore
+  // @ts-expect-error navigator.connection is not yet standardized across browsers
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   
   if (connection) {

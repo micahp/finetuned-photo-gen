@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
     
-    let { priceId, mode, quantity } = validation.data;
+    let { priceId } = validation.data;
+    const { mode, quantity } = validation.data;
 
     // Check if priceId is actually a plan ID and resolve it to a price ID
     const plan = getPlanById(priceId);

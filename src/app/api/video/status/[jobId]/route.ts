@@ -28,11 +28,18 @@ export async function GET(
       return NextResponse.json({ error: 'Video not found' }, { status: 404 })
     }
 
+    let latestProgress: number | undefined
+    let latestLogs: string[] | undefined
     // If video is still processing and we have a falJobId, poll Fal.ai for an update
     if (generatedVideo.status === 'processing' && generatedVideo.falJobId) {
+      let latestFallbackUrl: string | undefined
       try {
         const falVideoService = new FalVideoService()
         const falStatus = await falVideoService.getJobStatus(generatedVideo.falJobId, generatedVideo.modelId)
+
+        latestFallbackUrl = falStatus.fallbackUrl
+        latestProgress = falStatus.progress
+        latestLogs = falStatus.logs
 
         if (falStatus.status === 'completed') {
           // Update DB with completed info
@@ -53,6 +60,10 @@ export async function GET(
           generatedVideo.thumbnailUrl = falStatus.thumbnailUrl || null
           generatedVideo.fileSize = falStatus.fileSize || null
           // width/height fields may exist but not in type, ignore for response
+          if (latestFallbackUrl) {
+            // Attach to generatedVideo temporary object for response
+            ;(generatedVideo as any).fallbackUrl = latestFallbackUrl
+          }
         } else if (falStatus.status === 'failed') {
           await prisma.generatedVideo.update({
             where: { id: generatedVideo.id },
@@ -78,6 +89,9 @@ export async function GET(
         aspectRatio: generatedVideo.aspectRatio,
         fps: generatedVideo.fps,
         fileSize: generatedVideo.fileSize,
+        fallbackUrl: (generatedVideo as any).fallbackUrl,
+        logs: latestLogs,
+        progress: latestProgress,
         createdAt: generatedVideo.createdAt,
         error: generatedVideo.status === 'failed' ? 'Video generation failed' : null
       }

@@ -93,7 +93,7 @@ export class BandwidthEstimator {
   }
 
   private getConnectionEstimate(): number {
-    // @ts-ignore - navigator.connection is experimental
+    // @ts-expect-error - navigator.connection is experimental
     const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     
     if (!connection) return 0;

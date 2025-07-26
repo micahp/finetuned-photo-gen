@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
-import { Sparkles, Camera, Crown, Clock, ExternalLink } from 'lucide-react'
+import { Sparkles, Camera, Crown, Clock, ExternalLink, Video as VideoIcon } from 'lucide-react'
 
 interface DashboardStats {
   user: {
@@ -26,6 +26,8 @@ interface DashboardStats {
     type: string
     prompt: string
     imageUrl: string
+    videoUrl?: string | null
+    thumbnailUrl?: string | null
     createdAt: string
     creditsUsed: number
     model: string
@@ -241,38 +243,57 @@ export default function DashboardPage() {
             <CardContent className="p-6">
               {stats?.recentActivity && stats.recentActivity.length > 0 ? (
                 <div className="space-y-4">
-                  {stats.recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="flex-shrink-0">
-                        <img 
-                          src={activity.imageUrl} 
-                          alt="Generated image"
-                          className="w-16 h-16 rounded-lg object-cover"
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Camera className="h-4 w-4 text-purple-500" />
-                          <span className="font-medium text-sm">Image Generated</span>
-                          <Badge variant="outline" className="text-xs">{activity.model.split('/').pop()}</Badge>
+                  {stats.recentActivity.map((activity) => {
+                    const isVideo = activity.type === 'video_generated'
+                    const previewUrl = activity.imageUrl || activity.thumbnailUrl || ''
+
+                    return (
+                      <div key={activity.id} className="flex items-start gap-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="flex-shrink-0">
+                          {isVideo ? (
+                            <video
+                              src={activity.videoUrl || ''}
+                              poster={previewUrl}
+                              className="w-16 h-16 rounded-lg object-cover"
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img 
+                              src={previewUrl} 
+                              alt="Generated media"
+                              className="w-16 h-16 rounded-lg object-cover"
+                            />
+                          )}
                         </div>
-                        <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                          "{activity.prompt}"
-                        </p>
-                        <div className="flex items-center justify-between text-xs text-gray-500">
-                          <span>{formatDate(activity.createdAt)}</span>
-                          <div className="flex items-center gap-2">
-                            <span>{activity.creditsUsed} credit{activity.creditsUsed !== 1 ? 's' : ''}</span>
-                            <Button variant="ghost" size="sm" asChild className="h-6 w-6 p-0">
-                              <a href={activity.imageUrl} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            </Button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {isVideo ? (
+                              <VideoIcon className="h-4 w-4 text-red-500" />
+                            ) : (
+                              <Camera className="h-4 w-4 text-purple-500" />
+                            )}
+                            <span className="font-medium text-sm">{isVideo ? 'Video Generated' : 'Image Generated'}</span>
+                            <Badge variant="outline" className="text-xs">{activity.model.split('/').pop()}</Badge>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                            "{activity.prompt}"
+                          </p>
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>{formatDate(activity.createdAt)}</span>
+                            <div className="flex items-center gap-2">
+                              <span>{activity.creditsUsed} credit{activity.creditsUsed !== 1 ? 's' : ''}</span>
+                              <Button variant="ghost" size="sm" asChild className="h-6 w-6 p-0">
+                                <a href={isVideo ? (activity.videoUrl || '#') : previewUrl} target="_blank" rel="noopener noreferrer">
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="text-center text-gray-500 py-8">

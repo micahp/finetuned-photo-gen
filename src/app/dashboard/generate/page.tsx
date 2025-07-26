@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -14,8 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Sparkles, Download, RefreshCw, Zap, Crown, Lightbulb, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2, ChevronRight } from 'lucide-react'
+import { Loader2, Sparkles, Download, RefreshCw, Zap, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2, ChevronRight } from 'lucide-react'
 import { CreditCostHint } from '@/components/credits/CreditCostHint'
 import { TogetherAIService } from '@/lib/together-ai'
 import { SmartImage } from '@/components/ui/smart-image'
@@ -69,7 +68,7 @@ export default function GeneratePage() {
 
   // Premium subscription checks
   const hasPremiumAccess = isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
-  const premiumFeatures = getPremiumFeatures(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
+  const _premiumFeatures = getPremiumFeatures(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
 
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null)
@@ -78,9 +77,34 @@ export default function GeneratePage() {
   const [copiedPrompt, setCopiedPrompt] = useState<string | null>(null)
   const [userModels, setUserModels] = useState<UserModel[]>([])
   const [selectedUserModel, setSelectedUserModel] = useState<UserModel | null>(null)
-  const [loadingModels, setLoadingModels] = useState(true)
+  // Internal loading flag (underscore-prefixed to avoid eslint unused warnings)
+  const [_loadingModels, _setLoadingModels] = useState(true)
   const [showMoreSuggestions, setShowMoreSuggestions] = useState(false)
   const [generatingPrompt, setGeneratingPrompt] = useState(false)
+  // Track remaining free generations for today (null = unknown/loading)
+  const [freeRemaining, setFreeRemaining] = useState<number | null>(null)
+
+  // Fetch remaining free allowance once per session
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    const fetchAllowance = async () => {
+      try {
+        const res = await fetch('/api/free-generation/remaining')
+        if (!res.ok) throw new Error('Failed to fetch')
+        const data = await res.json()
+        if (typeof data.remaining === 'number') {
+          setFreeRemaining(data.remaining)
+        } else {
+          setFreeRemaining(0)
+        }
+      } catch {
+        setFreeRemaining(0) // fallback to 0 on error
+      }
+    }
+
+    fetchAllowance()
+  }, [session?.user?.id])
 
   // Keep local creditsRemaining in sync with session changes
   useEffect(() => {
@@ -159,7 +183,6 @@ export default function GeneratePage() {
   const together = getTogetherService()
   const baseModels = together.getAvailableModels()
   const styles = together.getStylePresets()
-  const suggestions = together.getPromptSuggestions()
   const quickPrompts = together.getQuickPrompts()
   const categorizedPrompts = together.getCategorizedPrompts() as Record<string, Array<{ prompt: string; description: string }>>
   
@@ -234,7 +257,7 @@ export default function GeneratePage() {
 
   const fetchUserModels = async () => {
     try {
-      setLoadingModels(true)
+      _setLoadingModels(true)
       const response = await fetch('/api/models')
       if (response.ok) {
         const data = await response.json()
@@ -259,12 +282,16 @@ export default function GeneratePage() {
     } catch (error) {
       console.error('Failed to fetch user models:', error)
     } finally {
-      setLoadingModels(false)
+      _setLoadingModels(false)
     }
   }
 
   const onSubmit = async (data: GenerateFormData) => {
-    if (creditsRemaining < CREDIT_COSTS.photo) {
+    const selectedBaseModel = baseModels.find((m) => m.id === data.modelId)
+    const isFreeModelSelected = selectedBaseModel?.free ?? false
+    const hasFreeAllowance = isFreeModelSelected && (freeRemaining ?? 0) > 0
+
+    if (!hasFreeAllowance && creditsRemaining < CREDIT_COSTS.photo) {
       setError('Insufficient credits. Please upgrade your plan.')
       return
     }
@@ -359,7 +386,7 @@ export default function GeneratePage() {
     }
   }
 
-  const handleSuggestionClick = (suggestion: string) => {
+  const _handleSuggestionClick = (suggestion: string) => {
     // If using a custom model with trigger word, prepend it
     if (selectedUserModel?.triggerWord) {
       const enhancedSuggestion = `${selectedUserModel.triggerWord}, ${suggestion}`
@@ -389,7 +416,7 @@ export default function GeneratePage() {
     }
   }
 
-  const handlePromptAppend = (addition: string) => {
+  const _handlePromptAppend = (addition: string) => {
     const currentPrompt = form.getValues('prompt')
     const newPrompt = currentPrompt ? `${currentPrompt}, ${addition}` : addition
     form.setValue('prompt', newPrompt)
@@ -562,7 +589,7 @@ export default function GeneratePage() {
                       
                       {selectedUserModel.triggerWord && (
                         <div className="text-xs text-blue-700">
-                          💡 Tip: Use "<code className="bg-blue-100 px-1 rounded">{selectedUserModel.triggerWord}</code>" in your prompt for best results
+                          💡 Tip: Use &quot;<code className="bg-blue-100 px-1 rounded">{selectedUserModel.triggerWord}</code>&quot; in your prompt for best results
                         </div>
                       )}
                       
@@ -906,25 +933,37 @@ export default function GeneratePage() {
                 </CardContent>
               </Card>
 
-              <Button 
-                type="submit" 
-                disabled={isGenerating || creditsRemaining < CREDIT_COSTS.photo} 
-                className="w-full"
-                size="lg"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Generate Image ({CREDIT_COSTS.photo} credits)
-                  </>
-                )}
-              </Button>
+              {(() => {
+                const selectedBaseModel = baseModels.find((m) => m.id === form.watch('modelId'))
+                const isFreeModelSelected = selectedBaseModel?.free ?? false
+                const hasFreeAllowance = isFreeModelSelected && (freeRemaining ?? 0) > 0
+                const shouldDisable = isGenerating || (!hasFreeAllowance && creditsRemaining < CREDIT_COSTS.photo)
 
+                return (
+                  <Button
+                    type="submit"
+                    disabled={shouldDisable}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Generate Image ({CREDIT_COSTS.photo} credits)
+                        {hasFreeAllowance && creditsRemaining < CREDIT_COSTS.photo && (
+                          <span className="ml-2 text-xs text-green-600">Free!</span>
+                        )}
+                      </>
+                    )}
+                  </Button>
+                )
+              })()}
+               
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
                   {typeof error === 'string' ? error : error}

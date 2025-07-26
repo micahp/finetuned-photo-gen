@@ -19,15 +19,24 @@ const FileConstructor: typeof File | (new () => unknown) =
   typeof File === 'undefined' ? (class DummyFile {}) : File
 
 const generateVideoSchema = z.object({
-  prompt: z.string().max(2000, 'Prompt too long'),
+  prompt: z.string().max(2000, 'Prompt too long').optional(),
+  negativePrompt: z.string().max(2000, 'Negative prompt too long').optional(),
+  enhancePrompt: z.enum(['true', 'false']).transform(v => v === 'true').optional(),
+  effects: z.string().optional(), // Comma-separated list; will split later
+  extend: z.enum(['true', 'false']).transform(v => v === 'true').optional(),
+  firstFrame: z.string().url().optional(),
+  lastFrame: z.string().url().optional(),
+  resolution: z.string().optional(),
+
   modelId: z.string().min(1, 'Model is required'),
   duration: z.number().min(3).max(30).default(5),
-  aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3']).default('16:9'),
+  aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3', '4:5']).default('16:9'),
   fps: z.number().min(12).max(30).default(24),
   motionLevel: z.number().min(1).max(10).default(5),
   seed: z.number().optional(),
-  // Use safe File constructor fallback for server build
-  imageFile: z.instanceof(FileConstructor as any).optional(),
+  // We cannot reliably validate the runtime File constructor across Node/browser;
+  // instead accept any value and validate manually later.
+  imageFile: z.any().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -43,7 +52,6 @@ export async function POST(request: NextRequest) {
 
     // 🔍 Debug: Check FAL API token availability
     console.log('FAL_API_TOKEN exists:', !!process.env.FAL_API_TOKEN)
-    console.log('FAL_API_TOKEN prefix:', process.env.FAL_API_TOKEN?.substring(0, 8) + '...')
     console.log('All FAL env vars:', Object.keys(process.env).filter(key => key.includes('FAL')))
 
     // Parse FormData from request
@@ -52,26 +60,51 @@ export async function POST(request: NextRequest) {
     // 🔍 Debug: log raw form entries to quickly spot missing / malformed values
     const debugEntries: Record<string, unknown> = {}
     formData.forEach((value, key) => {
-      debugEntries[key] = value instanceof File ? { name: value.name, size: value.size } : value
+      // Use FileConstructor to avoid ReferenceError in non-browser runtimes
+      debugEntries[key] = value instanceof (FileConstructor as any) ? { name: (value as any).name, size: (value as any).size } : value
     })
     console.log('VIDEO_GEN_REQUEST_DATA', debugEntries)
     
     // Extract and validate form fields
     const prompt = formData.get('prompt') as string
     const modelId = formData.get('modelId') as string
-    const durationString = formData.get('duration') as string
-    const duration = durationString ? parseInt(durationString) : undefined
+    const safeInt = (raw: FormDataEntryValue | null, label: string): number | undefined => {
+      if (typeof raw !== 'string' || raw.trim() === '') return undefined
+      const n = parseInt(raw)
+      if (Number.isNaN(n)) {
+        // eslint-disable-next-line no-console
+        console.warn('VIDEO_GEN_PARSE_NAN', { label, raw })
+        return undefined
+      }
+      return n
+    }
+
+    const duration = safeInt(formData.get('duration'), 'duration')
     const aspectRatio = formData.get('aspectRatio') as string
-    const fpsString = formData.get('fps') as string
-    const fps = fpsString ? parseInt(fpsString) : undefined
-    const motionLevelString = formData.get('motionLevel') as string
-    const motionLevel = motionLevelString ? parseInt(motionLevelString) : undefined
-    const seedString = formData.get('seed') as string
-    const seed = seedString ? parseInt(seedString) : undefined
+    const fps = safeInt(formData.get('fps'), 'fps')
+    const motionLevel = safeInt(formData.get('motionLevel'), 'motionLevel')
+    const seed = safeInt(formData.get('seed'), 'seed')
     const imageFile = formData.get('imageFile') as File | null
+
+    // New optional fields
+    const negativePrompt = formData.get('negativePrompt') as string | null
+    const enhancePromptRaw = formData.get('enhancePrompt') as string | null // 'true' | 'false'
+    const effectsRaw = formData.get('effects') as string | null
+    const extendRaw = formData.get('extend') as string | null // 'true' | 'false'
+    const firstFrame = formData.get('firstFrame') as string | null
+    const lastFrame = formData.get('lastFrame') as string | null
+    const resolution = formData.get('resolution') as string | null
 
     // Validate the parsed data
     const validationResult = generateVideoSchema.safeParse({
+      negativePrompt: negativePrompt || undefined,
+      enhancePrompt: enhancePromptRaw || undefined,
+      effects: effectsRaw || undefined,
+      extend: extendRaw || undefined,
+      firstFrame: firstFrame || undefined,
+      lastFrame: lastFrame || undefined,
+      resolution: resolution || undefined,
+      imageFile: imageFile || undefined,
       prompt,
       modelId,
       duration,
@@ -79,7 +112,7 @@ export async function POST(request: NextRequest) {
       fps,
       motionLevel,
       seed,
-      imageFile: imageFile || undefined,
+      // prompt may be optional if imageFile present; actual prompt handled later
     })
     
     let validatedData: any
@@ -201,6 +234,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate resolution if provided
+    if (validatedData.resolution && !falVideoService.isResolutionSupported(validatedData.modelId, validatedData.resolution)) {
+      return NextResponse.json(
+        { error: `Resolution ${validatedData.resolution} not supported by ${modelConfig.name}` },
+        { status: 400 }
+      )
+    }
+
     console.log('🎬 Starting video generation:', {
       userId: user.id,
       model: modelConfig.name,
@@ -230,16 +271,40 @@ export async function POST(request: NextRequest) {
 
     // Generate video
     const generationStartTime = Date.now()
-    const videoResult = await falVideoService.generateVideo({
-      prompt: validatedData.prompt,
+
+    // eslint-disable-next-line no-console
+    console.log('VIDEO_GEN_CALL_FAL', {
       modelId: validatedData.modelId,
       duration: validatedData.duration,
       aspectRatio: validatedData.aspectRatio,
-      fps: validatedData.fps,
-      motionLevel: validatedData.motionLevel,
-      seed: validatedData.seed,
-      imageBuffer,
+      prompt: (validatedData.prompt || '').slice(0, 120),
+      hasImage: !!validatedData.imageFile,
     })
+
+    let videoResult
+    try {
+      videoResult = await falVideoService.generateVideo({
+        prompt: validatedData.prompt,
+        modelId: validatedData.modelId,
+        duration: validatedData.duration,
+        aspectRatio: validatedData.aspectRatio,
+        fps: validatedData.fps,
+        motionLevel: validatedData.motionLevel,
+        seed: validatedData.seed,
+        imageBuffer,
+        negativePrompt: validatedData.negativePrompt,
+        enhancePrompt: validatedData.enhancePrompt,
+        effects: validatedData.effects ? validatedData.effects.split(',').map((e: string) => e.trim()).filter(Boolean) : undefined,
+        extend: validatedData.extend,
+        firstFrame: validatedData.firstFrame,
+        lastFrame: validatedData.lastFrame,
+        resolution: validatedData.resolution,
+      })
+    } catch (falErr) {
+      // eslint-disable-next-line no-console
+      console.error('VIDEO_GEN_FAL_EXCEPTION', falErr)
+      throw falErr
+    }
 
     console.log('VIDEO_GEN_SERVICE_RESPONSE', {
       status: videoResult.status,
@@ -300,6 +365,7 @@ export async function POST(request: NextRequest) {
           id: generatedVideo.id,
           status: 'processing',
           jobId: videoResult.id,
+          falModelId: videoResult.falModelId,
           prompt: validatedData.prompt,
           modelId: validatedData.modelId,
           duration: validatedData.duration,
@@ -356,7 +422,7 @@ export async function POST(request: NextRequest) {
       success: true,
       video: {
         id: generatedVideo.id,
-        url: videoResult.videoUrl,
+        videoUrl: videoResult.videoUrl,
         thumbnailUrl: videoResult.thumbnailUrl,
         prompt: validatedData.prompt,
         modelId: validatedData.modelId,
@@ -366,6 +432,7 @@ export async function POST(request: NextRequest) {
         width: videoResult.width,
         height: videoResult.height,
         fileSize: videoResult.fileSize,
+        fallbackUrl: videoResult.fallbackUrl,
         creditsUsed: estimatedCost,
         generationDuration,
         createdAt: generatedVideo.createdAt
