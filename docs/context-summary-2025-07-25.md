@@ -24,3 +24,18 @@ Yesterday we hardened the SSE proxy but user testing still showed buffering and 
 - [ ] Remove dead SSE files (`/api/fal/stream`, `fal-log-subscriber.ts`) once CI passes.
 - [ ] Adaptive back-off after 90 % to save API calls.
 - [ ] Consolidate duplicated progress parsing into shared util. 
+
+- **Gallery UI Consistency:** Major effort to align the video and image gallery experiences.
+    - Video previews now use the same `<Card>` component as images.
+    - Action controls (select, download, delete) were added to videos, reaching feature parity with the image gallery.
+    - The video detail modal layout was updated to match the image modal.
+- **Video Card Refactor:**
+    - A new `VideoGalleryCard` component was introduced, encapsulating skeleton loading, a fade-in effect, and hover-to-play logic.
+    - The background color of the video container now matches the skeleton, preventing a "white flash" during load.
+    - The old `VideoPreview` component was deprecated and is slated for removal.
+- **Infinite Scroll Fixed:**
+    - The gallery's infinite scroll was fixed for both images and videos. An intersection observer was correctly attached to the last element, allowing users to load more than the initial 20 items.
+    - API requests for the gallery now correctly include filter parameters to ensure subsequent pages are loaded correctly.
+    - The total count of items is now accurately displayed.
+- **Decision logs** – Added:
+  - `decisions/gallery-consistency-2024-07-26.md` 
