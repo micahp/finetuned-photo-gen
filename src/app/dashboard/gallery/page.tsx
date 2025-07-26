@@ -29,6 +29,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useRef } from 'react'
 import { SkeletonCard } from '@/components/ui/skeleton-card'
+import { VideoGalleryCard } from '@/components/video/VideoGalleryCard'
 
 interface GeneratedImage {
   id: string
@@ -82,7 +83,12 @@ export default function GalleryPage() {
   const [filteredImages, setFilteredImages] = useState<GeneratedImage[]>([])
   const [videos, setVideos] = useState<GeneratedVideo[]>([])
   const [filteredVideos, setFilteredVideos] = useState<GeneratedVideo[]>([])
+  // Track the total number of videos that match the current filters (reported by the API)
+  const [videoTotalCount, setVideoTotalCount] = useState<number | null>(null)
+  // Track total images as well
+  const [imageTotalCount, setImageTotalCount] = useState<number | null>(null)
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set<string>())
+  const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set<string>())
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<GeneratedVideo | null>(
     null
@@ -140,9 +146,20 @@ export default function GalleryPage() {
   const fetchImages = useCallback(
     async (page: number) => {
       if (!hasMoreImages && page > 1) return
-      setLoadingMore(true)
+      if (page > 1) {
+        setLoadingMore(true)
+      }
       try {
-        const response = await fetch(`/api/gallery?page=${page}&limit=20`)
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: '20',
+          sortBy: filters.sortBy,
+        });
+        if (filters.search) params.append('search', filters.search);
+        if (filters.model !== 'all') params.append('modelId', filters.model);
+        if (filters.aspectRatio !== 'all') params.append('aspectRatio', filters.aspectRatio);
+        
+        const response = await fetch(`/api/gallery?${params.toString()}`)
         const data = await response.json()
 
         if (data.success) {
@@ -151,6 +168,11 @@ export default function GalleryPage() {
             page === 1 ? data.images : [...prev, ...data.images]
           )
           setHasMoreImages(data.pagination.hasNext)
+
+          // Store image total count (only need on first page)
+          if (page === 1 && typeof data.pagination?.total === 'number') {
+            setImageTotalCount(data.pagination.total)
+          }
         }
       } catch (error) {
         console.error('Failed to fetch images:', error)
@@ -159,16 +181,27 @@ export default function GalleryPage() {
         setLoadingMore(false)
       }
     },
-    [hasMoreImages]
+    [hasMoreImages, filters]
   )
 
   // Fetch videos
   const fetchVideos = useCallback(
     async (page: number) => {
       if (!hasMoreVideos && page > 1) return
-      setLoadingMore(true)
+      if (page > 1) {
+        setLoadingMore(true)
+      }
       try {
-        const res = await fetch(`/api/video/gallery?page=${page}&limit=20`)
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: '20',
+          sortBy: filters.sortBy,
+        });
+        if (filters.search) params.append('search', filters.search);
+        if (filters.model !== 'all') params.append('modelId', filters.model);
+        if (filters.aspectRatio !== 'all') params.append('aspectRatio', filters.aspectRatio);
+
+        const res = await fetch(`/api/video/gallery?${params.toString()}`)
         const json = await res.json()
         if (json.success) {
           setVideos(prev => (page === 1 ? json.videos : [...prev, ...json.videos]))
@@ -176,6 +209,11 @@ export default function GalleryPage() {
             page === 1 ? json.videos : [...prev, ...json.videos]
           )
           setHasMoreVideos(json.pagination.hasNextPage)
+
+          // Store the total count for UI display (only need to set on first page)
+          if (page === 1 && typeof json.pagination?.totalCount === 'number') {
+            setVideoTotalCount(json.pagination.totalCount)
+          }
         }
       } catch (err) {
         console.error('Failed to fetch videos', err)
@@ -184,7 +222,7 @@ export default function GalleryPage() {
         setLoadingMore(false)
       }
     },
-    [hasMoreVideos]
+    [hasMoreVideos, filters]
   )
 
   useEffect(() => {
@@ -221,6 +259,8 @@ export default function GalleryPage() {
     setFilteredVideos([])
     setHasMoreImages(true)
     setHasMoreVideos(true)
+    setImageTotalCount(null)
+    setVideoTotalCount(null) // Reset total count on filter change
     if (activeTab === 'images') {
       fetchImages(1)
     } else {
@@ -345,6 +385,16 @@ export default function GalleryPage() {
       newSelected.add(imageId)
     }
     setSelectedImages(newSelected)
+  }
+
+  const handleVideoSelection = (videoId: string) => {
+    const newSelected = new Set(selectedVideos);
+    if (newSelected.has(videoId)) {
+      newSelected.delete(videoId);
+    } else {
+      newSelected.add(videoId);
+    }
+    setSelectedVideos(newSelected);
   }
 
   const selectAllImages = () => {
@@ -472,11 +522,27 @@ export default function GalleryPage() {
         </p>
         <div className="flex items-center gap-2 mt-3">
           <Badge variant="secondary" className="flex items-center gap-1">
-            {activeTab==='images' ? (<><ImageIcon className="h-3 w-3" />{filteredImages.length} image{filteredImages.length!==1?'s':''}</>) : (<><VideoIcon className="h-3 w-3" />{filteredVideos.length} video{filteredVideos.length!==1?'s':''}</>)}
+            {activeTab==='images' ? (
+              <>
+                <ImageIcon className="h-3 w-3" />
+                {imageTotalCount ?? filteredImages.length} image{(imageTotalCount ?? filteredImages.length)!==1?'s':''}
+              </>
+            ) : (
+              <>
+                <VideoIcon className="h-3 w-3" />
+                {/* Show total videos when available, otherwise fallback to currently loaded count */}
+                {videoTotalCount ?? filteredVideos.length} video{(videoTotalCount ?? filteredVideos.length)!==1?'s':''}
+              </>
+            )}
           </Badge>
-          {selectedImages.size > 0 && (
+          {selectedImages.size > 0 && activeTab === 'images' && (
             <Badge variant="default">
               {selectedImages.size} selected
+            </Badge>
+          )}
+          {selectedVideos.size > 0 && activeTab === 'videos' && (
+            <Badge variant="default">
+              {selectedVideos.size} selected
             </Badge>
           )}
         </div>
@@ -600,7 +666,7 @@ export default function GalleryPage() {
         )}
 
         {/* Bulk Actions */}
-        {selectedImages.size > 0 && (
+        {selectedImages.size > 0 && activeTab === 'images' && (
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-center justify-between">
@@ -637,6 +703,51 @@ export default function GalleryPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => setSelectedImages(new Set())}
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        {selectedVideos.size > 0 && activeTab === 'videos' && (
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <Checkbox
+                    checked={selectedVideos.size === filteredVideos.length}
+                    onCheckedChange={() => {
+                      if (selectedVideos.size === filteredVideos.length) {
+                        setSelectedVideos(new Set())
+                      } else {
+                        setSelectedVideos(new Set(filteredVideos.map(v => v.id)))
+                      }
+                    }}
+                  />
+                  <span className="text-sm font-medium">
+                    {selectedVideos.size} of {filteredVideos.length} selected
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      // TODO: Implement video deletion
+                      alert(`Deleting ${selectedVideos.size} videos... (not implemented)`);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedVideos(new Set())}
                   >
                     Clear Selection
                   </Button>
@@ -1010,11 +1121,10 @@ export default function GalleryPage() {
             </div>
           )
         ) : loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading your videos...</p>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
           </div>
         ) : filteredVideos.length === 0 ? (
           <div className="flex items-center justify-center h-64">
@@ -1030,46 +1140,32 @@ export default function GalleryPage() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {filteredVideos.map((video, index) => {
+              // Attach the IntersectionObserver ref to the last element to trigger pagination
               if (filteredVideos.length === index + 1) {
                 return (
-                  <div
-                    ref={lastVideoElementRef}
-                    key={video.id}
-                    className="relative group cursor-pointer"
-                    onClick={() => setSelectedVideo(video)}
-                  >
-                    <video
-                      src={video.videoUrl}
-                      poster={video.thumbnailUrl || undefined}
-                      className="w-full h-auto rounded-lg object-cover"
-                      muted
-                      playsInline
+                  <div ref={lastVideoElementRef} key={video.id}>
+                    <VideoGalleryCard
+                      video={video}
+                      isSelected={selectedVideos.has(video.id)}
+                      onSelectionChange={handleVideoSelection}
+                      onViewDetails={setSelectedVideo}
+                      onDelete={(id) => alert(`TODO: Delete video ${id}`)}
+                      copyPrompt={copyPrompt}
                     />
-                    <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-1 rounded">
-                      {video.duration}s
-                    </div>
-                  </div>
-                )
-              } else {
-                return (
-                  <div
-                    key={video.id}
-                    className="relative group cursor-pointer"
-                    onClick={() => setSelectedVideo(video)}
-                  >
-                    <video
-                      src={video.videoUrl}
-                      poster={video.thumbnailUrl || undefined}
-                      className="w-full h-auto rounded-lg object-cover"
-                      muted
-                      playsInline
-                    />
-                    <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-1 rounded">
-                      {video.duration}s
-                    </div>
                   </div>
                 )
               }
+              return (
+                <VideoGalleryCard
+                  key={video.id}
+                  video={video}
+                  isSelected={selectedVideos.has(video.id)}
+                  onSelectionChange={handleVideoSelection}
+                  onViewDetails={setSelectedVideo}
+                  onDelete={(id) => alert(`TODO: Delete video ${id}`)}
+                  copyPrompt={copyPrompt}
+                />
+              )
             })}
           </div>
         )}
@@ -1095,16 +1191,15 @@ export default function GalleryPage() {
                       alt={selectedImage.prompt}
                       className="w-full rounded-lg shadow-lg"
                     />
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div>
+                    <div className="mt-4">
                       <h3 className="font-medium text-gray-900 mb-2">Prompt</h3>
-                      <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 bg-gray-50 p-3 rounded-lg text-[13px]">
                         {selectedImage.prompt}
                       </p>
                     </div>
-                    
+                  </div>
+                  
+                  <div className="space-y-4">
                     <div>
                       <h3 className="font-medium text-gray-900 mb-2">Generation Parameters</h3>
                       <div className="space-y-2 text-sm">
