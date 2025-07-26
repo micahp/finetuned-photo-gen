@@ -155,7 +155,7 @@ export function VideoGalleryCard({
     <Card className="group p-4 animate-fade-in">
       <CardContent>
         <div className="flex gap-4 items-center" onClick={() => onViewDetails(video)}>
-          <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0 pt-1">
+          <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
             <Checkbox
               checked={isSelected}
               onCheckedChange={() => onSelectionChange(video.id)}

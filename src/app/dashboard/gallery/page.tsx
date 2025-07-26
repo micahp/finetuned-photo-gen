@@ -898,7 +898,7 @@ export default function GalleryPage() {
                           </div>
                         ) : (
                           // List View
-                          <div className="flex gap-4 p-4">
+                          <div className="flex gap-4 p-4 items-center">
                             <div className="flex-shrink-0">
                               <Checkbox
                                 checked={selectedImages.has(image.id)}
@@ -1062,7 +1062,7 @@ export default function GalleryPage() {
                           </div>
                         ) : (
                           // List View
-                          <div className="flex gap-4 p-4">
+                          <div className="flex gap-4 p-4 items-center">
                             <div className="flex-shrink-0">
                               <Checkbox
                                 checked={selectedImages.has(image.id)}
