@@ -53,6 +53,21 @@ export async function GET() {
             creditsUsed: true,
             generationParams: true
           }
+        }),
+        // Get recent generated videos for activity (new)
+        prisma.generatedVideo.findMany({
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            prompt: true,
+            thumbnailUrl: true,
+            videoUrl: true,
+            createdAt: true,
+            creditsUsed: true,
+            modelId: true
+          }
         })
       ])
     ])
@@ -64,13 +79,44 @@ export async function GET() {
       )
     }
 
-    const [imagesGenerated, modelsCount, recentImages] = stats
+    const [imagesGenerated, modelsCount, recentImages, recentVideos] = stats
 
     // Calculate total credits used
     const totalCreditsUsed = await prisma.generatedImage.aggregate({
       where: { userId },
       _sum: { creditsUsed: true }
     })
+
+    // Merge and sort by createdAt desc, limit to 10
+    const recentActivity = [
+      ...recentImages.map(image => {
+        const params = image.generationParams as any
+        const model = params?.model || 'Unknown'
+        return {
+          id: image.id,
+          type: 'image_generated',
+          prompt: image.prompt.length > 100 ? `${image.prompt.substring(0, 100)}...` : image.prompt,
+          imageUrl: image.imageUrl,
+          createdAt: image.createdAt,
+          creditsUsed: image.creditsUsed,
+          model,
+          videoUrl: null,
+          thumbnailUrl: image.imageUrl
+        }
+      }),
+      ...recentVideos.map(video => ({
+        id: video.id,
+        type: 'video_generated',
+        prompt: video.prompt.length > 100 ? `${video.prompt.substring(0, 100)}...` : video.prompt,
+        imageUrl: video.thumbnailUrl || '',
+        thumbnailUrl: video.thumbnailUrl || '',
+        videoUrl: video.videoUrl,
+        createdAt: video.createdAt,
+        creditsUsed: video.creditsUsed,
+        model: video.modelId || 'Unknown'
+      }))
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10)
 
     return NextResponse.json({
       success: true,
@@ -86,21 +132,7 @@ export async function GET() {
           modelsCount,
           totalCreditsUsed: totalCreditsUsed._sum.creditsUsed || 0
         },
-        recentActivity: recentImages.map(image => {
-          // Safely extract model from generationParams
-          const params = image.generationParams as any
-          const model = params?.model || 'Unknown'
-          
-          return {
-            id: image.id,
-            type: 'image_generated',
-            prompt: image.prompt.length > 100 ? `${image.prompt.substring(0, 100)}...` : image.prompt,
-            imageUrl: image.imageUrl,
-            createdAt: image.createdAt,
-            creditsUsed: image.creditsUsed,
-            model
-          }
-        })
+        recentActivity
       }
     })
 

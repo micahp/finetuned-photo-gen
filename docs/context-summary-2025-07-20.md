@@ -81,6 +81,15 @@ We continue the sprint to expose the **full Fal.ai video-generation portfolio (n
   **Rationale**: Differentiates product; minimal engineering lift due to shared Fal interface.  
   **Alternatives**: Wait for Veo-4 – rejected (unknown timeline).
 
+• **Decision**: Keep NSFW checker opt-out via env flag only.  
+  **Rationale**: Avoid UI surface area that encourages disabling safety.  
+  **Alternatives**: UI toggle for power users—rejected on legal grounds.  
+
+- **Decision logs** – Added:
+  - `fal-ai-endpoint-catalogue-sync-2025-07-20.md`
+  - `fal-catalogue-update-2025-07-20.md`
+  - `fal-spec-diff-tooling-2025-07-20.md`
+
 ---
 
 *End of summary.* 

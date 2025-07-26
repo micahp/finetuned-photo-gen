@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -45,9 +45,11 @@ import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AdvancedParametersForm from '@/components/video/AdvancedParametersForm'
 import inputGroups from '@/data/fal_input_groups.json'
+import { useJobProgress } from '@/hooks/use-job-progress'
 
 const videoGenerationSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
+  // Prompt is required only for text-to-video. For image-to-video we allow it to be blank.
+  prompt: z.string().max(2000, 'Prompt too long').optional(),
   modelId: z.string().min(1, 'Model is required'),
   duration: z.number().min(3).max(60),
   aspectRatio: z.enum(['16:9', '9:16', '1:1', '3:4', '4:3']),
@@ -63,8 +65,14 @@ const videoGenerationSchema = z.object({
   enhancePrompt: z.boolean().optional(),
   effects: z.string().optional(),
   extend: z.boolean().optional(),
-  firstFrame: z.string().url().optional(),
-  lastFrame: z.string().url().optional(),
+  firstFrame: z
+    .preprocess(val => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+      z.string().url())
+    .optional(),
+  lastFrame: z
+    .preprocess(val => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+      z.string().url())
+    .optional(),
   resolution: z.string().optional(),
 })
 
@@ -72,7 +80,7 @@ type VideoGenerationFormData = z.infer<typeof videoGenerationSchema>
 
 interface GeneratedVideo {
   id: string
-  url: string
+  videoUrl: string
   thumbnailUrl?: string
   prompt: string
   duration: number
@@ -80,6 +88,9 @@ interface GeneratedVideo {
   fps: number
   fileSize?: number
   createdAt: string
+  fallbackUrl?: string
+  status: 'processing' | 'completed' | 'failed'
+  falModelId?: string
 }
 
 // VideoModel interface imported from video-models.ts
@@ -144,27 +155,90 @@ export default function VideoGenerationPage() {
   const [generatingPrompt, setGeneratingPrompt] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
+  /** DEBUG: accumulated log lines for on-screen inspection */
+  const [debugLogs, setDebugLogs] = useState<string[]>([])
+  const [showLogs, setShowLogs] = useState<boolean>(true)
+  const pushLog = (msg: string) => {
+    setDebugLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`])
+  }
+
+  /** Job info for unified progress tracking */
+  const [jobInfo, setJobInfo] = useState<{ provider: 'fal' | 'replicate' | 'other'; modelId: string; jobId: string } | null>(null)
+
+  const jobProgress = useJobProgress({
+    provider: jobInfo?.provider || 'other',
+    modelId: jobInfo?.modelId || '',
+    jobId: jobInfo?.jobId || '',
+    onDone: () => {
+      pushLog('Job completed (hook)')
+      setGenerationProgress(100)
+      setIsGenerating(false)
+    },
+    onError: (err) => {
+      console.error('Job progress error', err)
+      pushLog(`Job progress error: ${String(err)}`)
+    },
+    onLog: (line: string) => pushLog(line),
+  })
+
+  useEffect(() => {
+    if (jobProgress.pct > 0) {
+      setGenerationProgress(jobProgress.pct)
+    }
+
+    if (jobProgress.status.toLowerCase() === 'completed' && jobInfo?.jobId) {
+      // Fetch final video data once
+      ;(async () => {
+        try {
+          const res = await fetch(`/api/video/status/${jobInfo.jobId}`)
+          if (res.ok) {
+            const json = await res.json()
+            if (json?.success) {
+              setGeneratedVideo(json.video)
+            }
+          }
+        } catch (err) {
+          console.error('Fetch final video failed', err)
+        }
+      })()
+    }
+  }, [jobProgress.pct, jobProgress.status])
+
+  /**
+   * Interval ref for the synthetic random progress updates that we used prior
+   * to integrating real-time Fal logs.  Cleared automatically once the first
+   * real progress value is received (or on generation completion).
+   */
+  const syntheticProgressRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Removed falUnsubscribeRef – unified hook manages cleanup
+
   // Track which generation mode (text or image) the user is on
   const [activeMode, setActiveMode] = useState<'text-to-video' | 'image-to-video'>(
     'text-to-video'
   )
 
-  // Find Veo 3 model for text-to-video default, fallback to cheapest
-  const veo3Model = AVAILABLE_VIDEO_MODELS.find(m => m.id === 'veo-3-text')
+  // Select the first budget-tier model (cheapest cost) for each mode; fall back to the overall cheapest if
+  // no budget model exists.
+  const budgetTextModel = AVAILABLE_VIDEO_MODELS
+    .filter((m) => m.mode === 'text-to-video' && getTier(m.costPerSecond) === 'budget')
+    .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
+
   const cheapestTextModel = AVAILABLE_VIDEO_MODELS
     .filter((m) => m.mode === 'text-to-video')
     .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
-  
-  // Find SeeDANCE Pro model for image-to-video default, fallback to cheapest
-  const seedanceProModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === 'seedance-pro-image')
+
+  const budgetImageModel = AVAILABLE_VIDEO_MODELS
+    .filter((m) => m.mode === 'image-to-video' && getTier(m.costPerSecond) === 'budget')
+    .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
+
   const cheapestImageModel = AVAILABLE_VIDEO_MODELS
     .filter((m) => m.mode === 'image-to-video')
     .sort((a, b) => a.costPerSecond - b.costPerSecond)[0]
 
-  // Set defaults with Veo 3 preferred for text-to-video and SeeDANCE Pro for image-to-video
   const defaultModelIdByMode: Record<'text-to-video' | 'image-to-video', string> = {
-    'text-to-video': veo3Model?.id || cheapestTextModel?.id || '',
-    'image-to-video': seedanceProModel?.id || cheapestImageModel?.id || '',
+    'text-to-video': budgetTextModel?.id || cheapestTextModel?.id || '',
+    'image-to-video': budgetImageModel?.id || cheapestImageModel?.id || '',
   }
 
   const defaultSelectedModel = AVAILABLE_VIDEO_MODELS.find(m => m.id === defaultModelIdByMode['text-to-video'])
@@ -186,8 +260,8 @@ export default function VideoGenerationPage() {
       enhancePrompt: false,
       effects: '',
       extend: false,
-      firstFrame: '',
-      lastFrame: '',
+      firstFrame: undefined,
+      lastFrame: undefined,
       resolution: baselineResolution,
     },
   })
@@ -341,9 +415,28 @@ export default function VideoGenerationPage() {
     }
   }
 
+  const handleSubmitInvalid = (errors: any) => {
+    /* eslint-disable no-console */
+    console.error('❌ VIDEO_GEN_FORM_INVALID', errors)
+    /* eslint-enable no-console */
+    setError('Please fix the highlighted errors before generating the video.')
+  }
+
   const onSubmit = async (data: VideoGenerationFormData) => {
+    pushLog('Form submitted')
+    pushLog(JSON.stringify({ modelId: data.modelId, duration: data.duration }))
+    /* eslint-disable no-console */
+    console.log('▶️ VIDEO_GEN_FORM_SUBMIT', {
+      activeMode,
+      data,
+      hasImage: !!data.imageFile,
+      creditsRemaining,
+      estimatedCost,
+    })
+    /* eslint-enable no-console */
     try {
       setIsGenerating(true)
+      pushLog('Spinner START — isGenerating=true')
       setError(null)
       setGenerationProgress(0)
 
@@ -379,14 +472,11 @@ export default function VideoGenerationPage() {
 
       // All video models require premium access - handled at page level
 
-      // Start with fake progress, will switch to real progress if job is processing
-      const progressInterval = setInterval(() => {
-        setGenerationProgress(prev => Math.min(prev + Math.random() * 15, 95))
-      }, 2000)
+      // Synthetic progress disabled – rely solely on real-time Fal logs
 
       // Prepare form data for API call
       const formData = new FormData()
-      formData.append('prompt', data.prompt)
+      formData.append('prompt', data.prompt || '') // Ensure prompt is always sent, even if empty
       formData.append('modelId', data.modelId)
       formData.append('duration', data.duration.toString())
       formData.append('aspectRatio', data.aspectRatio)
@@ -420,12 +510,15 @@ export default function VideoGenerationPage() {
         body: formData,
       })
 
+      pushLog(`POST /api/video/generate → ${response.status}`)
+
       // eslint-disable-next-line no-console
       console.log('VIDEO_GEN_API_RESPONSE_STATUS', response.status)
 
-      clearInterval(progressInterval)
+      // Keep progress bar running; will clear when polling detects completion
 
       if (!response.ok) {
+        pushLog('API responded with error; aborting')
         const errorData = await response.json()
         // eslint-disable-next-line no-console
         console.error('VIDEO_GEN_API_ERROR', errorData)
@@ -433,20 +526,29 @@ export default function VideoGenerationPage() {
       }
 
       const result = await response.json()
+      pushLog(`Generation request accepted: jobId=${result?.video?.jobId}`)
       // eslint-disable-next-line no-console
       console.log('VIDEO_GEN_API_RESULT', result)
       
       if (result.success) {
         if (result.video.status === 'processing') {
-          // Start polling for async job completion
+          // Store placeholder record so UI can show job ID immediately
           setGeneratedVideo(result.video)
           setCreditsRemaining(result.creditsRemaining)
-          await pollVideoStatus(result.video.jobId, progressInterval)
+
+          // Determine Fal model slug (if available)
+          const modelFalId = result.video.falModelId || selectedModel?.falModelId
+          const provider: 'fal' | 'replicate' | 'other' = modelFalId ? 'fal' : 'other'
+          setJobInfo({ provider, modelId: modelFalId || '', jobId: result.video.jobId })
+
         } else {
-          // Synchronous completion
+          // Immediate completion (rare)
           setGeneratedVideo(result.video)
           setCreditsRemaining(result.creditsRemaining)
           setGenerationProgress(100)
+          pushLog('Job already completed (synchronous)')
+          setIsGenerating(false)
+          pushLog('Spinner STOP — isGenerating=false')
         }
         await update()
       } else {
@@ -457,10 +559,17 @@ export default function VideoGenerationPage() {
       console.error('Generation error:', error)
       setError(error instanceof Error ? error.message : 'An error occurred')
       setGenerationProgress(0)
+      pushLog(`Generation error: ${error instanceof Error ? error.message : 'unknown'}`)
     } finally {
-      setIsGenerating(false)
+      // Ensure we cancel any outstanding WebSocket subscription when generation
+      // cycle ends (success or failure)
+      // Unified hook handles cleanup implicitly
+      // No synthetic progress to clean up
+      // IMPORTANT: do NOT clear isGenerating here; let success/failure paths handle it
     }
   }
+
+  // Unified hook handles cleanup implicitly
 
   const getAspectRatioLabel = (ratio: string) => {
     const labels: Record<string, string> = {
@@ -500,6 +609,14 @@ export default function VideoGenerationPage() {
     }, 300)
   }
 
+  // Add effect to log URL when video changes
+  useEffect(() => {
+    if (generatedVideo) {
+      // eslint-disable-next-line no-console
+      console.log('DISPLAYING_VIDEO_URL', generatedVideo.videoUrl)
+    }
+  }, [generatedVideo])
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
@@ -520,7 +637,7 @@ export default function VideoGenerationPage() {
 
             <TabsContent value={activeMode} asChild>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form onSubmit={form.handleSubmit(onSubmit, handleSubmitInvalid)} className="space-y-6">
                   {/* Model Selection */}
                   <Card>
                     <CardHeader>
@@ -973,7 +1090,25 @@ export default function VideoGenerationPage() {
                       <p className="text-sm text-red-700">{error}</p>
                     </div>
                   )}
+
                 </form>
+
+                {/* --- Debug Logs Panel (moved outside <form>) --- */}
+                <Card className="mt-6">
+                  <CardHeader className="flex flex-row items-center justify-between py-2">
+                    <CardTitle className="text-sm">Logs</CardTitle>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowLogs(!showLogs)}>
+                      {showLogs ? 'Hide' : 'Show'}
+                    </Button>
+                  </CardHeader>
+                  {showLogs && (
+                    <CardContent className="p-0">
+                      <pre className="bg-gray-900 text-gray-100 text-xs p-4 max-h-64 overflow-y-auto whitespace-pre-wrap">
+                        {debugLogs.length ? debugLogs.join('\n') : 'No logs yet'}
+                      </pre>
+                    </CardContent>
+                  )}
+                </Card>
               </Form>
             </TabsContent>
           </Tabs>
@@ -981,41 +1116,65 @@ export default function VideoGenerationPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {generatedVideo && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5" />
-                  Generated Video
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <video 
-                  src={generatedVideo.url}
-                  controls
-                  poster={generatedVideo.thumbnailUrl}
-                  className="w-full h-auto rounded-lg"
-                >
-                  Your browser does not support the video tag.
-                </video>
-                
-                <div className="flex gap-2">
-                  <Button size="sm" className="flex-1">
-                    <Download className="mr-2 h-4 w-4" />
-                    Download
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/dashboard/gallery">
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Gallery
-                    </Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          {generatedVideo?.status === 'completed' && generatedVideo.videoUrl && (
+            <VideoPlayerWithFallback video={generatedVideo} />
           )}
         </div>
       </div>
     </div>
   )
 } 
+
+// ---------- helper component ----------
+
+function VideoPlayerWithFallback({ video }: { video: GeneratedVideo }) {
+  // Server now guarantees Cloudflare asset readiness via size-stabilisation, so
+  // we can load the primary `videoUrl` immediately without a client-side HEAD
+  // probe that triggers noisy CORS pre-flights.  We still fall back to
+  // `fallbackUrl` if for some reason `videoUrl` is missing.
+  const [src] = useState<string>(video.videoUrl || video.fallbackUrl || '')
+
+  // No polling needed – backend ensures the file is fully propagated.
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5" />
+          Generated Video
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <video
+          src={src}
+          controls
+          poster={video.thumbnailUrl}
+          className="w-full h-auto rounded-lg"
+        >
+          Your browser does not support the video tag.
+        </video>
+
+        <p className="break-all text-xs text-gray-500 select-all">
+          {src}
+        </p>
+
+        <div className="flex gap-2">
+          <Button size="sm" className="flex-1" asChild>
+            <a href={video.videoUrl} download>
+              <Download className="mr-2 h-4 w-4" />
+              Download
+            </a>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/dashboard/gallery">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Gallery
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+} 
+
+export { VideoPlayerWithFallback } 

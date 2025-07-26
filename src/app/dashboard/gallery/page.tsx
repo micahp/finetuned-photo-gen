@@ -16,14 +16,22 @@ import {
   Image as ImageIcon, 
   Grid3X3, 
   List, 
+  StretchHorizontal,
   Filter,
   Trash2,
   Eye,
   Copy,
   Share,
-  MoreHorizontal
+  MoreHorizontal,
+  Video as VideoIcon,
+  Loader2
 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useRef } from 'react'
+import { SkeletonCard } from '@/components/ui/skeleton-card'
+import { VideoGalleryCard } from '@/components/video/VideoGalleryCard'
+import { toast } from 'sonner'
 
 interface GeneratedImage {
   id: string
@@ -56,15 +64,78 @@ interface FilterState {
   sortBy: string
 }
 
+interface GeneratedVideo {
+  id: string
+  prompt: string
+  videoUrl: string
+  thumbnailUrl?: string
+  duration: number
+  aspectRatio: string
+  fps: number
+  creditsUsed: number
+  createdAt: string
+  generationParams?: any
+  model?: string
+  originalTempUrl?: string
+}
+
 export default function GalleryPage() {
   const { data: session } = useSession()
   const [images, setImages] = useState<GeneratedImage[]>([])
   const [filteredImages, setFilteredImages] = useState<GeneratedImage[]>([])
+  const [videos, setVideos] = useState<GeneratedVideo[]>([])
+  const [filteredVideos, setFilteredVideos] = useState<GeneratedVideo[]>([])
+  // Track the total number of videos that match the current filters (reported by the API)
+  const [videoTotalCount, setVideoTotalCount] = useState<number | null>(null)
+  // Track total images as well
+  const [imageTotalCount, setImageTotalCount] = useState<number | null>(null)
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set<string>())
+  const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set<string>())
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null)
+  const [selectedVideo, setSelectedVideo] = useState<GeneratedVideo | null>(
+    null
+  )
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [imagePage, setImagePage] = useState(1)
+  const [hasMoreImages, setHasMoreImages] = useState(true)
+  const [videoPage, setVideoPage] = useState(1)
+  const [hasMoreVideos, setHasMoreVideos] = useState(true)
+
+  const observer = useRef<IntersectionObserver>()
+  const lastImageElementRef = useCallback(
+    node => {
+      if (loading) return
+      if (observer.current) observer.current.disconnect()
+      observer.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && hasMoreImages) {
+          setImagePage(prevPage => prevPage + 1)
+        }
+      })
+      if (node) observer.current.observe(node)
+    },
+    [loading, hasMoreImages]
+  )
+
+  const lastVideoElementRef = useCallback(
+    node => {
+      if (loading) return
+      if (observer.current) observer.current.disconnect()
+      observer.current = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && hasMoreVideos) {
+          setVideoPage(prevPage => prevPage + 1)
+        }
+      })
+      if (node) observer.current.observe(node)
+    },
+    [loading, hasMoreVideos]
+  )
+
+  const imagesFetchedRef = useRef(false)
+  const videosFetchedRef = useRef(false)
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'wide'>('grid')
   const [showFilters, setShowFilters] = useState(false)
+  const [activeTab, setActiveTab] = useState<'images' | 'videos'>('images')
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     model: 'all',
@@ -74,32 +145,145 @@ export default function GalleryPage() {
   })
 
   // Fetch images from API
-  const fetchImages = useCallback(async () => {
-    try {
-      setLoading(true)
-      const response = await fetch('/api/gallery')
-      const data = await response.json()
-      
-      if (data.success) {
-        setImages(data.images)
-        setFilteredImages(data.images)
+  const fetchImages = useCallback(
+    async (page: number) => {
+      if (!hasMoreImages && page > 1) return
+      if (page > 1) {
+        setLoadingMore(true)
       }
-    } catch (error) {
-      console.error('Failed to fetch images:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: '20',
+          sortBy: filters.sortBy,
+        });
+        if (filters.search) params.append('search', filters.search);
+        if (filters.model !== 'all') params.append('modelId', filters.model);
+        if (filters.aspectRatio !== 'all') params.append('aspectRatio', filters.aspectRatio);
+        
+        if (page === 1) {
+          // First page load – trigger global loading state so the UI shows a placeholder instead of 0
+          setLoading(true)
+        }
+
+        const response = await fetch(`/api/gallery?${params.toString()}`)
+        const data = await response.json()
+
+        if (data.success) {
+          setImages(prev => (page === 1 ? data.images : [...prev, ...data.images]))
+          setFilteredImages(prev =>
+            page === 1 ? data.images : [...prev, ...data.images]
+          )
+          setHasMoreImages(data.pagination.hasNext)
+
+          // Store image total count (only need on first page)
+          if (page === 1 && typeof data.pagination?.total === 'number') {
+            setImageTotalCount(data.pagination.total)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch images:', error)
+      } finally {
+        setLoading(false)
+        setLoadingMore(false)
+      }
+    },
+    [hasMoreImages, filters]
+  )
+
+  // Fetch videos
+  const fetchVideos = useCallback(
+    async (page: number) => {
+      if (!hasMoreVideos && page > 1) return
+      if (page > 1) {
+        setLoadingMore(true)
+      }
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: '20',
+          sortBy: filters.sortBy,
+        });
+        if (filters.search) params.append('search', filters.search);
+        if (filters.model !== 'all') params.append('modelId', filters.model);
+        if (filters.aspectRatio !== 'all') params.append('aspectRatio', filters.aspectRatio);
+
+        if (page === 1) {
+          // First page load – trigger global loading state so the UI shows a placeholder instead of 0
+          setLoading(true)
+        }
+
+        const res = await fetch(`/api/video/gallery?${params.toString()}`)
+        const json = await res.json()
+        if (json.success) {
+          setVideos(prev => (page === 1 ? json.videos : [...prev, ...json.videos]))
+          setFilteredVideos(prev =>
+            page === 1 ? json.videos : [...prev, ...json.videos]
+          )
+          setHasMoreVideos(json.pagination.hasNextPage)
+
+          // Store the total count for UI display (only need to set on first page)
+          if (page === 1 && typeof json.pagination?.totalCount === 'number') {
+            setVideoTotalCount(json.pagination.totalCount)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch videos', err)
+      } finally {
+        setLoading(false)
+        setLoadingMore(false)
+      }
+    },
+    [hasMoreVideos, filters]
+  )
 
   useEffect(() => {
     if (session?.user) {
-      fetchImages()
+      if (activeTab === 'images') {
+        fetchImages(imagePage)
+      }
     }
-  }, [session, fetchImages])
+  }, [session, imagePage])
+
+  useEffect(() => {
+    if (session?.user) {
+      if (activeTab === 'videos') {
+        fetchVideos(videoPage)
+      }
+    }
+  }, [session, videoPage])
+
+  useEffect(() => {
+    if (activeTab === 'images' && !images.length) {
+      fetchImages(1)
+    } else if (activeTab === 'videos' && !videos.length) {
+      fetchVideos(1)
+    }
+  }, [activeTab])
+
+  // Reset state when filters change
+  useEffect(() => {
+    setImagePage(1)
+    setVideoPage(1)
+    setImages([])
+    setVideos([])
+    setFilteredImages([])
+    setFilteredVideos([])
+    setHasMoreImages(true)
+    setHasMoreVideos(true)
+    setImageTotalCount(null)
+    setVideoTotalCount(null) // Reset total count on filter change
+    if (activeTab === 'images') {
+      fetchImages(1)
+    } else {
+      fetchVideos(1)
+    }
+  }, [filters])
 
   // Apply filters
   useEffect(() => {
     let filtered = [...images]
+    let filteredV = [...videos]
 
     // Search filter
     if (filters.search) {
@@ -159,7 +343,47 @@ export default function GalleryPage() {
     })
 
     setFilteredImages(filtered)
-  }, [images, filters])
+
+    // Apply same filters to videos (reuse search, model aspect etc where applicable)
+    if (filters.search) {
+      filteredV = filteredV.filter(v => v.prompt.toLowerCase().includes(filters.search.toLowerCase()))
+    }
+    if (filters.model !== 'all') {
+      filteredV = filteredV.filter(v => (v.generationParams?.model || '') === filters.model)
+    }
+    if (filters.aspectRatio !== 'all') {
+      filteredV = filteredV.filter(v => v.aspectRatio === filters.aspectRatio)
+    }
+    if (filters.dateRange !== 'all') {
+      const now = new Date()
+      const cutoffDate = new Date()
+      switch (filters.dateRange) {
+        case 'today':
+          cutoffDate.setHours(0,0,0,0)
+          break
+        case 'week':
+          cutoffDate.setDate(now.getDate()-7)
+          break
+        case 'month':
+          cutoffDate.setMonth(now.getMonth()-1)
+          break
+      }
+      filteredV = filteredV.filter(v => new Date(v.createdAt) >= cutoffDate)
+    }
+    filteredV.sort((a,b)=>{
+      switch (filters.sortBy) {
+        case 'newest':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        case 'oldest':
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        case 'prompt':
+          return a.prompt.localeCompare(b.prompt)
+        default:
+          return 0
+      }
+    })
+    setFilteredVideos(filteredV)
+  }, [images, videos, filters])
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -173,6 +397,16 @@ export default function GalleryPage() {
       newSelected.add(imageId)
     }
     setSelectedImages(newSelected)
+  }
+
+  const handleVideoSelection = (videoId: string) => {
+    const newSelected = new Set(selectedVideos);
+    if (newSelected.has(videoId)) {
+      newSelected.delete(videoId);
+    } else {
+      newSelected.add(videoId);
+    }
+    setSelectedVideos(newSelected);
   }
 
   const selectAllImages = () => {
@@ -209,16 +443,30 @@ export default function GalleryPage() {
   }
 
   const copyPrompt = (prompt: string) => {
-    navigator.clipboard.writeText(prompt)
+    if (!prompt) return
+    navigator.clipboard
+      .writeText(prompt)
+      .then(() => {
+        toast.success('Prompt copied to clipboard')
+      })
+      .catch(() => {
+        toast.error('Failed to copy prompt')
+      })
   }
 
-  const shareImage = (image: GeneratedImage) => {
+  const shareImage = async (image: GeneratedImage) => {
     if (navigator.share) {
-      navigator.share({
-        title: 'AI Generated Image',
-        text: image.prompt,
-        url: image.imageUrl
-      })
+      try {
+        await navigator.share({
+          title: 'AI Generated Image',
+          text: image.prompt,
+          url: image.imageUrl
+        })
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          console.error('Image share failed:', error)
+        }
+      }
     } else {
       navigator.clipboard.writeText(image.imageUrl)
     }
@@ -266,19 +514,62 @@ export default function GalleryPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
+      {/* Tabs for Images / Videos */}
+      <Tabs
+        value={activeTab}
+        onValueChange={value =>
+          setActiveTab(value as 'images' | 'videos')
+        }
+        className="mb-4"
+      >
+        <TabsList>
+          <TabsTrigger value="images">
+            <ImageIcon className="h-4 w-4 mr-2" />
+            Images
+          </TabsTrigger>
+          <TabsTrigger value="videos">
+            <VideoIcon className="h-4 w-4 mr-2" />
+            Videos
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Image Gallery</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          {activeTab === 'images' ? 'Image Gallery' : 'Video Gallery'}
+        </h1>
         <p className="text-gray-600">
-          View and manage all your AI-generated images
+          View and manage all your AI-generated {activeTab==='images'?'images':'videos'}
         </p>
         <div className="flex items-center gap-2 mt-3">
           <Badge variant="secondary" className="flex items-center gap-1">
-            <ImageIcon className="h-3 w-3" />
-            {filteredImages.length} image{filteredImages.length !== 1 ? 's' : ''}
+            {activeTab==='images' ? (
+              <>
+                <ImageIcon className="h-3 w-3" />
+                {imageTotalCount !== null ? (
+                  `${imageTotalCount} image${imageTotalCount!==1 ? 's' : ''}`
+                ) : (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                )}
+              </>
+            ) : (
+              <>
+                <VideoIcon className="h-3 w-3" />
+                {videoTotalCount !== null ? (
+                  `${videoTotalCount} video${videoTotalCount!==1 ? 's' : ''}`
+                ) : (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                )}
+              </>
+            )}
           </Badge>
-          {selectedImages.size > 0 && (
+          {selectedImages.size > 0 && activeTab === 'images' && (
             <Badge variant="default">
               {selectedImages.size} selected
+            </Badge>
+          )}
+          {selectedVideos.size > 0 && activeTab === 'videos' && (
+            <Badge variant="default">
+              {selectedVideos.size} selected
             </Badge>
           )}
         </div>
@@ -319,6 +610,14 @@ export default function GalleryPage() {
                 className="rounded-r-none"
               >
                 <Grid3X3 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'wide' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('wide')}
+                className="-mx-px rounded-none" /* Negative margin to avoid double border */
+              >
+                <StretchHorizontal className="h-4 w-4" />
               </Button>
               <Button
                 variant={viewMode === 'list' ? 'default' : 'ghost'}
@@ -402,7 +701,7 @@ export default function GalleryPage() {
         )}
 
         {/* Bulk Actions */}
-        {selectedImages.size > 0 && (
+        {selectedImages.size > 0 && activeTab === 'images' && (
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-center justify-between">
@@ -447,277 +746,725 @@ export default function GalleryPage() {
             </CardContent>
           </Card>
         )}
-      </div>
-
-      {/* Image Grid/List */}
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading your images...</p>
-          </div>
-        </div>
-      ) : filteredImages.length === 0 ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">
-              {images.length === 0 ? 'No images generated yet' : 'No images match your filters'}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className={viewMode === 'grid' 
-          ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'
-          : 'space-y-4'
-        }>
-          {filteredImages.map((image) => (
-            <Card key={image.id} className={`group ${viewMode === 'list' ? 'p-4' : ''}`}>
-              <CardContent className={viewMode === 'grid' ? 'p-0' : 'p-0'}>
-                {viewMode === 'grid' ? (
-                  // Grid View
-                  <div className="relative">
-                    <div className="absolute top-2 left-2 z-10">
-                      <Checkbox
-                        checked={selectedImages.has(image.id)}
-                        onCheckedChange={() => toggleImageSelection(image.id)}
-                        className="bg-white/80 border-white"
-                      />
-                    </div>
-                    
-                    <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="secondary" size="sm" className="h-8 w-8 p-0 bg-white/80">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setSelectedImage(image)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => downloadImage(image)}>
-                            <Download className="h-4 w-4 mr-2" />
-                            Download
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => copyPrompt(image.prompt)}>
-                            <Copy className="h-4 w-4 mr-2" />
-                            Copy Prompt
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => shareImage(image)}>
-                            <Share className="h-4 w-4 mr-2" />
-                            Share
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => handleDeleteImages([image.id])}>
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-
-                    <SmartImage
-                      src={image.imageUrl}
-                      alt={image.prompt}
-                      className="w-full aspect-square object-cover rounded-lg cursor-pointer"
-                      onClick={() => setSelectedImage(image)}
-                    />
-                    
-                    <div className="p-3">
-                      <p className="text-sm text-gray-600 line-clamp-2 mb-2">
-                        {image.prompt}
-                      </p>
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>{new Date(image.createdAt).toLocaleDateString()}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {image.generationParams.aspectRatio}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  // List View
-                  <div className="flex gap-4 p-4">
-                    <div className="flex-shrink-0">
-                      <Checkbox
-                        checked={selectedImages.has(image.id)}
-                        onCheckedChange={() => toggleImageSelection(image.id)}
-                      />
-                    </div>
-                    
-                    <SmartImage
-                      src={image.imageUrl}
-                      alt={image.prompt}
-                      className="w-20 h-20 object-cover rounded-lg cursor-pointer flex-shrink-0"
-                      onClick={() => setSelectedImage(image)}
-                    />
-                    
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 mb-1 line-clamp-1">
-                        {image.prompt}
-                      </h3>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge variant="secondary" className="text-xs">
-                          {image.generationParams.model.split('/').pop()}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {image.generationParams.aspectRatio}
-                        </Badge>
-                        <span className="text-xs text-gray-500">
-                          {image.generationParams.steps} steps
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-500">
-                        {new Date(image.createdAt).toLocaleDateString()} • {image.creditsUsed} credit{image.creditsUsed !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadImage(image)}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedImage(image)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Image Details Modal */}
-      <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          {selectedImage && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Image Details</DialogTitle>
-              </DialogHeader>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                  <SmartImage
-                    src={selectedImage.imageUrl}
-                    alt={selectedImage.prompt}
-                    className="w-full rounded-lg shadow-lg"
+        {selectedVideos.size > 0 && activeTab === 'videos' && (
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <Checkbox
+                    checked={selectedVideos.size === filteredVideos.length}
+                    onCheckedChange={() => {
+                      if (selectedVideos.size === filteredVideos.length) {
+                        setSelectedVideos(new Set())
+                      } else {
+                        setSelectedVideos(new Set(filteredVideos.map(v => v.id)))
+                      }
+                    }}
                   />
+                  <span className="text-sm font-medium">
+                    {selectedVideos.size} of {filteredVideos.length} selected
+                  </span>
                 </div>
                 
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-medium text-gray-900 mb-2">Prompt</h3>
-                    <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">
-                      {selectedImage.prompt}
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h3 className="font-medium text-gray-900 mb-2">Generation Parameters</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Model:</span>
-                        <span>{selectedImage.generationParams.model.split('/').pop()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Aspect Ratio:</span>
-                        <span>{selectedImage.generationParams.aspectRatio}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Steps:</span>
-                        <span>{selectedImage.generationParams.steps}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Seed:</span>
-                        <span>{selectedImage.generationParams.seed ?? 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Style:</span>
-                        <span className="capitalize">{selectedImage.generationParams.style}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="font-medium text-gray-900 mb-2">Enhanced Metadata</h3>
-                    <div className="space-y-2 text-sm">
-                      {selectedImage.width && selectedImage.height && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Dimensions:</span>
-                          <span>{selectedImage.width} × {selectedImage.height} px</span>
-                        </div>
-                      )}
-                      {selectedImage.fileSize && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">File Size:</span>
-                          <span>{(selectedImage.fileSize / 1024 / 1024).toFixed(2)} MB</span>
-                        </div>
-                      )}
-                      {selectedImage.generationDuration && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Generation Time:</span>
-                          <span>{(selectedImage.generationDuration / 1000).toFixed(1)}s</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Created:</span>
-                        <span>{new Date(selectedImage.createdAt).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Credits Used:</span>
-                        <span>{selectedImage.creditsUsed}</span>
-                      </div>
-                      {selectedImage.originalTempUrl && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Original URL:</span>
-                          <span className="text-xs text-blue-600 truncate max-w-32" title={selectedImage.originalTempUrl}>
-                            {selectedImage.originalTempUrl.split('/').pop()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 pt-4">
-                    <Button
-                      onClick={() => downloadImage(selectedImage)}
-                      className="flex-1"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => copyPrompt(selectedImage.prompt)}
-                    >
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy Prompt
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => shareImage(selectedImage)}
-                    >
-                      <Share className="h-4 w-4 mr-2" />
-                      Share
-                    </Button>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      // TODO: Implement video deletion
+                      alert(`Deleting ${selectedVideos.size} videos... (not implemented)`);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedVideos(new Set())}
+                  >
+                    Clear Selection
+                  </Button>
                 </div>
               </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <div className="mt-8">
+        {/* Content rendering depending on activeTab */}
+        {loading && !loadingMore ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        ) : activeTab === 'images' ? (
+          filteredImages.length === 0 ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">
+                  {images.length === 0
+                    ? 'No images generated yet'
+                    : 'No images match your filters'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div
+              className={
+                (viewMode !== 'list')
+                  ? `grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 ${viewMode === 'wide' ? 'auto-rows-fr' : ''}`
+                  : 'space-y-4'
+              }
+            >
+              {filteredImages.map((image, index) => {
+                if (filteredImages.length === index + 1) {
+                  return (
+                    <Card
+                      ref={lastImageElementRef}
+                      key={image.id}
+                      className={`group ${
+                        viewMode === 'list' ? 'p-4' : ''
+                      }`}
+                    >
+                      <CardContent
+                        className={viewMode === 'grid' ? 'p-0' : 'p-0'}
+                      >
+                        {(viewMode !== 'list') ? (
+                          // Grid View
+                          <div className="relative">
+                            <div className="absolute top-2 left-2 z-10">
+                              <Checkbox
+                                checked={selectedImages.has(image.id)}
+                                onCheckedChange={() =>
+                                  toggleImageSelection(image.id)
+                                }
+                                className="bg-white/80 border-white"
+                              />
+                            </div>
+
+                            <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 bg-white/80"
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => setSelectedImage(image)}
+                                  >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => downloadImage(image)}
+                                  >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => copyPrompt(image.prompt)}
+                                  >
+                                    <Copy className="h-4 w-4 mr-2" />
+                                    Copy Prompt
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => shareImage(image)}
+                                  >
+                                    <Share className="h-4 w-4 mr-2" />
+                                    Share
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-red-600 focus:text-red-600"
+                                    onClick={() =>
+                                      handleDeleteImages([image.id])
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+
+                            <SmartImage
+                              src={image.imageUrl}
+                              alt={image.prompt}
+                              className={`w-full ${viewMode === 'wide' ? 'aspect-video' : 'aspect-square'} object-cover rounded-lg cursor-pointer`}
+                              onClick={() => setSelectedImage(image)}
+                            />
+
+                            <div className="p-3">
+                              <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                                {image.prompt}
+                              </p>
+                              <div className="flex items-center justify-between text-xs text-gray-500">
+                                <span>
+                                  {new Date(
+                                    image.createdAt
+                                  ).toLocaleDateString()}
+                                </span>
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {image.generationParams.aspectRatio}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          // List View
+                          <div className="flex gap-4 p-4 items-center">
+                            <div className="flex-shrink-0">
+                              <Checkbox
+                                checked={selectedImages.has(image.id)}
+                                onCheckedChange={() =>
+                                  toggleImageSelection(image.id)
+                                }
+                              />
+                            </div>
+
+                            <SmartImage
+                              src={image.imageUrl}
+                              alt={image.prompt}
+                              className="w-20 h-20 object-cover rounded-lg cursor-pointer flex-shrink-0"
+                              onClick={() => setSelectedImage(image)}
+                            />
+
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium text-gray-900 mb-1 line-clamp-1">
+                                {image.prompt}
+                              </h3>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {image.generationParams.model
+                                    .split('/')
+                                    .pop()}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs"
+                                >
+                                  {image.generationParams.aspectRatio}
+                                </Badge>
+                                <span className="text-xs text-gray-500">
+                                  {image.generationParams.steps} steps
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-500">
+                                {new Date(
+                                  image.createdAt
+                                ).toLocaleDateString()}{' '}
+                                • {image.creditsUsed} credit
+                                {image.creditsUsed !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedImage(image)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )
+                } else {
+                  return (
+                    <Card
+                      key={image.id}
+                      className={`group ${
+                        viewMode === 'list' ? 'p-4' : ''
+                      }`}
+                    >
+                      <CardContent
+                        className={viewMode === 'grid' ? 'p-0' : 'p-0'}
+                      >
+                        {(viewMode !== 'list') ? (
+                          // Grid View
+                          <div className="relative">
+                            <div className="absolute top-2 left-2 z-10">
+                              <Checkbox
+                                checked={selectedImages.has(image.id)}
+                                onCheckedChange={() =>
+                                  toggleImageSelection(image.id)
+                                }
+                                className="bg-white/80 border-white"
+                              />
+                            </div>
+
+                            <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 bg-white/80"
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => setSelectedImage(image)}
+                                  >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => downloadImage(image)}
+                                  >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => copyPrompt(image.prompt)}
+                                  >
+                                    <Copy className="h-4 w-4 mr-2" />
+                                    Copy Prompt
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => shareImage(image)}
+                                  >
+                                    <Share className="h-4 w-4 mr-2" />
+                                    Share
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-red-600 focus:text-red-600"
+                                    onClick={() =>
+                                      handleDeleteImages([image.id])
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+
+                            <SmartImage
+                              src={image.imageUrl}
+                              alt={image.prompt}
+                              className={`w-full ${viewMode === 'wide' ? 'aspect-video' : 'aspect-square'} object-cover rounded-lg cursor-pointer`}
+                              onClick={() => setSelectedImage(image)}
+                            />
+
+                            <div className="p-3">
+                              <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                                {image.prompt}
+                              </p>
+                              <div className="flex items-center justify-between text-xs text-gray-500">
+                                <span>
+                                  {new Date(
+                                    image.createdAt
+                                  ).toLocaleDateString()}
+                                </span>
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {image.generationParams.aspectRatio}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          // List View
+                          <div className="flex gap-4 p-4 items-center">
+                            <div className="flex-shrink-0">
+                              <Checkbox
+                                checked={selectedImages.has(image.id)}
+                                onCheckedChange={() =>
+                                  toggleImageSelection(image.id)
+                                }
+                              />
+                            </div>
+
+                            <SmartImage
+                              src={image.imageUrl}
+                              alt={image.prompt}
+                              className="w-20 h-20 object-cover rounded-lg cursor-pointer flex-shrink-0"
+                              onClick={() => setSelectedImage(image)}
+                            />
+
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium text-gray-900 mb-1 line-clamp-1">
+                                {image.prompt}
+                              </h3>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {image.generationParams.model
+                                    .split('/')
+                                    .pop()}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs"
+                                >
+                                  {image.generationParams.aspectRatio}
+                                </Badge>
+                                <span className="text-xs text-gray-500">
+                                  {image.generationParams.steps} steps
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-500">
+                                {new Date(
+                                  image.createdAt
+                                ).toLocaleDateString()}{' '}
+                                • {image.creditsUsed} credit
+                                {image.creditsUsed !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedImage(image)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )
+                }
+              })}
+            </div>
+          )
+        ) : loading ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        ) : filteredVideos.length === 0 ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <VideoIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">
+                {videos.length === 0
+                  ? 'No videos generated yet'
+                  : 'No videos match your filters'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className={viewMode !== 'list' ? 'grid grid-cols-2 md:grid-cols-4 gap-4' : 'space-y-4'}>
+            {filteredVideos.map((video, index) => {
+              // Attach the IntersectionObserver ref to the last element to trigger pagination
+              if (filteredVideos.length === index + 1) {
+                return (
+                  <div ref={lastVideoElementRef} key={video.id}>
+                    <VideoGalleryCard
+                      viewMode={viewMode}
+                      video={video}
+                      isSelected={selectedVideos.has(video.id)}
+                      onSelectionChange={handleVideoSelection}
+                      onViewDetails={setSelectedVideo}
+                      onDelete={(id) => alert(`TODO: Delete video ${id}`)}
+                      copyPrompt={copyPrompt}
+                    />
+                  </div>
+                )
+              }
+              return (
+                <VideoGalleryCard
+                  viewMode={viewMode}
+                  key={video.id}
+                  video={video}
+                  isSelected={selectedVideos.has(video.id)}
+                  onSelectionChange={handleVideoSelection}
+                  onViewDetails={setSelectedVideo}
+                  onDelete={(id) => alert(`TODO: Delete video ${id}`)}
+                  copyPrompt={copyPrompt}
+                />
+              )
+            })}
+          </div>
+        )}
+        {loadingMore && (
+          <div className="text-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-500" />
+          </div>
+        )}
+
+        {/* Image Details Modal */}
+        <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            {selectedImage && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Image Details</DialogTitle>
+                </DialogHeader>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <SmartImage
+                      src={selectedImage.imageUrl}
+                      alt={selectedImage.prompt}
+                      className="w-full rounded-lg shadow-lg"
+                    />
+                    <div className="mt-4">
+                      <h3 className="font-medium text-gray-900 mb-2">Prompt</h3>
+                      <p className="text-gray-600 bg-gray-50 p-3 rounded-lg text-[13px]">
+                        {selectedImage.prompt}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-medium text-gray-900 mb-2">Generation Parameters</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Model:</span>
+                          <span>{selectedImage.generationParams.model.split('/').pop()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Aspect Ratio:</span>
+                          <span>{selectedImage.generationParams.aspectRatio}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Steps:</span>
+                          <span>{selectedImage.generationParams.steps}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Seed:</span>
+                          <span>{selectedImage.generationParams.seed ?? 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Style:</span>
+                          <span className="capitalize">{selectedImage.generationParams.style}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-medium text-gray-900 mb-2">Enhanced Metadata</h3>
+                      <div className="space-y-2 text-sm">
+                        {selectedImage.width && selectedImage.height && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Dimensions:</span>
+                            <span>{selectedImage.width} × {selectedImage.height} px</span>
+                          </div>
+                        )}
+                        {selectedImage.fileSize && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">File Size:</span>
+                            <span>{(selectedImage.fileSize / 1024 / 1024).toFixed(2)} MB</span>
+                          </div>
+                        )}
+                        {selectedImage.generationDuration && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Generation Time:</span>
+                            <span>{(selectedImage.generationDuration / 1000).toFixed(1)}s</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Created:</span>
+                          <span>{new Date(selectedImage.createdAt).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Credits Used:</span>
+                          <span>{selectedImage.creditsUsed}</span>
+                        </div>
+                        {selectedImage.originalTempUrl && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Original URL:</span>
+                            <span className="text-xs text-blue-600 truncate max-w-32" title={selectedImage.originalTempUrl}>
+                              {selectedImage.originalTempUrl.split('/').pop()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 pt-4">
+                      <Button
+                        onClick={() => downloadImage(selectedImage)}
+                        className="flex-1"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => copyPrompt(selectedImage.prompt)}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy Prompt
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => shareImage(selectedImage)}
+                      >
+                        <Share className="h-4 w-4 mr-2" />
+                        Share
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Video Details Modal */}
+        <Dialog open={!!selectedVideo} onOpenChange={() => setSelectedVideo(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            {selectedVideo && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Video Details</DialogTitle>
+                </DialogHeader>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <video
+                      src={selectedVideo.videoUrl}
+                      poster={selectedVideo.thumbnailUrl || ''}
+                      className="w-full rounded-lg shadow-lg"
+                      controls
+                    />
+                    <div className="mt-4">
+                      <h3 className="font-medium text-gray-900 mb-2">Prompt</h3>
+                      <p className="text-gray-600 bg-gray-50 p-3 rounded-lg text-[13px]">
+                        {selectedVideo.prompt}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    
+                    <div>
+                      <h3 className="font-medium text-gray-900 mb-2">Generation Parameters</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Model:</span>
+                          <span>{selectedVideo.generationParams?.model || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Aspect Ratio:</span>
+                          <span>{selectedVideo.aspectRatio}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Duration:</span>
+                          <span>{selectedVideo.duration}s</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">FPS:</span>
+                          <span>{selectedVideo.fps}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Seed:</span>
+                          <span>{selectedVideo.generationParams?.seed ?? 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Style:</span>
+                          <span className="capitalize">{selectedVideo.generationParams?.style || 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-medium text-gray-900 mb-2">Enhanced Metadata</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Created:</span>
+                          <span>{new Date(selectedVideo.createdAt).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Credits Used:</span>
+                          <span>{selectedVideo.creditsUsed}</span>
+                        </div>
+                        {selectedVideo.originalTempUrl && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Original URL:</span>
+                            <span className="text-xs text-blue-600 truncate max-w-32" title={selectedVideo.originalTempUrl}>
+                              {selectedVideo.originalTempUrl.split('/').pop()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 pt-4">
+                      <Button
+                        onClick={() => {
+                          const a = document.createElement('a');
+                          a.href = selectedVideo.videoUrl;
+                          a.download = `generated-video-${selectedVideo.id}.mp4`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                        }}
+                        className="flex-1"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => copyPrompt(selectedVideo.prompt)}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy Prompt
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          if (navigator.share) {
+                            try {
+                              await navigator.share({
+                                title: 'AI Generated Video',
+                                text: selectedVideo.prompt,
+                                url: selectedVideo.videoUrl
+                              });
+                            } catch (error: any) {
+                              if (error.name !== 'AbortError') {
+                                console.error('Video share failed:', error)
+                              }
+                            }
+                          } else {
+                            navigator.clipboard.writeText(selectedVideo.videoUrl)
+                          }
+                        }}
+                      >
+                        <Share className="h-4 w-4 mr-2" />
+                        Share
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
-  )
+  );
 } 

@@ -7,6 +7,9 @@ const nextConfig = {
   },
   transpilePackages: ['next-auth'],
   
+  // Disable gzip compression so SSE streams flush immediately
+  compress: false,
+  
   // Enable standalone output for Docker
   output: 'standalone',
   

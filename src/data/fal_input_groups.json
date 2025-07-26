@@ -130,7 +130,7 @@
     ],
     "advanced": []
   },
-  "ltx-v095-text": {
+  "ltx-v098-text": {
     "above": [
       "prompt",
       "resolution",
@@ -189,7 +189,7 @@
       "seed"
     ]
   },
-  "ltx-video-v095-mc-image": {
+  "ltx-video-v098-mc-image": {
     "above": [
       "prompt",
       "resolution",

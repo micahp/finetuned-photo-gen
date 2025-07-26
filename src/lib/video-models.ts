@@ -29,6 +29,8 @@ export interface VideoModel {
   /** Resolution-specific cost multipliers relative to the baseline costPerSecond */
   resolutionMultipliers?: Record<string, number>
   avgGenerationTimeMinutes?: number
+  /** Whether the model supports Fal.ai streaming logs via subscribe() */
+  supportsStreamingLogs?: boolean
 }
 
 /**
@@ -302,7 +304,7 @@ export const VIDEO_MODELS: VideoModel[] = [
 
   {
     id: 'stable-video-diffusion',
-    name: 'Stable Video Diffusion – Image → Video',
+    name: 'Stable Video Diffusion (No Prompt) – Image → Video', // You cannot use a prompt with this model. need to update UI for this model
     falModelId: 'fal-ai/stable-video',
     mode: 'image-to-video',
     maxDuration: 5,
@@ -315,15 +317,16 @@ export const VIDEO_MODELS: VideoModel[] = [
 
   {
     id: 'ltx-video-13b-distilled',
-    name: 'LTX Video 13B Distilled – Image → Video',
-    falModelId: 'fal-ai/ltx-video-13b-distilled/image-to-video',
+    name: 'LTX Video 13B 0.9.8 Distilled – Image → Video', // upgraded to v0.9.8 (better quality, custom LoRA)
+    falModelId: 'fal-ai/ltxv-13b-098-distilled/image-to-video',
     mode: 'image-to-video',
     maxDuration: 5,
-    costPerSecond: 2, // Fal cost ≈0.8¢/s (0.04 per 5s clip), markup ×2 → 2 credits
+    costPerSecond: 5, // Fal page: $0.02 / s ⇒ 5 credits/s in our accounting model
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 4 },
     durationOptions: [5],
     hasAudio: false,
+    supportsStreamingLogs: true,
   },
 
   {
@@ -505,19 +508,19 @@ export const VIDEO_MODELS: VideoModel[] = [
     falModelId: 'fal-ai/fast-svd',
     mode: 'image-to-video',
     maxDuration: 5,
-    costPerSecond: 3, // Price not disclosed. We assume the rate matches the text‑to‑video endpoint ( $0.00111 / compute s ).
+    costPerSecond: 2, // Price not disclosed. We assume the rate matches the text‑to‑video endpoint ( $0.00111 / compute s ).
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 5 },
     // duration fixed to 25 frames (~2-3s); leave undefined to fallback
     hasAudio: false,
-  },
+  }, // You cannot use a prompt with this model. need to update UI for this model
   {
     id: 'fast-svd-text',
     name: 'Fast Stable Video Diffusion – Text → Video',
     falModelId: 'fal-ai/fast-svd/text-to-video',
     mode: 'text-to-video',
     maxDuration: 5,
-    costPerSecond: 3, // Fal page: "Your request will cost $0.00111 per compute second." Matched to image variant at 12 credits/s.
+    costPerSecond: 2, // Fal page: "Your request will cost $0.00111 per compute second." Matched to image variant at 12 credits/s.
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 4 },
     durationOptions: [5],
@@ -536,7 +539,7 @@ export const VIDEO_MODELS: VideoModel[] = [
   },
   {
     id: 'ltx-video-13b-dev-image',
-    name: 'LTX Video 13B Dev – Image → Video',
+    name: 'LTX Video 13B Dev – Image → Video', // 0.9.7 13B and custom LoRA, we can keep for now
     falModelId: 'fal-ai/ltx-video-13b-dev/image-to-video',
     mode: 'image-to-video',
     maxDuration: 5,
@@ -549,7 +552,7 @@ export const VIDEO_MODELS: VideoModel[] = [
   // Currently we don't support video uploads so we'll come back to this
   // {
   //   id: 'ltx-video-13b-dev-extend',
-  //   name: 'LTX Video 13B Dev Extend – Image → Video',
+  //   name: 'LTX Video 13B Dev Extend – Image → Video', // 0.9.7 13B and custom LoRA, we'll keep 9.7 dev models for now
   //   falModelId: 'fal-ai/ltx-video-13b-dev/extend',
   //   mode: 'image-to-video',
   //   maxDuration: 10,
@@ -559,25 +562,14 @@ export const VIDEO_MODELS: VideoModel[] = [
   //   durationOptions: [5, 10],
   //   hasAudio: false,
   // },
+  
   {
-    id: 'ltx-video-v095-image',
-    name: 'LTX Video v0.95 – Image → Video',
-    falModelId: 'fal-ai/ltx-video-v095/image-to-video',
+    id: 'ltx-video-v098-mc-image',
+    name: 'LTX Video 13B 0.9.8 MC – Image → Video', // upgraded multiconditioning endpoint
+    falModelId: 'fal-ai/ltxv-13b-098-distilled/multiconditioning',
     mode: 'image-to-video',
     maxDuration: 5,
-    costPerSecond: 5, // Your request will cost $0.02 per second, billed at 24 frames per second. For $1 you can generate 50 seconds of video. Enabling detail_pass will double the billed seconds.
-    supportedAspectRatios: ['16:9', '9:16', '1:1'],
-    defaultParams: { fps: 24, motionLevel: 4 },
-    durationOptions: [5],
-    hasAudio: false,
-  }, // DEPRECATED
-  {
-    id: 'ltx-video-v095-mc-image',
-    name: 'LTX Video v0.95 MC – Image → Video',
-    falModelId: 'fal-ai/ltx-video-v095/multiconditioning',
-    mode: 'image-to-video',
-    maxDuration: 5,
-    costPerSecond: 8, // Your request will cost $0.04 per video.
+    costPerSecond: 5, // Fal page: $0.02 / s ⇒ 5 credits/s
 
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 4 },
@@ -622,31 +614,20 @@ export const VIDEO_MODELS: VideoModel[] = [
     hasAudio: false,
   },
   {
-    id: 'ltx-preview-image',
-    name: 'LTX Video Preview – Image → Video',
-    falModelId: 'fal-ai/ltx-video/image-to-video',
-    mode: 'image-to-video',
-    maxDuration: 5,
-    costPerSecond: 2,
-    supportedAspectRatios: ['16:9', '9:16', '1:1'],
-    defaultParams: { fps: 24, motionLevel: 4 },
-    durationOptions: [5],
-    hasAudio: false,
-  },
-  {
-    id: 'ltx-v095-text',
-    name: 'LTX Video 0.9.5 – Text → Video',
-    falModelId: 'fal-ai/ltx-video-v095',
+    id: 'ltx-v098-text', // updated to 9.8 text variant
+    name: 'LTX Video 13B 0.9.8 Distilled – Text → Video', // upgraded text-to-video endpoint
+    falModelId: 'fal-ai/ltxv-13b-098-distilled',
     mode: 'text-to-video',
     maxDuration: 5,
-    costPerSecond: 3,
+    costPerSecond: 5, // Fal page: $0.02 / s ⇒ 5 credits/s
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 4 },
     durationOptions: [5],
     hasAudio: false,
+    supportsStreamingLogs: true,
   },
   // {
-  //   id: 'ltx-13b-dev-extend',
+  //   id: 'ltx-13b-dev-extend', // 0.9.7 13B and custom LoRA, i guess we can keep since it's 9.7 dev vs the vs 9.7 distilled
   //   name: 'LTX Video 13B Dev Extend – Video → Video',
   //   falModelId: 'fal-ai/ltx-video-13b-dev/extend',
   //   mode: 'video-to-video',
