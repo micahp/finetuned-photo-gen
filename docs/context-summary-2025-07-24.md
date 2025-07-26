@@ -22,6 +22,13 @@
 
 - **Hide prompt field for Stable-Video Diffusion models** – UI now omits the text prompt box whenever a user selects `fal-ai/stable-video` (image→video) to prevent confusion; see `docs/hide-stable-video-prompt-field-2025-07-24.md`. 
 
+- **Decision logs** – Added:
+  - `fal-sse-controller-progress-fallback-2025-07-24.md`
+  - `fal-stream-route-simplification-2025-07-24.md`
+  - `fal-stream-heartbeat-debug-2025-07-24.md`
+  - `unified-job-progress-hook-2025-07-24.md`
+  - `fal-stream-node-runtime-keepalive-2025-07-25.md`
+
 ## Open Tasks (derived from Decision follow-ups)
 
 ### High Priority
