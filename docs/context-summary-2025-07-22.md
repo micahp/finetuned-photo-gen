@@ -14,6 +14,11 @@
 - Fixed mismatch between video generation API response (`url`) and UI expectation (`videoUrl`), restoring video playback in dashboard (see `decisions/video-api-response-field-fix-2025-07-22.md`). 
 - Implemented fallback video pipeline: backend now returns original Fal URL (`fallbackUrl`) and dashboard player streams it until Cloudflare copy is ready (commit `feat(video latency)` 2025-07-22). 
 
+- **Decision logs** – Added:
+  - `video-generation-timing-logs-2025-07-22.md`
+  - `image-prompt-creativity-update-2025-07-22.md`
+  - `together-ai-retry-handling-2025-07-22.md`
+
 ## Open Tasks (derived from Decision follow-ups)
 
 ### High Priority
