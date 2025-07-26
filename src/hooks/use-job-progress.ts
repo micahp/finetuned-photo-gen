@@ -71,7 +71,7 @@ export function useJobProgress({
             const video = json.video || {}
             if (Array.isArray(video.logs)) {
               const newLines = video.logs.filter((l: string) => !lastLogRef.current.includes(l))
-              newLines.forEach(l => onLog?.(l))
+              newLines.forEach((l: string) => onLog?.(l))
               // Keep only last 50 lines
               lastLogRef.current = [...lastLogRef.current, ...newLines].slice(-50)
             }

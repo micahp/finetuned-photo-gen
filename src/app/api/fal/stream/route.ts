@@ -105,6 +105,7 @@ export async function GET(req: NextRequest) {
             const upstream  = await openStream()
             // node-fetch returns a Node.js stream that doesn't implement getReader.
             // Convert it to a Web ReadableStream if necessary.
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore – Node 18+ exposes Readable to Web conversion.
             const webBody: ReadableStream<Uint8Array> = (typeof upstream.body?.getReader === 'function')
               ? (upstream.body as any)

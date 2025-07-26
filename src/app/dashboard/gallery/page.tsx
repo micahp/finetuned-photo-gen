@@ -104,7 +104,7 @@ export default function GalleryPage() {
 
   const observer = useRef<IntersectionObserver>()
   const lastImageElementRef = useCallback(
-    node => {
+    (node: Element | null) => {
       if (loading) return
       if (observer.current) observer.current.disconnect()
       observer.current = new IntersectionObserver(entries => {
@@ -118,7 +118,7 @@ export default function GalleryPage() {
   )
 
   const lastVideoElementRef = useCallback(
-    node => {
+    (node: Element | null) => {
       if (loading) return
       if (observer.current) observer.current.disconnect()
       observer.current = new IntersectionObserver(entries => {

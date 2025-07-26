@@ -294,7 +294,7 @@ export async function POST(request: NextRequest) {
         imageBuffer,
         negativePrompt: validatedData.negativePrompt,
         enhancePrompt: validatedData.enhancePrompt,
-        effects: validatedData.effects ? validatedData.effects.split(',').map(e => e.trim()).filter(Boolean) : undefined,
+        effects: validatedData.effects ? validatedData.effects.split(',').map((e: string) => e.trim()).filter(Boolean) : undefined,
         extend: validatedData.extend,
         firstFrame: validatedData.firstFrame,
         lastFrame: validatedData.lastFrame,

@@ -246,7 +246,7 @@ export default function VideoGenerationPage() {
     ? Object.keys(defaultSelectedModel.resolutionMultipliers)[0]
     : ''
 
-  const form = useForm<VideoGenerationFormData>({
+  const form = useForm({
     resolver: zodResolver(videoGenerationSchema),
     defaultValues: {
       prompt: '',
@@ -333,19 +333,14 @@ export default function VideoGenerationPage() {
     }
   }, [selectedModel])
 
-  // Show upgrade prompt while session is loading for non-premium users
-  if (session && !isDev && !hasPremiumAccess) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="text-center">
-          <Crown className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Premium Feature</h1>
-          <p className="text-gray-600 mb-6">Video generation requires an active subscription</p>
-          <p className="text-sm text-gray-500 mb-4">Redirecting to billing...</p>
-        </div>
-      </div>
-    )
-  }
+  // Prepare upgrade prompt banner for non-premium users (actual redirect handled above)
+  const upgradeBanner = (session && !isDev && !hasPremiumAccess) ? (
+    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-center space-y-2">
+      <Crown className="h-6 w-6 text-yellow-500 mx-auto" />
+      <p className="font-semibold">Video generation is a premium feature.</p>
+      <p className="text-sm text-gray-600">Redirecting to billing...</p>
+    </div>
+  ) : null
 
   const handleImagesUploaded = (files: File[]) => {
     setUploadedImages(files)
@@ -618,7 +613,8 @@ export default function VideoGenerationPage() {
   }, [generatedVideo])
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 space-y-6">
+      {upgradeBanner}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Video Generation</h1>
         <p className="text-gray-600">Create stunning videos from text prompts or images using advanced AI models</p>
@@ -1176,5 +1172,3 @@ function VideoPlayerWithFallback({ video }: { video: GeneratedVideo }) {
     </Card>
   )
 } 
-
-export { VideoPlayerWithFallback } 

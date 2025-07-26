@@ -54,10 +54,6 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
   // If none of the advanced options are supported, render nothing so parent can hide section.
   const hasAnyAdvanced = supportsNegativePrompt || supportsEnhancePrompt || supportsEffects || supportsExtend || supportsFirstLastFrame || supportsResolution
 
-  if (!hasAnyAdvanced) {
-    return null
-  }
-
   // Ensure the selected resolution is always valid for the current model
   useEffect(() => {
     if (!supportsResolution) return
@@ -77,6 +73,10 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supportsResolution, selectedModel])
+
+  if (!hasAnyAdvanced) {
+    return null
+  }
 
   return (
     <div className="space-y-4">
