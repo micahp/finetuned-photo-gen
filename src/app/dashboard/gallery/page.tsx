@@ -1147,13 +1147,14 @@ export default function GalleryPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className={viewMode === 'grid' ? 'grid grid-cols-2 md:grid-cols-4 gap-4' : 'space-y-4'}>
             {filteredVideos.map((video, index) => {
               // Attach the IntersectionObserver ref to the last element to trigger pagination
               if (filteredVideos.length === index + 1) {
                 return (
                   <div ref={lastVideoElementRef} key={video.id}>
                     <VideoGalleryCard
+                      viewMode={viewMode}
                       video={video}
                       isSelected={selectedVideos.has(video.id)}
                       onSelectionChange={handleVideoSelection}
@@ -1166,6 +1167,7 @@ export default function GalleryPage() {
               }
               return (
                 <VideoGalleryCard
+                  viewMode={viewMode}
                   key={video.id}
                   video={video}
                   isSelected={selectedVideos.has(video.id)}
