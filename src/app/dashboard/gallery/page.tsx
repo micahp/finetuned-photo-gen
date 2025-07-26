@@ -544,16 +544,20 @@ export default function GalleryPage() {
             {activeTab==='images' ? (
               <>
                 <ImageIcon className="h-3 w-3" />
-                {imageTotalCount !== null
-                  ? `${imageTotalCount} image${imageTotalCount!==1?'s':''}`
-                  : '—'}
+                {imageTotalCount !== null ? (
+                  `${imageTotalCount} image${imageTotalCount!==1 ? 's' : ''}`
+                ) : (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                )}
               </>
             ) : (
               <>
                 <VideoIcon className="h-3 w-3" />
-                {videoTotalCount !== null
-                  ? `${videoTotalCount} video${videoTotalCount!==1?'s':''}`
-                  : '—'}
+                {videoTotalCount !== null ? (
+                  `${videoTotalCount} video${videoTotalCount!==1 ? 's' : ''}`
+                ) : (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                )}
               </>
             )}
           </Badge>

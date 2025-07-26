@@ -5,7 +5,7 @@
 
 **Change Summary:**
 1. Added a global `setLoading(true)` trigger when requesting page 1 of images or videos.
-2. Gallery badge now displays an em dash (`—`) until `imageTotalCount` or `videoTotalCount` is received, eliminating the misleading "0 images/videos" state.
+2. Gallery badge now renders a small animated spinner (`Loader2`) until `imageTotalCount` or `videoTotalCount` is received, eliminating the misleading "0 images/videos" state.
 
 **Rationale:**
 • Users perceived the brief "0 images/videos" display as a bug or data loss. The placeholder communicates that counts are still loading.
