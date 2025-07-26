@@ -30,6 +30,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useRef } from 'react'
 import { SkeletonCard } from '@/components/ui/skeleton-card'
 import { VideoGalleryCard } from '@/components/video/VideoGalleryCard'
+import { toast } from 'sonner'
 
 interface GeneratedImage {
   id: string
@@ -431,7 +432,15 @@ export default function GalleryPage() {
   }
 
   const copyPrompt = (prompt: string) => {
-    navigator.clipboard.writeText(prompt)
+    if (!prompt) return
+    navigator.clipboard
+      .writeText(prompt)
+      .then(() => {
+        toast.success('Prompt copied to clipboard')
+      })
+      .catch(() => {
+        toast.error('Failed to copy prompt')
+      })
   }
 
   const shareImage = async (image: GeneratedImage) => {
