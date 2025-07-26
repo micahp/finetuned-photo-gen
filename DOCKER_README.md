@@ -131,3 +131,48 @@ When ready to separate frontend and backend:
 2. Configure CORS for API routes
 3. Update environment variables for different services
 4. Deploy frontend to Vercel and backend to your preferred platform 
+
+## Zero-Downtime Updates on a Single Server
+
+These steps let you build the new Docker image *while the old container keeps serving traffic*. Downtime is reduced to only the few seconds required to replace the container.
+
+### Fast Rolling Update (recommended)
+```bash
+# 1. Pull the latest code
+git pull
+
+# 2. Build the new image **without** touching the running container
+# (adds the newer image to the local cache)
+docker compose build            # or: docker compose build <service>
+
+# 3. Recreate containers in the background
+#    – Compose stops the old container and immediately starts the new one
+#    – If the build had failed, the old site would have kept running
+docker compose up -d            # or: docker compose up -d <service>
+```
+Shortcut: `docker compose up -d --build` performs steps 2 + 3 in one command—Compose builds first and only swaps containers if the build succeeds.
+
+### Near Zero-Downtime (blue-green style)
+1. Run a second stack on a different project name / port:
+   ```bash
+   docker compose -p myapp-v2 -f docker-compose.yml up -d --build
+   ```
+2. Wait for health checks to pass.
+3. Point your load-balancer / Nginx upstream to the new port and reload it:
+   ```bash
+   # example for nginx
+   nginx -s reload
+   ```
+4. Remove the old stack when satisfied:
+   ```bash
+   docker compose -p myapp-v1 down
+   ```
+
+This approach keeps user-visible interruption to a single reverse-proxy reload (< 1 s).
+
+> **Tip:** Tagging images with the current git SHA (e.g., `myapp:<SHA>`) makes rollbacks trivial:
+> ```bash
+> HASH=$(git rev-parse --short HEAD)
+> docker compose build --tag myapp:$HASH
+> docker compose up -d myapp:$HASH
+> ``` 
