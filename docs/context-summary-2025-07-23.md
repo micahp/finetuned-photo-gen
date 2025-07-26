@@ -10,6 +10,8 @@
 - **Fal SSE source updated:** Backend now proxies `.../stream?logs=1` instead of misusing `fal.subscribe`, eliminating 422 errors while keeping live logs for all models (see `decisions/use-status-stream-endpoint-2025-07-23.md`).
 - **Fal SSE reliability:** `src/app/api/fal/stream/route.ts` now retries `/status/stream` on early 404/405 with exponential back-off, so the UI no longer shows phantom 405 errors (see `decisions/retry-fal-stream-connection-2025-07-23.md`).
 - **Logs toggle bug fixed:** Moving Logs card out of form and setting button `type="button"` prevents accidental video generation when hiding logs (see `decisions/video-log-toggle-submit-fix-2025-07-23.md`).
+- **Video SSE Buffering Fix:** SSE proxy now buffers packets to prevent stalls and ensures consistent progress bar (see `decisions/video-sse-buffering-fix-2025-07-23.md`).
+- **Skip SSE Text Models:** SSE proxy now skips text models to reduce bandwidth and improve performance (see `decisions/skip-sse-text-models-2025-07-23.md`).
 
 ## Open Tasks (derived from Decision follow-ups)
 
