@@ -3,7 +3,7 @@ import json, requests, urllib.parse, pathlib, os
 
 BASE_DIR = pathlib.Path(__file__).parent
 # Load endpoints
-with open(BASE_DIR / 'fal_api_endpoints_35.json', 'r') as f:
+with open(BASE_DIR / 'fal_api_endpoints_25.json', 'r') as f:
     endpoints = json.load(f)
 
 out_dir = BASE_DIR / 'fal_api_specs'

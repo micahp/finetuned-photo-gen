@@ -33,5 +33,6 @@
   ["LTX 13B dev Extend", "fal-ai/ltx-video-13b-dev/extend"],
   ["LTX preview I2V (dup)", "fal-ai/ltx-video/image-to-video/api"],
   ["Fast-SVD LCM I2V (dup)", "fal-ai/fast-svd-lcm/api"],
-  ["Stable Video Diffusion T2V", "fal-ai/stable-video/t2v"]
+  ["Stable Video Diffusion T2V", "fal-ai/stable-video/t2v"],
+  ["Gemini 2.5 Flash Image Edit", "fal-ai/gemini-25-flash-image/edit"]
 ] 
