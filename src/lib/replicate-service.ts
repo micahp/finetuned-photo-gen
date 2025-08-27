@@ -890,4 +890,68 @@ export class ReplicateService {
       }
     }
   }
+
+  /**
+   * Edit an image using Google's Gemini 2.5 Flash Image (nano-banana) on Replicate
+   * https://replicate.com/google/nano-banana
+   */
+  async editImageWithNanoBanana(params: {
+    /** Accepts a data URL (base64) or public HTTP URL */
+    image: string
+    prompt: string
+    /** Optional: number of outputs (default 1) */
+    numImages?: number
+  }): Promise<ReplicateGenerationResponse> {
+    try {
+      console.log('🖌️ Editing image with google/nano-banana...', {
+        has_image: typeof params.image === 'string' && params.image.startsWith('data:') ? 'data-url' : 'url',
+        prompt: params.prompt,
+      })
+
+      const input: Record<string, unknown> = {
+        prompt: params.prompt,
+        image: params.image,
+        num_images: params.numImages || 1,
+      }
+
+      // Use client.run with owner/model; Replicate resolves to latest version
+      const prediction = await this.client.run(
+        'google/nano-banana',
+        { input }
+      ) as any
+
+      // Normalize outputs → array or object
+      const outputs: string[] = Array.isArray(prediction)
+        ? prediction.map((o: any) => typeof o === 'string' ? o : (o?.url?.() ? String(o.url()) : String(o?.url || '')))
+        : prediction?.output
+          ? (Array.isArray(prediction.output)
+            ? prediction.output.map((o: any) => typeof o === 'string' ? o : (o?.url?.() ? String(o.url()) : String(o?.url || '')))
+            : [String(prediction.output)])
+          : []
+
+      const imageUrl = outputs.find((u: string) => typeof u === 'string' && u.startsWith('http'))
+
+      if (imageUrl) {
+        // Use a generic square size when unknown; downstream code updates real size after CF upload
+        return {
+          id: `replicate_nano_banana_${Date.now()}`,
+          status: 'completed',
+          images: [{ url: imageUrl, width: 1024, height: 1024 }],
+        }
+      }
+
+      return {
+        id: `replicate_nano_banana_err_${Date.now()}`,
+        status: 'failed',
+        error: 'nano-banana returned no image URLs',
+      }
+    } catch (error) {
+      console.error('❌ Replicate nano-banana edit error:', error)
+      return {
+        id: `replicate_nano_banana_exc_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'nano-banana edit failed',
+      }
+    }
+  }
 } 
