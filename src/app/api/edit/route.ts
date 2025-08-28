@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+export const runtime = 'nodejs'
 import { auth } from '@/lib/next-auth'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
 import { ReplicateService } from '@/lib/replicate-service'
 import { CloudflareImagesService } from '@/lib/cloudflare-images-service'
-import { ImageProcessingService } from '@/lib/image-processing-service'
 import { CreditService } from '@/lib/credit-service'
 import { CREDIT_COSTS } from '@/lib/credits/constants'
 import { isPremiumUser } from '@/lib/subscription-utils'
@@ -79,107 +79,124 @@ export async function POST(request: NextRequest) {
     })
 
     if (result.status !== 'completed' || !result.images?.[0]) {
-      const message = result.error || 'Edit failed'
-      console.error('❌ Edit failed:', message)
-      return NextResponse.json({ error: message }, { status: 500 })
-    }
-
-    // Deduct credit only on success
-    const creditResult = await CreditService.spendCredits(
-      session.user.id,
-      EDIT_CREDIT_COST,
-      `Image edit: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`,
-      'image_edit',
-      undefined,
-      {
-        prompt,
-        model: 'google/nano-banana',
+      const originalError = result.error || 'NO_OUTPUT'
+      console.error('edit.error', {
         provider: 'replicate',
-        seed,
+        model: 'google/nano-banana',
+        originalError,
+      })
+      
+      const isBillingIssue = /\b402\b|Payment Required|Insufficient credit/i.test(originalError)
+      if (isBillingIssue) {
+        return NextResponse.json(
+          { success: false, error: 'This model is temporarily unavailable due to a provider issue. Please try again later. You were not charged.', code: 'PROVIDER_BILLING' },
+          { status: 503 }
+        )
       }
-    )
 
-    if (!creditResult.success) {
       return NextResponse.json(
-        { error: creditResult.error || 'Failed to process credit transaction' },
-        { status: 400 }
+        { success: false, error: 'We couldn’t generate an image this time. Try again or switch models. You weren’t charged.', code: 'NO_OUTPUT' },
+        { status: 502 }
       )
     }
 
-    // Persist the output image: upload to Cloudflare for stable hosting
+    const creditResult = await CreditService.spendCredits(
+      session.user.id,
+      EDIT_CREDIT_COST,
+      `Image edit: ${prompt.substring(0, 100)}`,
+      'image_edit',
+      undefined,
+      { prompt, model: 'google/nano-banana', provider: 'replicate', seed }
+    )
+
+    if (!creditResult.success) {
+      return NextResponse.json({ error: creditResult.error || 'Failed to process credit transaction' }, { status: 400 })
+    }
+
     const imageData = result.images[0]
     const temporaryImageUrl = imageData.url
+    
+    // --- AGGRESSIVE LOGGING ---
+    console.log('🔍 CRITICAL_TRACE: temporaryImageUrl', {
+      url: temporaryImageUrl,
+      type: typeof temporaryImageUrl,
+      isDataUrl: temporaryImageUrl.startsWith('data:'),
+      isHttpUrl: temporaryImageUrl.startsWith('http'),
+      length: temporaryImageUrl.length,
+      preview: temporaryImageUrl.substring(0, 100) + (temporaryImageUrl.length > 100 ? '...' : ''),
+    });
+    // --- END LOGGING ---
+
     let imageWidth = imageData.width
     let imageHeight = imageData.height
-
     let finalImageUrl = temporaryImageUrl
     let cloudflareImageId: string | undefined = undefined
     let fileSize: number | undefined = undefined
 
     try {
       const cfImagesService = new CloudflareImagesService()
-      let uploadResult: any = null
-      let uploadAttempts = 0
-      const maxRetries = 3
-
-      while (uploadAttempts < maxRetries && (!uploadResult || !uploadResult.success)) {
-        uploadAttempts++
-        console.log(`🔄 Uploading to Cloudflare (attempt ${uploadAttempts}/${maxRetries})...`)
-        try {
-          uploadResult = await cfImagesService.uploadImageFromUrl(temporaryImageUrl)
-        } catch (uploadError) {
-          console.error(`❌ Cloudflare upload error (attempt ${uploadAttempts}/${maxRetries}):`, uploadError)
-          if (uploadAttempts < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 1000))
-          }
-        }
+      let uploadResult: Awaited<ReturnType<typeof cfImagesService.uploadImageFromUrl>> | null = null
+      
+      if (temporaryImageUrl.startsWith('data:')) {
+        const commaIndex = temporaryImageUrl.indexOf(',')
+        const base64Data = temporaryImageUrl.substring(commaIndex + 1)
+        const buffer = Buffer.from(base64Data, 'base64')
+        uploadResult = await cfImagesService.uploadImageFromBuffer(
+          buffer,
+          `edit-result-${Date.now()}.png`,
+          { source: 'replicate-edit', model: 'google/nano-banana' }
+        )
+      } else {
+        uploadResult = await cfImagesService.uploadImageFromUrl(temporaryImageUrl)
       }
 
-      if (uploadResult && uploadResult.success) {
-        console.log('✅ Cloudflare upload successful:', uploadResult.imageId)
+      // --- AGGRESSIVE LOGGING ---
+      console.log('🔍 CRITICAL_TRACE: uploadResult from Cloudflare', {
+        success: uploadResult?.success,
+        error: uploadResult?.error,
+        imageId: uploadResult?.imageId,
+        originalResponse: JSON.stringify(uploadResult?.originalResponse, null, 2) 
+      });
+      // --- END LOGGING ---
+
+      if (uploadResult && uploadResult.success && uploadResult.imageId) {
         cloudflareImageId = uploadResult.imageId
         finalImageUrl = cfImagesService.getPublicUrl(uploadResult.imageId)
-        fileSize = typeof uploadResult.originalResponse?.result?.size === 'number'
-          ? uploadResult.originalResponse.result.size
-          : undefined
-
-        if (uploadResult.originalResponse?.result?.metadata) {
-          const metadata = uploadResult.originalResponse.result.metadata
-          if (metadata && typeof metadata === 'object') {
-            if ('width' in metadata && typeof (metadata as any).width === 'number') {
-              imageWidth = (metadata as any).width
-            }
-            if ('height' in metadata && typeof (metadata as any).height === 'number') {
-              imageHeight = (metadata as any).height
-            }
-          }
+        const cfResult = uploadResult.originalResponse?.result
+        if (cfResult) {
+          fileSize = cfResult.size
         }
       } else {
-        console.warn('⚠️ Failed to upload to Cloudflare after multiple attempts, using temporary URL')
+        console.warn('⚠️ Cloudflare upload failed. Falling back to temporary URL.', {
+          error: uploadResult?.error || 'No upload result',
+        })
       }
-    } catch (cfError) {
-      console.error('❌ Cloudflare service error:', cfError)
+    } catch (uploadError) {
+      console.error('❌ An unexpected error occurred during the image upload process:', uploadError)
     }
 
-    const savedImage = await prisma.editedImage.create({
-      data: {
-        userId: session.user.id,
-        prompt,
-        url: finalImageUrl,
-        temporaryUrl: temporaryImageUrl,
-        width: imageWidth,
-        height: imageHeight,
-        fileSize,
-        cloudflareImageId,
-        seed: seed,
-        processingTimeMs: editDuration,
-        creditsUsed: EDIT_CREDIT_COST,
-        metadata: {
-          model: 'google/nano-banana',
-          provider: 'replicate',
-        },
-      },
-    })
+    const prismaData = {
+      userId: session.user.id,
+      prompt,
+      url: finalImageUrl,
+      temporaryUrl: temporaryImageUrl,
+      width: imageWidth,
+      height: imageHeight,
+      fileSize,
+      cloudflareImageId,
+      seed: seed,
+      processingTimeMs: editDuration,
+      creditsUsed: EDIT_CREDIT_COST,
+      metadata: { model: 'google/nano-banana', provider: 'replicate' },
+    };
+
+    // --- AGGRESSIVE LOGGING ---
+    console.log('🔍 CRITICAL_TRACE: Data for prisma.editedImage.create', {
+      data: JSON.stringify(prismaData, null, 2)
+    });
+    // --- END LOGGING ---
+
+    const savedImage = await prisma.editedImage.create({ data: prismaData })
 
     try {
       if (savedImage) {
@@ -188,7 +205,6 @@ export async function POST(request: NextRequest) {
             userId: savedImage.userId,
             prompt: savedImage.prompt,
             imageUrl: savedImage.url,
-            s3Key: null,
             cloudflareImageId: savedImage.cloudflareImageId,
             fileSize: savedImage.fileSize,
             width: savedImage.width,
@@ -201,27 +217,17 @@ export async function POST(request: NextRequest) {
             },
           },
         })
-        console.log('✅ Created corresponding GeneratedImage record for edited image.')
       }
     } catch (genImgError) {
-      console.error('❌ Failed to create GeneratedImage record for edited image:', genImgError)
+      console.error('❌ Failed to create GeneratedImage record for edited image', genImgError)
     }
 
     try {
-      if (savedImage && savedImage.id) {
-        await prisma.creditTransaction.updateMany({
-          where: {
-            userId: session.user.id,
-            type: 'spent',
-            relatedEntityType: 'image_edit',
-            relatedEntityId: null,
-            createdAt: { gte: new Date(Date.now() - 60000) },
-          },
-          data: { relatedEntityId: savedImage.id },
-        })
+      if (savedImage?.id && creditResult.transactionId) {
+        await CreditService.updateTransactionWithEntityId(creditResult.transactionId, savedImage.id)
       }
     } catch (transactionError) {
-      console.error('Failed to update credit transaction with edited image ID:', transactionError)
+      console.error('Failed to update credit transaction with edited image ID', transactionError)
     }
 
     return NextResponse.json({

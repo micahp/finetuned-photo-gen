@@ -910,43 +910,79 @@ export class ReplicateService {
 
       const input: Record<string, unknown> = {
         prompt: params.prompt,
-        image: params.image,
-        num_images: params.numImages || 1,
+        image_input: [params.image],
+        output_format: 'jpg',
       }
 
-      // Use client.run with owner/model; Replicate resolves to latest version
-      const prediction = await this.client.run(
-        'google/nano-banana',
-        { input }
-      ) as any
+      // Get the latest version of the model to avoid invalid version errors
+      const model = await this.client.models.get('google', 'nano-banana')
+      const latestVersion = model.latest_version?.id
+      if (!latestVersion) {
+        throw new Error('Could not get latest version for google/nano-banana')
+      }
 
-      // Normalize outputs → array or object
-      const outputs: string[] = Array.isArray(prediction)
-        ? prediction.map((o: any) => typeof o === 'string' ? o : (o?.url?.() ? String(o.url()) : String(o?.url || '')))
-        : prediction?.output
-          ? (Array.isArray(prediction.output)
-            ? prediction.output.map((o: any) => typeof o === 'string' ? o : (o?.url?.() ? String(o.url()) : String(o?.url || '')))
-            : [String(prediction.output)])
-          : []
+      console.log(`🧠 Using latest model version for google/nano-banana: ${latestVersion}`)
 
-      const imageUrl = outputs.find((u: string) => typeof u === 'string' && u.startsWith('http'))
-
-      if (imageUrl) {
-        // Use a generic square size when unknown; downstream code updates real size after CF upload
+      // Use predictions.create to get a consistent polling flow
+      const prediction = await this.client.predictions.create({
+        version: latestVersion,
+        input,
+      })
+      
+      if (prediction.error) {
+        console.error('❌ Immediate error with nano-banana edit:', prediction.error)
         return {
-          id: `replicate_nano_banana_${Date.now()}`,
-          status: 'completed',
-          images: [{ url: imageUrl, width: 1024, height: 1024 }],
+          id: String(prediction.id),
+          status: 'failed',
+          error: String(prediction.error),
         }
       }
 
-      return {
-        id: `replicate_nano_banana_err_${Date.now()}`,
-        status: 'failed',
-        error: 'nano-banana returned no image URLs',
+      // Poll for the result, same as Kontext
+      let result = prediction;
+      let status = result.status;
+      while (status === 'starting' || status === 'processing') {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        result = await this.client.predictions.get(String(prediction.id));
+        status = result.status;
       }
+      
+      console.log('✅ nano-banana edit completed:', {
+        id: result.id,
+        status: result.status,
+        output: result.output ? 'Present' : 'Not present',
+        error: result.error,
+      })
+
+      if (result.status === 'succeeded' && result.output) {
+        // Normalize output to handle array or single string/object
+        const outputs = Array.isArray(result.output) ? result.output : [result.output]
+        
+        // Find the first valid image URL (http or data)
+        const imageUrl = outputs.find((u: any) => 
+          typeof u === 'string' && (u.startsWith('http') || u.startsWith('data:'))
+        ) as string | undefined
+
+        if (imageUrl) {
+          return {
+            id: String(result.id),
+            status: 'completed',
+            images: [{ url: imageUrl, width: 1024, height: 1024 }], // Use default size
+          }
+        }
+      }
+
+      // Handle failure cases
+      const errorMessage = result.error ? String(result.error) : 'nano-banana returned no image URLs'
+      console.error('❌ nano-banana edit failed:', errorMessage)
+      return {
+        id: String(result.id || `replicate_nano_banana_err_${Date.now()}`),
+        status: 'failed',
+        error: errorMessage,
+      }
+
     } catch (error) {
-      console.error('❌ Replicate nano-banana edit error:', error)
+      console.error('❌ Replicate nano-banana edit exception:', error)
       return {
         id: `replicate_nano_banana_exc_${Date.now()}`,
         status: 'failed',
