@@ -81,16 +81,6 @@
             "type": "string",
             "description": "The text prompt used to generate the video"
           },
-          "duration": {
-            "enum": [
-              "5",
-              "10"
-            ],
-            "title": "Duration",
-            "type": "string",
-            "description": "Duration of the video in seconds",
-            "default": "5"
-          },
           "aspect_ratio": {
             "enum": [
               "21:9",
@@ -108,23 +98,51 @@
           "resolution": {
             "enum": [
               "480p",
+              "720p",
               "1080p"
             ],
             "title": "Resolution",
             "type": "string",
-            "description": "Video resolution - 480p for faster generation, 1080p for higher quality",
+            "description": "Video resolution - 480p for faster generation, 720p for balance, 1080p for higher quality",
             "default": "1080p"
           },
-          "seed": {
-            "title": "Seed",
-            "type": "integer",
-            "description": "Random seed to control video generation. Use -1 for random."
+          "duration": {
+            "enum": [
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "10",
+              "11",
+              "12"
+            ],
+            "title": "Duration",
+            "type": "string",
+            "description": "Duration of the video in seconds",
+            "default": "5"
+          },
+          "enable_safety_checker": {
+            "examples": [
+              true
+            ],
+            "title": "Enable Safety Checker",
+            "type": "boolean",
+            "description": "If set to true, the safety checker will be enabled.",
+            "default": true
           },
           "camera_fixed": {
             "title": "Camera Fixed",
             "type": "boolean",
             "description": "Whether to fix the camera position",
             "default": false
+          },
+          "seed": {
+            "title": "Seed",
+            "type": "integer",
+            "description": "Random seed to control video generation. Use -1 for random."
           }
         },
         "x-fal-order-properties": [
@@ -133,7 +151,8 @@
           "resolution",
           "duration",
           "camera_fixed",
-          "seed"
+          "seed",
+          "enable_safety_checker"
         ],
         "required": [
           "prompt"

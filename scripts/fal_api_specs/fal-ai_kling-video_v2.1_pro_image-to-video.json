@@ -77,43 +77,45 @@
             "examples": [
               "Warm, incandescent streetlights paint the rain-slicked cobblestones in pools of amber light as a couple walks hand-in-hand, their silhouettes stark against the blurry backdrop of a city shrouded in a gentle downpour; the camera lingers on the subtle textures of their rain-soaked coats and the glistening reflections dancing on the wet pavement, creating a sense of intimate vulnerability and shared quietude."
             ],
-            "maxLength": 2500,
+            "title": "Prompt",
             "type": "string",
-            "title": "Prompt"
+            "maxLength": 2500
           },
           "duration": {
             "enum": [
               "5",
               "10"
             ],
-            "title": "Duration",
-            "type": "string",
             "description": "The duration of the generated video in seconds",
+            "type": "string",
+            "title": "Duration",
             "default": "5"
+          },
+          "tail_image_url": {
+            "description": "URL of the image to be used for the end of the video",
+            "type": "string",
+            "title": "Tail Image Url"
           },
           "cfg_scale": {
             "minimum": 0,
             "maximum": 1,
             "type": "number",
-            "title": "Cfg Scale",
             "description": "\n            The CFG (Classifier Free Guidance) scale is a measure of how close you want\n            the model to stick to your prompt.\n        ",
+            "title": "Cfg Scale",
             "default": 0.5
           },
           "negative_prompt": {
-            "maxLength": 2500,
-            "type": "string",
             "title": "Negative Prompt",
+            "type": "string",
+            "maxLength": 2500,
             "default": "blur, distort, and low quality"
           },
           "image_url": {
-            "format": "uri",
-            "description": "URL of the image to be used for the video",
-            "type": "string",
             "examples": [
               "https://v3.fal.media/files/lion/_I_io6Gtk83c72d-afXf8_image.webp"
             ],
-            "maxLength": 2083,
-            "minLength": 1,
+            "description": "URL of the image to be used for the video",
+            "type": "string",
             "title": "Image Url"
           }
         },
@@ -122,7 +124,8 @@
           "image_url",
           "duration",
           "negative_prompt",
-          "cfg_scale"
+          "cfg_scale",
+          "tail_image_url"
         ],
         "required": [
           "prompt",
@@ -139,8 +142,8 @@
                 "url": "https://v3.fal.media/files/rabbit/Y5I8-7u3e7ogVSvPin1TS_output.mp4"
               }
             ],
-            "title": "Video",
             "description": "The generated video",
+            "title": "Video",
             "allOf": [
               {
                 "$ref": "#/components/schemas/File"
@@ -163,36 +166,36 @@
             "examples": [
               4404019
             ],
-            "title": "File Size",
+            "description": "The size of the file in bytes.",
             "type": "integer",
-            "description": "The size of the file in bytes."
+            "title": "File Size"
           },
           "file_name": {
             "examples": [
               "z9RV14K95DvU.png"
             ],
-            "title": "File Name",
+            "description": "The name of the file. It will be auto-generated if not provided.",
             "type": "string",
-            "description": "The name of the file. It will be auto-generated if not provided."
+            "title": "File Name"
           },
           "content_type": {
             "examples": [
               "image/png"
             ],
-            "title": "Content Type",
+            "description": "The mime type of the file.",
             "type": "string",
-            "description": "The mime type of the file."
+            "title": "Content Type"
           },
           "url": {
-            "title": "Url",
+            "description": "The URL where the file can be downloaded from.",
             "type": "string",
-            "description": "The URL where the file can be downloaded from."
+            "title": "Url"
           },
           "file_data": {
             "format": "binary",
-            "title": "File Data",
+            "description": "File data",
             "type": "string",
-            "description": "File data"
+            "title": "File Data"
           }
         },
         "x-fal-order-properties": [

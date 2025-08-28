@@ -79,6 +79,16 @@
             "description": "Negative prompt to be used for the generation",
             "default": ""
           },
+          "duration": {
+            "enum": [
+              "5",
+              "8"
+            ],
+            "title": "Duration",
+            "type": "string",
+            "description": "The duration of the generated video in seconds",
+            "default": "5"
+          },
           "resolution": {
             "enum": [
               "360p",
@@ -90,16 +100,6 @@
             "type": "string",
             "description": "The resolution of the generated video.",
             "default": "720p"
-          },
-          "duration": {
-            "enum": [
-              "5",
-              "8"
-            ],
-            "title": "Duration",
-            "type": "string",
-            "description": "The duration of the generated video in seconds",
-            "default": "5"
           },
           "effect": {
             "enum": [

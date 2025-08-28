@@ -73,19 +73,19 @@
         "title": "ProImageToVideoHailuo02Input",
         "type": "object",
         "properties": {
-          "prompt": {
-            "examples": [
-              "Man walked into winter cave with polar bear"
-            ],
-            "maxLength": 2000,
-            "type": "string",
-            "title": "Prompt"
-          },
           "prompt_optimizer": {
             "title": "Prompt Optimizer",
             "type": "boolean",
             "description": "Whether to use the model's prompt optimizer",
             "default": true
+          },
+          "prompt": {
+            "examples": [
+              "Man walked into winter cave with polar bear"
+            ],
+            "title": "Prompt",
+            "type": "string",
+            "maxLength": 2000
           },
           "image_url": {
             "examples": [
