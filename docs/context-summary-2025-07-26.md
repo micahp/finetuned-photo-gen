@@ -14,6 +14,8 @@
    • Logged results in `docs/docker-scout-report-2025-07-26.md` with concrete remediation steps (update `next`, `form-data`, consider `node:24-alpine`, npm overrides for indirect deps).  
 4. **Documentation**  
    • Wrote this summary & the detailed Scout report.
+5. **CI/CD roadmap**  
+   • Captured future pipeline improvements in `docs/ci-cd-upgrade-plan-2025-07-26.md`.
 
 ## Yesterday → Today narrative
 Yesterday (25 Jul) we refactored video progress handling—ditching SSE for 1 s polling and surfacing Fal logs.  Today we shifted from feature work to **stability & deployability**: cleaning the lint/build pipeline, ensuring Docker images reproduce the local setup, and surfacing supply-chain CVEs.  No user-visible changes landed, but we’re now able to ship the polling-based video feature confidently to staging/production via container deploys.
@@ -31,6 +33,7 @@ Yesterday (25 Jul) we refactored video progress handling—ditching SSE for 1 s 
 | ⏳ | Evaluate base-image switch to `node:24-alpine`; run integration tests |
 | ⏳ | Add CI step: `docker scout quickview` fail on critical CVEs; `npm audit --omit=dev` |
 | ⏳ | Remove obsolete `version:` key and fix env-var warnings in `docker-compose.dev.yml` |
+| ⏳ | **Plan**: Review & implement CI/CD upgrade plan (see `docs/ci-cd-upgrade-plan-2025-07-26.md`) |
 
 ## Next Steps (short-term)
 1. **Upgrade critical packages** & rebuild image → confirm Scout quickview is green.  

@@ -890,4 +890,237 @@ export class ReplicateService {
       }
     }
   }
+
+  /**
+   * Edit an image using Google's Gemini 2.5 Flash Image (nano-banana) on Replicate
+   * https://replicate.com/google/nano-banana
+   *
+   * Based on official API spec:
+   * - Input: { prompt: string, image_input: string[], output_format?: string }
+   * - Output: string (URI format)
+   */
+  async editImageWithNanoBanana(params: {
+    /** Accepts a data URI (base64) or public HTTP URI */
+    image: string
+    prompt: string
+    /** Optional: number of outputs (default 1) */
+    numImages?: number
+  }): Promise<ReplicateGenerationResponse> {
+    try {
+      console.log('🖌️ Editing image with google/nano-banana...', {
+        has_image: typeof params.image === 'string' && params.image.startsWith('data:') ? 'data-uri' : 'uri',
+        prompt: params.prompt,
+      })
+
+      // Nano-banana accepts URIs directly - Replicate supports data URIs < 1MB
+      // The API spec says it accepts URIs, and data URIs are valid URIs per RFC 2397
+      let inputImageUri = params.image
+
+      if (params.image.startsWith('data:')) {
+        console.log('📝 Using data URI directly (Replicate supports data URIs < 1MB)')
+
+        // Validate data URI format and size per Replicate's recommendations
+        const dataUriParts = params.image.split(',')
+        if (dataUriParts.length !== 2) {
+          return {
+            id: `data_uri_error_${Date.now()}`,
+            status: 'failed',
+            error: 'Invalid data URI format - must be "data:mime;base64,data"'
+          }
+        }
+
+        const header = dataUriParts[0]
+        const base64Data = dataUriParts[1]
+
+        // Check if it's the right MIME type (Replicate docs recommend application/octet-stream)
+        if (!header.includes('application/octet-stream') && !header.includes('image/')) {
+          console.warn('⚠️ Data URI MIME type may not be optimal for nano-banana. Consider using application/octet-stream')
+        }
+
+        // Estimate size (base64 is ~33% larger than original)
+        const estimatedSizeBytes = (base64Data.length * 3) / 4
+        const estimatedSizeMB = estimatedSizeBytes / (1024 * 1024)
+
+        console.log(`📊 Data URI size estimate: ${estimatedSizeMB.toFixed(2)} MB`)
+
+        if (estimatedSizeMB > 1.0) {
+          console.warn('⚠️ Data URI exceeds 1MB - Replicate recommends hosted files for larger images')
+        }
+      } else {
+        console.log('📝 Using HTTP URI directly')
+      }
+
+      // Use the official API format from https://replicate.com/google/nano-banana/llms.txt
+      const input = {
+        prompt: params.prompt,
+        image_input: [inputImageUri],  // Official parameter: array of URIs
+        output_format: 'jpg',           // Optional output format
+      }
+
+      console.log('🔍 NANO-BANANA INPUT (per official API spec):', {
+        prompt: params.prompt,
+        image_input: [inputImageUri.substring(0, 100) + (inputImageUri.length > 100 ? '...' : '')],
+        output_format: 'jpg',
+        inputUriType: inputImageUri.startsWith('data:') ? 'data-uri' : 'http-uri',
+        note: 'Sending URI directly - no Cloudflare upload needed',
+        fullInput: JSON.stringify(input, null, 2)
+      })
+
+      // Get the latest version of the model
+      const model = await this.client.models.get('google', 'nano-banana')
+      const latestVersion = model.latest_version?.id
+      if (!latestVersion) {
+        throw new Error('Could not get latest version for google/nano-banana')
+      }
+
+      console.log(`🧠 Using latest model version: ${latestVersion}`)
+      console.log(`🔧 Full model info:`, {
+        owner: model.owner,
+        name: model.name,
+        latest_version: model.latest_version?.id,
+        description: model.description
+      })
+
+      // Create prediction with official API format
+      // Alternative approaches to try if this fails:
+      // 1. Use run() method instead: client.run("google/nano-banana", { input })
+      // 2. Use full model path: client.run("google/nano-banana:" + latestVersion, { input })
+      console.log(`📡 Creating prediction with:`, {
+        version: latestVersion,
+        inputKeys: Object.keys(input),
+        inputSummary: JSON.stringify(input, null, 2)
+      })
+
+      let prediction;
+      try {
+        prediction = await this.client.predictions.create({
+          version: latestVersion,
+          input,
+        })
+        console.log(`✅ Prediction created successfully:`, {
+          id: prediction.id,
+          status: prediction.status,
+          hasError: !!prediction.error
+        })
+      } catch (createError) {
+        console.error('❌ Failed to create prediction:', createError)
+        // Try fallback with run() method using different model formats
+        console.log('🔄 Trying fallback with run() method...')
+        try {
+          // Try with full model path first
+          console.log('🔄 Attempt 1: Using full model path with version')
+          const runResult = await this.client.run(
+            `google/nano-banana:${latestVersion}`,
+            { input }
+          )
+          console.log('✅ Run method succeeded:', typeof runResult)
+          return {
+            id: `run_${Date.now()}`,
+            status: 'completed',
+            images: [{
+              url: String(runResult),
+              width: 1024,
+              height: 1024
+            }],
+          }
+        } catch (runError1) {
+          console.error('❌ Run attempt 1 failed:', runError1)
+          try {
+            // Try without version
+            console.log('🔄 Attempt 2: Using model path without version')
+            const runResult2 = await this.client.run(
+              `google/nano-banana`,
+              { input }
+            )
+            console.log('✅ Run method attempt 2 succeeded:', typeof runResult2)
+            return {
+              id: `run2_${Date.now()}`,
+              status: 'completed',
+              images: [{
+                url: String(runResult2),
+                width: 1024,
+                height: 1024
+              }],
+            }
+          } catch (runError2) {
+            console.error('❌ Run attempt 2 also failed:', runError2)
+            return {
+              id: `error_${Date.now()}`,
+              status: 'failed',
+              error: `All prediction methods failed:\n- predictions.create(): ${createError instanceof Error ? createError.message : 'Unknown error'}\n- run() with version: ${runError1 instanceof Error ? runError1.message : 'Unknown error'}\n- run() without version: ${runError2 instanceof Error ? runError2.message : 'Unknown error'}`,
+            }
+          }
+        }
+      }
+
+      if (prediction.error) {
+        console.error('❌ Prediction created but has error:', prediction.error)
+        return {
+          id: String(prediction.id),
+          status: 'failed',
+          error: String(prediction.error),
+        }
+      }
+
+      // Poll for completion
+      let result = prediction
+      let status = result.status
+      while (status === 'starting' || status === 'processing') {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        result = await this.client.predictions.get(String(prediction.id))
+        status = result.status
+      }
+
+      console.log('✅ Nano-banana prediction completed:', {
+        id: result.id,
+        status: result.status,
+        outputType: typeof result.output,
+        outputLength: typeof result.output === 'string' ? result.output.length : 'N/A',
+        error: result.error,
+      })
+
+      // Handle successful completion per API spec (returns direct string in URI format)
+      if (result.status === 'succeeded' && result.output) {
+        // Per API spec, output is a string in URI format
+        if (typeof result.output === 'string') {
+          const imageUri = result.output
+          console.log('✅ Nano-banana returned URI:', imageUri.substring(0, 100) + '...')
+
+          return {
+            id: String(result.id),
+            status: 'completed',
+            images: [{
+              url: imageUri,
+              width: 1024,  // Default dimensions (nano-banana doesn't specify)
+              height: 1024
+            }],
+          }
+        } else {
+          console.error('❌ Unexpected output format. Expected string in URI format, got:', typeof result.output)
+          return {
+            id: String(result.id),
+            status: 'failed',
+            error: `Unexpected output format: ${typeof result.output}. Expected string in URI format.`,
+          }
+        }
+      }
+
+      // Handle failure
+      const errorMessage = result.error ? String(result.error) : 'Nano-banana failed with unknown error'
+      console.error('❌ Nano-banana edit failed:', errorMessage)
+      return {
+        id: String(result.id || `nano_banana_err_${Date.now()}`),
+        status: 'failed',
+        error: errorMessage,
+      }
+
+    } catch (error) {
+      console.error('❌ Nano-banana exception:', error)
+      return {
+        id: `nano_banana_exc_${Date.now()}`,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Nano-banana edit failed',
+      }
+    }
+  }
 } 

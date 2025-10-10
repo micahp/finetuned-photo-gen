@@ -235,7 +235,7 @@ export class CreditService {
     relatedEntityType?: RelatedEntityType,
     relatedEntityId?: string,
     metadata?: Record<string, any>
-  ): Promise<{ success: boolean; newBalance: number; error?: string }> {
+  ): Promise<{ success: boolean; newBalance: number; transactionId?: string; error?: string }> {
     let userCreditsBeforeSpend = 0;
     try {
       // Check if user has enough credits
@@ -250,10 +250,10 @@ export class CreditService {
       userCreditsBeforeSpend = user.credits;
 
       if (user.credits < amount) {
-        return { 
-          success: false, 
-          newBalance: user.credits, 
-          error: `Insufficient credits. Required: ${amount}, Available: ${user.credits}` 
+        return {
+          success: false,
+          newBalance: user.credits,
+          error: `Insufficient credits. Required: ${amount}, Available: ${user.credits}`
         };
       }
 
@@ -278,7 +278,11 @@ export class CreditService {
       }
 
       // If recordTransaction was successful
-      return { success: true, newBalance: transactionResult.newBalance! }; // newBalance from successful recordTransaction
+      return {
+        success: true,
+        newBalance: transactionResult.newBalance!,
+        transactionId: transactionResult.transactionId
+      }; // newBalance and transactionId from successful recordTransaction
     } catch (error) {
       // This catch block handles errors like prisma.user.findUnique failing, or if recordTransaction throws an unexpected error
       console.error('Error spending credits:', error);
@@ -598,6 +602,25 @@ export class CreditService {
       severity,
       creditsRemaining: limits.currentCredits,
       suggestedAction
+    }
+  }
+
+  /**
+   * Updates a credit transaction with the related entity ID (e.g., edited image ID)
+   * @param transactionId The transaction ID to update
+   * @param entityId The entity ID to link to the transaction
+   * @returns Promise<boolean> True if update succeeded
+   */
+  static async updateTransactionWithEntityId(transactionId: string, entityId: string): Promise<boolean> {
+    try {
+      await prisma.creditTransaction.update({
+        where: { id: transactionId },
+        data: { relatedEntityId: entityId }
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating transaction with entity ID:', error)
+      return false
     }
   }
 } 
