@@ -295,10 +295,15 @@ export default function VideoGenerationPage() {
     }
   }, [session?.user?.credits])
 
+  // Delay redirect to billing by 3 s so the upgrade banner is visible
   useEffect(() => {
-    if (session && !isDev && !hasPremiumAccess) {
+    if (!(session && !isDev && !hasPremiumAccess)) return
+
+    const t = setTimeout(() => {
       router.replace('/dashboard/billing?upgradeRequired=video')
-    }
+    }, 3000)
+
+    return () => clearTimeout(t)
   }, [session, hasPremiumAccess, isDev, router])
 
   // NEW: Ensure the selected model always matches the active mode
