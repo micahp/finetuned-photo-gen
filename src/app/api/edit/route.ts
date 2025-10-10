@@ -136,17 +136,28 @@ export async function POST(request: NextRequest) {
     try {
       const cfImagesService = new CloudflareImagesService()
       let uploadResult: Awaited<ReturnType<typeof cfImagesService.uploadImageFromUrl>> | null = null
-      
+
       if (temporaryImageUrl.startsWith('data:')) {
         const commaIndex = temporaryImageUrl.indexOf(',')
         const base64Data = temporaryImageUrl.substring(commaIndex + 1)
         const buffer = Buffer.from(base64Data, 'base64')
+        fileSize = buffer.length // Get file size from buffer
         uploadResult = await cfImagesService.uploadImageFromBuffer(
           buffer,
           `edit-result-${Date.now()}.png`,
           { source: 'replicate-edit', model: 'google/nano-banana' }
         )
       } else {
+        // For HTTP URLs, fetch the image to get its size before uploading
+        try {
+          const imageResponse = await fetch(temporaryImageUrl)
+          if (imageResponse.ok) {
+            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
+            fileSize = imageBuffer.length // Get file size from fetched image
+          }
+        } catch (fetchError) {
+          console.warn('⚠️ Failed to fetch image for size calculation:', fetchError)
+        }
         uploadResult = await cfImagesService.uploadImageFromUrl(temporaryImageUrl)
       }
 
@@ -155,17 +166,15 @@ export async function POST(request: NextRequest) {
         success: uploadResult?.success,
         error: uploadResult?.error,
         imageId: uploadResult?.imageId,
-        originalResponse: JSON.stringify(uploadResult?.originalResponse, null, 2) 
+        fileSize,
+        originalResponse: JSON.stringify(uploadResult?.originalResponse, null, 2)
       });
       // --- END LOGGING ---
 
       if (uploadResult && uploadResult.success && uploadResult.imageId) {
         cloudflareImageId = uploadResult.imageId
         finalImageUrl = cfImagesService.getPublicUrl(uploadResult.imageId)
-        const cfResult = uploadResult.originalResponse?.result
-        if (cfResult) {
-          fileSize = cfResult.size
-        }
+        // Note: Cloudflare Images API doesn't provide size in response, so we use the size we calculated above
       } else {
         console.warn('⚠️ Cloudflare upload failed. Falling back to temporary URL.', {
           error: uploadResult?.error || 'No upload result',
