@@ -40,7 +40,7 @@ export function SelfieTrainingSection({
   outputImageUrl =
     'https://photoai.com/cdn-cgi/image/format=jpeg,width=1000,quality=50/https://r2-us-west.photoai.com/1723596600-599fad91c8823eedc9646f3b6dec2c4e-1.png?1723596599',
   arrowImageUrl = '/swirly-arrow.svg',
-  outputLink = 'https://x.com/levelsio'
+  outputLink = 'https://x.com/geoppls'
 }: SelfieTrainingSectionProps) {
   return (
     <section

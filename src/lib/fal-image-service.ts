@@ -46,24 +46,24 @@ export class FalImageService {
     error?: string 
   }> {
     try {
-      // The `fal.run` method is asynchronous but does not require polling; 
+      // The `fal.run` method is asynchronous but does not require polling;
       // the client library handles waiting for the result.
-      const result: FalImageEditResponse = await fal.run('fal-ai/gemini-25-flash-image/edit', {
+      const result = await fal.run('fal-ai/gemini-25-flash-image/edit', {
         input: {
           prompt: params.prompt,
           image_urls: [params.imageUrl], // API expects an array of URLs
         },
       })
 
-      if (!result || !result.images || result.images.length === 0) {
+      if (!result || !result.data || !result.data.images || result.data.images.length === 0) {
         console.error('❌ Fal.ai - No images in response', { result })
         throw new Error('Image generation failed or returned no images.')
       }
 
       return {
         status: 'completed',
-        images: result.images,
-        description: result.description, // Return the description
+        images: result.data.images,
+        description: result.data.description, // Return the description
       }
     } catch (error) {
       console.error('❌ Fal.ai image edit error:', error)
