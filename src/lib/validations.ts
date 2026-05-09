@@ -56,7 +56,10 @@ export const createModelSchema = z.object({
       }
     ),
   images: z
-    .array(z.instanceof(File))
+    .array(z.custom<File>(
+      (val) => typeof File !== 'undefined' && val instanceof File,
+      'Must be a valid image file'
+    ))
     .min(10, 'At least 10 images are required')
     .max(20, 'Maximum 20 images allowed'),
 })
