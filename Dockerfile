@@ -24,15 +24,22 @@ RUN npm config set fetch-retries 4 \
 # Dependencies stage - production only
 FROM base AS deps
 
+# Accept optional npm registry override (for Verdaccio cache builds)
+ARG NPM_REGISTRY
+
 # Copy package files for dependency installation
 COPY package.json package-lock.json* ./
 
 # Install production dependencies with optimizations
-RUN npm ci --only=production --no-audit --no-fund --legacy-peer-deps && \
+RUN npm ci --only=production --no-audit --no-fund --legacy-peer-deps \
+    --registry ${NPM_REGISTRY:-https://registry.npmjs.org/} && \
     npm cache clean --force
 
 # Build dependencies stage - includes devDependencies needed for build
 FROM base AS build-deps
+
+# Accept optional npm registry override (for Verdaccio cache builds)
+ARG NPM_REGISTRY
 
 # Copy package files for dependency installation
 COPY package.json package-lock.json* ./
@@ -41,13 +48,16 @@ COPY package.json package-lock.json* ./
 RUN apk add --no-cache curl && \
     echo "Testing TLS handshake with registry.npmjs.org…" && \
     curl -I https://registry.npmjs.org/ --max-time 10 && \
-    npm ci --no-audit --no-fund --legacy-peer-deps && \
+    npm ci --no-audit --no-fund --legacy-peer-deps \
+    --registry ${NPM_REGISTRY:-https://registry.npmjs.org/} && \
     npm cache clean --force
 
 # Development stage (unchanged for compatibility)
 FROM base AS dev
+ARG NPM_REGISTRY
 COPY package.json package-lock.json* ./
-RUN npm ci --legacy-peer-deps
+RUN npm ci --legacy-peer-deps \
+    --registry ${NPM_REGISTRY:-https://registry.npmjs.org/}
 COPY . .
 RUN npx prisma generate
 CMD ["npm", "run", "dev"]
