@@ -175,8 +175,37 @@ services:
       - app-network
     restart: unless-stopped
 
+  # ─── Verdaccio npm cache ──────────────────────────────────
+  # Runs on demand via: docker compose --profile cache up -d verdaccio
+  # Used by scripts/verdaccio-build.sh to cache npm packages during builds
+  verdaccio:
+    image: verdaccio/verdaccio:6.0
+    profiles: ["cache"]          # opt-in — won't start with default `docker compose up`
+    ports:
+      - "127.0.0.1:4873:4873"   # only localhost — never expose to internet
+    volumes:
+      - ./verdaccio/config.yaml:/verdaccio/conf/config.yaml:ro
+      - verdaccio_storage:/verdaccio/storage
+    environment:
+      - VERDACCIO_PORT=4873
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4873/-/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
 volumes:
   postgres_data:
+    driver: local
+  verdaccio_storage:
     driver: local
 
 networks:

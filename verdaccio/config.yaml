@@ -1,0 +1,61 @@
+#
+# Verdaccio config — private npm proxy cache
+# Runs as a local cache between your Docker builds and npm registry.
+# Packages are pulled once from npm then cached forever.
+# If a package is compromised or deleted upstream, the cached copy survives.
+#
+
+storage: /verdaccio/storage
+plugins: /verdaccio/plugins
+
+# Web UI (optional, useful for debugging)
+web:
+  enable: true
+  title: "Verdaccio Cache"
+
+# Authentication — none needed for read-only proxy
+auth:
+  htpasswd:
+    file: /verdaccio/storage/htpasswd
+
+# Upstream registries — proxy npm
+uplinks:
+  npmjs:
+    url: https://registry.npmjs.org/
+    cache: true
+    max_fails: 5
+    maxage: 365d          # cache for a year (effectively forever)
+    timeout: 60s
+    # Retry on transient failures
+    retry: 3
+
+# Package access — proxy everything through npmjs
+packages:
+  '@*/*':
+    access: $all
+    publish: $authenticated
+    unpublish: $authenticated
+    proxy: npmjs
+
+  '**':
+    access: $all
+    publish: $authenticated
+    unpublish: $authenticated
+    proxy: npmjs
+
+# Server config
+server:
+  keepAliveTimeout: 60
+
+# Bind to all interfaces (accessible from Docker network)
+listen:
+  - 0.0.0.0:4873
+
+# Logging
+logs:
+  type: stdout
+  format: pretty
+  level: http
+
+# Max body size for package uploads
+max_body_size: 100mb
