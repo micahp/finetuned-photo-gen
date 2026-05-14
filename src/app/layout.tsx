@@ -5,6 +5,7 @@ import { auth } from "@/lib/next-auth";
 import AutoReloadErrorBoundary from "@/components/AutoReloadErrorBoundary";
 import { Toaster } from "sonner";
 import { CookieConsent } from "@/components/legal/CookieConsent";
+import { ExitIntentModal } from "@/components/newsletter/ExitIntentModal";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import "@/utils/errorMonitor"; // Auto-setup error monitoring
 import { Analytics } from "@vercel/analytics/react"
@@ -67,6 +68,7 @@ export default async function RootLayout({
             </div>
             <Toaster position="top-right" />
             <CookieConsent />
+            <ExitIntentModal />
             {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} />}
             <Analytics />
             <SpeedInsights />
