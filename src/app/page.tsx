@@ -35,7 +35,7 @@ export default function HomePage() {
             title: 'Seedance Pro',
             description: 'A bright blue race car speeds along a snowy racetrack...',
             fullPrompt: 'A bright blue race car speeds along a snowy racetrack. [Low-angle shot] Captures several cars speeding along the racetrack through a harsh snowstorm. [Overhead shot] The camera gradually pulls upward, revealing the full race scene illuminated by storm lights',
-            lowQualityPlaceholder: '/selfies/wan-i2v-thumb.jpg',
+            lowQualityPlaceholder: '/selfies/wan-i2v-thumb.jpg'
           },
           {
             id: 'video2',
@@ -52,8 +52,8 @@ export default function HomePage() {
             title: 'Hailuo 2',
             description: 'A Galactic Smuggler is a rogue figure with a cybernetic arm and a well-worn coat...',
             fullPrompt: "A Galactic Smuggler is a rogue figure with a cybernetic arm and a well-worn coat that hints at many dangerous escapades across the galaxy. Their ship is filled with rare and exotic treasures from distant planets, concealed in hidden compartments, showing their expertise in illicit trade. Their belt is adorned with energy-based weapons, ready to be drawn at any moment to protect themselves or escape from tight situations. This character thrives in the shadows of space, navigating between the law and chaos with stealth and wit, always seeking the next big score while evading bounty hunters and law enforcement. The rogue's ship, rugged yet efficient, serves as both a home and a tool for their dangerous lifestyle. The treasures they collect reflect the diverse and intriguing worlds they've encountered—alien artifacts, rare minerals, and artifacts of unknown origin. Their reputation precedes them, with whispers of their dealings and the deadly encounters that often follow. A master of negotiation and deception, the Galactic Smuggler navigates the cosmos with an eye on the horizon, always one step ahead of those who pursue them.",
-            lowQualityPlaceholder: '/selfies/framepack-thumb.jpg',
-          },
+            lowQualityPlaceholder: '/selfies/framepack-thumb.jpg'
+          }
         ]}
         autoplayInterval={5000}
         pauseOnHover={false}
@@ -77,49 +77,55 @@ export default function HomePage() {
         outputImageUrl={randomOutputImage}
       />
 
-      {/* How It Works */}
+      {/* Features Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
           How It Works
         </h2>
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            {
-              num: '1',
-              color: 'bg-blue-100 text-blue-600',
-              title: 'Upload Your Photos',
-              desc: 'Upload 10-20 high-quality photos of yourself to train your personalized AI model',
-            },
-            {
-              num: '2',
-              color: 'bg-green-100 text-green-600',
-              title: 'Train Your Model',
-              desc: 'Our AI analyzes your photos and creates a custom FLUX model that understands your unique features',
-            },
-            {
-              num: '3',
-              color: 'bg-purple-100 text-purple-600',
-              title: 'Generate Images',
-              desc: 'Create personalized images with custom prompts — from professional headshots to creative art',
-            },
-          ].map((step) => (
-            <Card key={step.num}>
-              <CardHeader>
-                <div className={`w-12 h-12 ${step.color} rounded-lg flex items-center justify-center mb-4`}>
-                  <span className="text-2xl font-bold">{step.num}</span>
-                </div>
-                <CardTitle>{step.title}</CardTitle>
-                <CardDescription>{step.desc}</CardDescription>
-              </CardHeader>
-            </Card>
-          ))}
+          <Card>
+            <CardHeader>
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                <span className="text-2xl font-bold text-blue-600">1</span>
+              </div>
+              <CardTitle>Upload Your Photos</CardTitle>
+              <CardDescription>
+                Upload 10-20 high-quality photos of yourself to train your personalized AI model
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                <span className="text-2xl font-bold text-green-600">2</span>
+              </div>
+              <CardTitle>Train Your Model</CardTitle>
+              <CardDescription>
+                Our AI analyzes your photos and creates a custom FLUX model that understands your unique features
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                <span className="text-2xl font-bold text-purple-600">3</span>
+              </div>
+              <CardTitle>Generate Images</CardTitle>
+              <CardDescription>
+                Create personalized images with custom prompts - from professional headshots to creative art
+              </CardDescription>
+            </CardHeader>
+          </Card>
         </div>
       </div>
 
-      {/* AI Film Studio */}
+      {/* AI Film Studio Section */}
       <FilmStudioSection />
 
-      {/* Demo Library */}
+      {/* Demo Library Section */}
       <DemoLibrarySection />
 
       {/* Social Proof — Testimonials */}
