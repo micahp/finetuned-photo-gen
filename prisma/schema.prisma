@@ -225,6 +225,18 @@ model GeneratedVideo {
   @@map("generated_videos")
 }
 
+model NewsletterSubscriber {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  source        String   @default("landing_page") // landing_page, exit_intent, footer, checkout
+  subscribed    Boolean  @default(true)
+  unsubscribedAt DateTime? @map("unsubscribed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("newsletter_subscribers")
+}
+
 enum RelatedEntityType {
   image_generation
   image_edit
