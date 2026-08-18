@@ -5,10 +5,15 @@ import { VideoModel } from './video-models'
 
 /**
  * Return the low ↔ high credits-per-second range for a given model based on any
- * resolution multipliers present. If the model has no multipliers, the range is
- * the fixed `costPerSecond` baseline.
+ * resolution multipliers or absolute pricing present.
  */
 export function getCostRange(model: VideoModel): { low: number; high: number } {
+  // Absolute per-resolution pricing (e.g. FLUX 3)
+  if (model.resolutionPricing && Object.keys(model.resolutionPricing).length > 0) {
+    const costs = Object.values(model.resolutionPricing)
+    return { low: Math.min(...costs), high: Math.max(...costs) }
+  }
+
   if (!model.resolutionMultipliers || Object.keys(model.resolutionMultipliers).length === 0) {
     return { low: model.costPerSecond, high: model.costPerSecond }
   }
@@ -25,20 +30,24 @@ export function getCostRange(model: VideoModel): { low: number; high: number } {
 }
 
 /**
- * Return the credits-per-second for a specific resolution (e.g. `"720p"`). If the
- * model doesn’t define a multiplier for the requested resolution, the baseline
- * cost is returned.
+ * Return the credits-per-second for a specific resolution.
+ * Supports absolute `resolutionPricing` (e.g. FLUX 3) or multiplier-based pricing.
  */
 export function getCostPerSecond(
   model: VideoModel,
   resolution?: string | null
 ): number {
+  // Absolute per-resolution pricing
+  if (model.resolutionPricing && resolution && model.resolutionPricing[resolution] !== undefined) {
+    return model.resolutionPricing[resolution]
+  }
+
   if (
     resolution &&
     model.resolutionMultipliers &&
     model.resolutionMultipliers[resolution] !== undefined
   ) {
-    return model.costPerSecond * model.resolutionMultipliers[resolution]
+    return Math.round(model.costPerSecond * model.resolutionMultipliers[resolution])
   }
   return model.costPerSecond
-} 
+}

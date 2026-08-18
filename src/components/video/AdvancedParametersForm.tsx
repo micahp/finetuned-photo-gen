@@ -195,7 +195,14 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
           name="resolution"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Resolution</FormLabel>
+              <FormLabel>
+                Resolution
+                {selectedModel?.resolutionPricing && (
+                  <span className="ml-2 text-xs text-gray-500">
+                    ({Object.entries(selectedModel.resolutionPricing).map(([res, cost]) => `${res}: ${cost} cr/s`).join(' / ')})
+                  </span>
+                )}
+              </FormLabel>
               <FormControl>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger>
@@ -203,7 +210,7 @@ const AdvancedParametersForm: React.FC<Props> = ({ selectedModel }) => {
                   </SelectTrigger>
                   <SelectContent>
                     {selectedModel &&
-                      Object.keys(selectedModel.resolutionMultipliers || {}).map((res, idx) => (
+                      Object.keys(selectedModel.resolutionMultipliers || selectedModel.resolutionPricing || {}).map((res, idx) => (
                         <SelectItem key={res} value={res}>{res}{idx === 0 ? ' (default)' : ''}</SelectItem>
                       ))}
                   </SelectContent>

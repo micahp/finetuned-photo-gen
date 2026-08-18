@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Loader2, Sparkles, Download, RefreshCw, Zap, Copy, Star, Plus, ExternalLink, Users, ChevronDown, ChevronUp, Wand2, ChevronRight } from 'lucide-react'
 import { CreditCostHint } from '@/components/credits/CreditCostHint'
-import { TogetherAIService } from '@/lib/together-ai'
+import { TogetherAIService, type BaseImageModel } from '@/lib/together-ai'
 import { SmartImage } from '@/components/ui/smart-image'
 import { isPremiumUser, isPremiumModel, getPremiumFeatures } from '@/lib/subscription-utils'
 import { PremiumModelBadge } from '@/components/ui/premium-model-badge'
@@ -181,7 +181,7 @@ export default function GeneratePage() {
   }
 
   const together = getTogetherService()
-  const baseModels = together.getAvailableModels()
+  const baseModels: BaseImageModel[] = together.getAvailableModels()
   const styles = together.getStylePresets()
   const quickPrompts = together.getQuickPrompts()
   const categorizedPrompts = together.getCategorizedPrompts() as Record<string, Array<{ prompt: string; description: string }>>
@@ -652,6 +652,18 @@ export default function GeneratePage() {
                                         </span>
                                         {model.free && (
                                           <Badge variant="secondary" className="text-xs">Free</Badge>
+                                        )}
+                                        {model.isNew && (
+                                          <Badge variant="default" className="text-xs bg-blue-500 hover:bg-blue-500">NEW</Badge>
+                                        )}
+                                        {model.maxResolution && (
+                                          <Badge variant="outline" className="text-xs">{model.maxResolution}</Badge>
+                                        )}
+                                        {model.supportsImagePrompt && (
+                                          <Badge variant="outline" className="text-xs" title="Supports image + text input">IMG+TXT</Badge>
+                                        )}
+                                        {model.maxReferenceImages && (
+                                          <Badge variant="outline" className="text-xs" title={`Up to ${model.maxReferenceImages} reference images`}>REF×{model.maxReferenceImages}</Badge>
                                         )}
                                         <PremiumModelBadge 
                                           isPremium={isModelPremium}

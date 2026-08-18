@@ -120,6 +120,19 @@ interface TogetherJobStatus {
   error?: string
 }
 
+export type BaseImageModel = {
+  id: string
+  name: string
+  description: string
+  free?: boolean
+  provider?: string
+  replicateModel?: string
+  isNew?: boolean
+  maxResolution?: string
+  supportsImagePrompt?: boolean
+  maxReferenceImages?: number
+}
+
 export class TogetherAIService {
   private apiKey: string
   private baseUrl = 'https://api.together.xyz/v1'
@@ -774,7 +787,7 @@ export class TogetherAIService {
   }
 
   // Get available FLUX models
-  getAvailableModels(): Array<{ id: string; name: string; description: string; free?: boolean; provider?: string; replicateModel?: string }> {
+  getAvailableModels(): BaseImageModel[] {
     return [
       {
         id: 'black-forest-labs/FLUX.1-schnell-Free',
@@ -808,7 +821,24 @@ export class TogetherAIService {
         description: 'Latest premium model with 3x faster generation (via Replicate)',
         provider: 'replicate',
         replicateModel: 'black-forest-labs/flux-1.1-pro'
-      }
+      },
+      {
+        id: 'black-forest-labs/FLUX.1-pro-v1.1-ultra',
+        name: 'FLUX.1 Pro v1.1 Ultra',
+        description: 'Ultra HD 2048x2048 — print-ready, image + text input',
+        provider: 'fal',
+        isNew: true,
+        maxResolution: '2048x2048',
+        supportsImagePrompt: true,
+      },
+      {
+        id: 'black-forest-labs/FLUX.1-kontext',
+        name: 'FLUX.1 Kontext Pro',
+        description: 'Up to 5 reference images for style/character consistency',
+        provider: 'fal',
+        isNew: true,
+        maxReferenceImages: 5,
+      },
     ]
   }
 

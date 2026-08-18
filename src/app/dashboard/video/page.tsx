@@ -139,6 +139,10 @@ const TIER_LABELS: Record<'premium' | 'standard' | 'budget', string> = {
 }
 const TIER_ORDER: Array<'premium' | 'standard' | 'budget'> = ['premium', 'standard', 'budget']
 
+// Filter out deprecated models unless they're the currently selected one
+const getVisibleModels = (models: typeof AVAILABLE_VIDEO_MODELS, selectedModelId: string) =>
+  models.filter((m) => !m.deprecated || m.id === selectedModelId)
+
 export default function VideoGenerationPage() {
   const { data: session, update } = useSession()
   const hasPremiumAccess = isPremiumUser(session?.user?.subscriptionPlan, session?.user?.subscriptionStatus)
@@ -658,8 +662,12 @@ export default function VideoGenerationPage() {
                                   <span>Veo 3: Generates video with synchronized audio</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm">
+                                  <Volume2 className="h-3 w-3 text-green-400" />
+                                  <span>FLUX 3: Native audio + lip sync (optional)</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm">
                                   <VolumeX className="h-3 w-3 text-gray-500" />
-                                  <span>All other models: Video only (no audio)</span>
+                                  <span>All other models: Video only</span>
                                 </div>
 
                                 <p className="font-medium">Camera Controls:</p>
@@ -673,6 +681,7 @@ export default function VideoGenerationPage() {
                                 <div className="space-y-1 text-sm">
                                   <div>Kling 2.1/2.0 Pro: <code>image_url</code> + <code>tail_image_url</code> for start/end frames</div>
                                   <div>Kling 1.6: multiple <code>input_image_urls</code> for key-frame sequence</div>
+                                  <div>FLUX 3: first-last-frame-to-video endpoint</div>
                                   <div>Other models: no native support; stitch clips externally</div>
                                 </div>
 
@@ -681,6 +690,7 @@ export default function VideoGenerationPage() {
                                   <span>Kling 2.1/2.0/1.6</span>
                                   <span>MiniMax Hailuo-01 "Director"</span>
                                   <span>Veo 2/3, Wan-2.1, Seedance 1.0, Phantom</span>
+                                  <span>Black Forest Labs FLUX 3</span>
                                 </div>
                               </div>
                             </TooltipContent>
@@ -705,41 +715,64 @@ export default function VideoGenerationPage() {
                                       <SelectLabel className="text-xs uppercase tracking-wider text-muted-foreground px-2">
                                         {TIER_LABELS[tierKey]}
                                       </SelectLabel>
-                                      {AVAILABLE_VIDEO_MODELS.filter(m => m.mode === activeMode && getTier(m.costPerSecond) === tierKey).map((model) => (
-                                        <SelectItem key={model.id} value={model.id}>
+                                      {getVisibleModels(
+                                        AVAILABLE_VIDEO_MODELS.filter(m => m.mode === activeMode && getTier(m.costPerSecond) === tierKey),
+                                        field.value
+                                      ).map((model) => (
+                                        <SelectItem key={model.id} value={model.id} disabled={!!model.deprecated}>
                                           <div className="flex items-center gap-2">
-                                            <span className="font-medium">{model.name}</span>
+                                            <span className={`font-medium ${model.deprecated ? 'text-gray-400 line-through' : ''}`}>
+                                              {model.name}
+                                              {model.deprecated && <span className="ml-1 text-xs text-red-500">(deprecated)</span>}
+                                            </span>
                                             <TooltipProvider delayDuration={200}>
                                               <div className="flex items-center gap-1">
-                                                {/* Lip-sync / Audio support */}
-                                                {model.hasAudio && (
+                                                {/* NEW badge */}
+                                                {model.isNew && (
                                                   <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                      <Volume2 className="h-3 w-3 text-green-600" aria-label="Audio Lip-sync" />
+                                                      <Sparkles className="h-3 w-3 text-blue-500" aria-label="New" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">New</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                {/* Audio support icon (Veo 3 always, FLUX 3 optional) */}
+                                                {model.audioMode === 'always' && !model.deprecated && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Volume2 className="h-3 w-3 text-green-600" aria-label="Audio" />
                                                     </TooltipTrigger>
                                                     <TooltipContent side="top">Audio&nbsp;Lip-sync</TooltipContent>
                                                   </Tooltip>
                                                 )}
-                                                {/* Key-frame / Start-End Frames support */}
-                                                {model.falModelId?.includes('wan-flf2v') && (
+                                                {model.audioMode === 'optional' && !model.deprecated && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Volume2 className="h-3 w-3 text-green-400" aria-label="Audio Optional" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Audio (optional)</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                {/* Key-frame support */}
+                                                {model.falModelId?.includes('wan-flf2v') && !model.deprecated && (
                                                   <Tooltip>
                                                     <TooltipTrigger asChild>
                                                       <Film className="h-3 w-3 text-purple-600" aria-label="Start & End Frames" />
                                                     </TooltipTrigger>
-                                                    <TooltipContent side="top">Start & End Frames</TooltipContent>
+                                                    <TooltipContent side="top">Start &amp; End Frames</TooltipContent>
                                                   </Tooltip>
                                                 )}
-                                                {/* Effects parameter support */}
-                                                {model.falModelId?.includes('pixverse') && (
+                                                {/* Effects */}
+                                                {model.falModelId?.includes('pixverse') && !model.deprecated && (
                                                   <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                      <Sparkles className="h-3 w-3 text-pink-600" aria-label="Effects Param" />
+                                                      <Sparkles className="h-3 w-3 text-pink-600" aria-label="Effects" />
                                                     </TooltipTrigger>
                                                     <TooltipContent side="top">Effects Parameter</TooltipContent>
                                                   </Tooltip>
                                                 )}
-                                                {/* Kling variants */}
-                                                {model.falModelId?.includes('kling-video') && (
+                                                {/* Kling extras */}
+                                                {model.falModelId?.includes('kling-video') && !model.deprecated && (
                                                   <Tooltip>
                                                     <TooltipTrigger asChild>
                                                       <Clapperboard className="h-3 w-3 text-blue-600" aria-label="Kling Extras" />
@@ -747,8 +780,8 @@ export default function VideoGenerationPage() {
                                                     <TooltipContent side="top">Kling-specific Features</TooltipContent>
                                                   </Tooltip>
                                                 )}
-                                                {/* Tier badge */}
-                                                {tierKey === 'premium' && (
+                                                {/* Premium tier */}
+                                                {tierKey === 'premium' && !model.deprecated && (
                                                   <Tooltip>
                                                     <TooltipTrigger asChild>
                                                       <Crown className="h-3 w-3 text-yellow-500" aria-label="Premium Tier" />
@@ -820,12 +853,25 @@ export default function VideoGenerationPage() {
                               </div>
                             </div>
                           )}
-                          {selectedModel.hasAudio && (
+                          {selectedModel.audioMode === 'always' && (
                             <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm">
                               <div className="flex items-center gap-2 text-green-700">
                                 <Volume2 className="h-4 w-4" />
-                                <span className="font-medium">This model generates video with synchronized audio</span>
+                                <span className="font-medium">This model always generates synchronized audio</span>
                               </div>
+                            </div>
+                          )}
+                          {selectedModel.audioMode === 'optional' && (
+                            <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm">
+                              <div className="flex items-center gap-2 text-green-700">
+                                <Volume2 className="h-4 w-4" />
+                                <span className="font-medium">This model can generate synchronized audio (on by default)</span>
+                              </div>
+                            </div>
+                          )}
+                          {selectedModel.deprecated && (
+                            <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm">
+                              <span className="text-red-700 font-medium">Deprecated — please migrate to a newer model</span>
                             </div>
                           )}
                         </div>

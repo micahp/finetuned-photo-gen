@@ -1,6 +1,6 @@
 'use client'
 
-import { Crown, Lock, Sparkles, ArrowRight } from 'lucide-react'
+import { Crown, Lock, Sparkles, ArrowRight, Clock, Monitor, Layers } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,7 +11,7 @@ interface PremiumModelBadgeProps {
   isPremium: boolean
   hasAccess: boolean
   modelName?: string
-  variant?: 'badge' | 'card' | 'inline'
+  variant?: 'badge' | 'card' | 'inline' | 'new' | 'ultra' | 'context'
   className?: string
   onUpgradeClick?: () => void
 }
@@ -24,6 +24,33 @@ export function PremiumModelBadge({
   className,
   onUpgradeClick 
 }: PremiumModelBadgeProps) {
+  if (variant === 'new') {
+    return (
+      <Badge className={cn("bg-blue-500 hover:bg-blue-500 text-white border-0 flex items-center gap-1 text-xs", className)}>
+        <Sparkles className="h-3 w-3" />
+        New
+      </Badge>
+    )
+  }
+
+  if (variant === 'ultra') {
+    return (
+      <Badge className={cn("bg-purple-500 hover:bg-purple-500 text-white border-0 flex items-center gap-1 text-xs", className)}>
+        <Monitor className="h-3 w-3" />
+        Ultra HD
+      </Badge>
+    )
+  }
+
+  if (variant === 'context') {
+    return (
+      <Badge className={cn("bg-orange-500 hover:bg-orange-500 text-white border-0 flex items-center gap-1 text-xs", className)}>
+        <Layers className="h-3 w-3" />
+        Context
+      </Badge>
+    )
+  }
+
   if (!isPremium) return null
 
   if (variant === 'badge') {

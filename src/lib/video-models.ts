@@ -18,7 +18,8 @@ export interface VideoModel {
   }
   /** Allowed clip durations (seconds) accepted by the underlying API, if restricted */
   durationOptions?: number[]
-  /** Whether the model generates video with synchronized audio */
+  audioMode?: 'always' | 'optional' | 'none'
+  /** @deprecated Use `audioMode` instead */
   hasAudio: boolean
   /** Optional human-readable description (not used in pricing logic) */
   description?: string
@@ -28,9 +29,29 @@ export interface VideoModel {
   baselineResolution?: string
   /** Resolution-specific cost multipliers relative to the baseline costPerSecond */
   resolutionMultipliers?: Record<string, number>
+  /**
+   * Absolute per-resolution cost in credits/second (overrides costPerSecond + multipliers).
+   * Use when FAL prices resolutions as absolute values rather than multipliers.
+   * Example: { "720p": 17, "1080p": 29 }
+   */
+  resolutionPricing?: Record<string, number>
   avgGenerationTimeMinutes?: number
   /** Whether the model supports Fal.ai streaming logs via subscribe() */
   supportsStreamingLogs?: boolean
+  /** Whether this model is new (shows "NEW" badge in UI) */
+  isNew?: boolean
+  /** Whether this model is deprecated (greyed out, hidden from new selection) */
+  deprecated?: boolean
+  /** Whether this model has a /draft endpoint for fast previews (e.g. FLUX 3) */
+  draftSupport?: boolean
+  /** Maximum output resolution for image models (e.g. "2048x2048") */
+  maxResolution?: string
+  /** Whether the model accepts an image prompt + strength (e.g. FLUX.1-pro v1.1-ultra) */
+  supportsImagePrompt?: boolean
+  /** Maximum number of reference images (e.g. FLUX.1-kontext = 5) */
+  maxReferenceImages?: number
+  /** Whether this is a context/reference-image model (e.g. FLUX.1-kontext) */
+  isContextModel?: boolean
 }
 
 /**
@@ -44,7 +65,36 @@ export interface VideoModel {
  * - Veo 3: Available but pricing varies
  */
 export const VIDEO_MODELS: VideoModel[] = [
-  /* -------------------------- Seedance 1.0 (ByteDance) -------------------------- */
+  {
+    id: 'flux-3-text',
+    name: 'FLUX 3 – Text → Video',
+    falModelId: 'blackforestlabs/flux-3/text-to-video',
+    mode: 'text-to-video',
+    maxDuration: 20,
+    costPerSecond: 25, // Fal cost 17¢/s @720p, markup ×1.5 → 25 credits
+    supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
+    defaultParams: { fps: 24, motionLevel: 5 },
+    audioMode: 'optional',
+    hasAudio: false,
+    resolutionPricing: { '720p': 25, '1080p': 37 },
+    isNew: true,
+    draftSupport: true,
+  },
+  {
+    id: 'flux-3-image',
+    name: 'FLUX 3 – Image → Video',
+    falModelId: 'blackforestlabs/flux-3/image-to-video',
+    mode: 'image-to-video',
+    maxDuration: 20,
+    costPerSecond: 25,
+    supportedAspectRatios: ['16:9', '9:16', '1:1', '3:4', '4:3'],
+    defaultParams: { fps: 24, motionLevel: 5 },
+    audioMode: 'optional',
+    hasAudio: false,
+    resolutionPricing: { '720p': 25, '1080p': 37 },
+    isNew: true,
+    draftSupport: true,
+  },
   {
     id: 'seedance-pro-image',
     name: 'Seedance 1.0 Pro – Image → Video',
@@ -287,6 +337,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
     hasAudio: false,
+    deprecated: true,
   },
 
   {
@@ -300,6 +351,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5, 10],
     hasAudio: false,
+    deprecated: true,
   },
 
   {
@@ -513,6 +565,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 5 },
     // duration fixed to 25 frames (~2-3s); leave undefined to fallback
     hasAudio: false,
+    deprecated: true,
   }, // You cannot use a prompt with this model. need to update UI for this model
   {
     id: 'fast-svd-text',
@@ -525,6 +578,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 4 },
     durationOptions: [5],
     hasAudio: false,
+    deprecated: true,
   },
   {
     id: 'fast-svd-lcm',
@@ -536,6 +590,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     defaultParams: { fps: 24, motionLevel: 5 },
     hasAudio: false,
+    deprecated: true,
   },
   {
     id: 'ltx-video-13b-dev-image',
@@ -587,6 +642,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     defaultParams: { fps: 24, motionLevel: 5 },
     durationOptions: [5],
     hasAudio: false,
+    deprecated: true,
   },
   
   {
