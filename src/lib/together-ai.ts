@@ -131,6 +131,7 @@ export type BaseImageModel = {
   maxResolution?: string
   supportsImagePrompt?: boolean
   maxReferenceImages?: number
+  supportsEdit?: boolean
 }
 
 export class TogetherAIService {
@@ -832,12 +833,33 @@ export class TogetherAIService {
         supportsImagePrompt: true,
       },
       {
-        id: 'black-forest-labs/FLUX.1-kontext',
-        name: 'FLUX.1 Kontext Pro',
-        description: 'Up to 5 reference images for style/character consistency',
+        id: 'fal-ai/flux-2-pro',
+        name: 'Flux 2 Pro',
+        description: 'Next-gen FLUX model with improved quality and prompt following',
         provider: 'fal',
         isNew: true,
-        maxReferenceImages: 5,
+      },
+      {
+        id: 'fal-ai/flux-2/klein/9b',
+        name: 'FLUX.2 Klein 9B',
+        description: 'Smaller/faster FLUX.2 model for quick iterations',
+        provider: 'fal',
+        isNew: true,
+      },
+      {
+        id: 'openai/gpt-image-2',
+        name: 'GPT Image 2',
+        description: 'OpenAI\'s latest image generation model',
+        provider: 'fal',
+        isNew: true,
+      },
+      {
+        id: 'openai/gpt-image-2/edit',
+        name: 'GPT Image 2 Edit',
+        description: 'OpenAI\'s latest image editing model',
+        provider: 'fal',
+        isNew: true,
+        supportsEdit: true,
       },
     ]
   }
